@@ -57,6 +57,31 @@
   }
   button:hover { border-color: var(--rose); }
   button:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+  #colorPanel {
+    position: fixed; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+    display: flex; justify-content: flex-end; pointer-events: none;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .panel {
+    pointer-events: auto; width: min(340px, 100%); display: grid; gap: 14px;
+    background: rgba(14, 10, 16, 0.9); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  }
+  .group { display: grid; gap: 8px; }
+  .group-head { display: flex; align-items: center; justify-content: space-between; color: var(--ink); }
+  .swatch { width: 30px; height: 18px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, 0.22); }
+  .row { display: grid; grid-template-columns: 14px 1fr 44px; align-items: center; gap: 8px; }
+  .row input { width: 100%; accent-color: var(--rose); }
+  .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .presets { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+  .presets button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px 6px 6px; font-size: 10px; white-space: nowrap; }
+  .presets button[aria-pressed="true"] { border-color: var(--rose); background: rgba(226, 164, 143, 0.12); }
+  .chip { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.25); flex: 0 0 auto; }
+  .panel-actions button { padding: 7px 10px; font-size: 10px; }
+  .panel-actions { display: flex; gap: 6px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+  #colorValues { text-transform: none; letter-spacing: 0.02em; color: var(--ink); font-size: 11px; line-height: 1.5; user-select: all; }
   #fallback {
     position: fixed; inset: 0; display: grid; place-items: center; text-align: center;
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -75,9 +100,33 @@
 <div class="rail bottom">
   <div id="hint">Move your finger or mouse to tilt the deck. Tap a card to lift it.</div>
   <div class="controls">
+    <button id="colorBtn" type="button" aria-expanded="false" aria-controls="colorPanel">Color</button>
     <button id="tilt" type="button" hidden>Tilt</button>
     <button id="shuffle" type="button">Shuffle</button>
     <button id="back" type="button" hidden>Return</button>
+  </div>
+</div>
+
+<div id="colorPanel" hidden>
+  <div class="panel" role="dialog" aria-label="Card back colors">
+    <div class="group">
+      <div class="group-head"><span>Metal</span><span class="swatch" id="metalSwatch"></span></div>
+      <label class="row"><span>H</span><input id="metalH" type="range" min="0" max="360" step="1"><span class="val" id="metalHv"></span></label>
+      <label class="row"><span>S</span><input id="metalS" type="range" min="0" max="100" step="1"><span class="val" id="metalSv"></span></label>
+      <label class="row"><span>L</span><input id="metalL" type="range" min="0" max="100" step="1"><span class="val" id="metalLv"></span></label>
+    </div>
+    <div class="group">
+      <div class="group-head"><span>Etching</span><span class="swatch" id="etchSwatch"></span></div>
+      <label class="row"><span>H</span><input id="etchH" type="range" min="0" max="360" step="1"><span class="val" id="etchHv"></span></label>
+      <label class="row"><span>S</span><input id="etchS" type="range" min="0" max="100" step="1"><span class="val" id="etchSv"></span></label>
+      <label class="row"><span>L</span><input id="etchL" type="range" min="0" max="100" step="1"><span class="val" id="etchLv"></span></label>
+    </div>
+    <div class="presets" id="presets" aria-label="Presets"></div>
+    <div id="colorValues"></div>
+    <div class="panel-actions">
+      <button type="button" id="copyColors">Copy values</button>
+      <button type="button" id="closeColors">Done</button>
+    </div>
   </div>
 </div>
 
@@ -210,13 +259,15 @@ function drawBackPattern(g, w, h, line, base) {
   });
 }
 
+const BW = 512, BH = Math.round(512 * CH / CW);
 function backTextures() {
-  const W = 512, H = Math.round(512 * CH / CW);
-  const [bc, bg] = canvas(W, H); drawBackPattern(bg, W, H, '#e6e6e6', '#7a7a7a');
-  const [rc, rg] = canvas(W, H); drawBackPattern(rg, W, H, '#8c8c8c', '#2c2c2c');
-  const bump = new THREE.CanvasTexture(bc), rough = new THREE.CanvasTexture(rc);
-  [bump, rough].forEach(t => { t.anisotropy = maxAniso; });
-  return { bump, rough };
+  const [bc, bg] = canvas(BW, BH); drawBackPattern(bg, BW, BH, '#e6e6e6', '#7a7a7a');
+  const [rc, rg] = canvas(BW, BH); drawBackPattern(rg, BW, BH, '#5a5a5a', '#2c2c2c');
+  const [cc, cg] = canvas(BW, BH);
+  const bump = new THREE.CanvasTexture(bc), rough = new THREE.CanvasTexture(rc), color = new THREE.CanvasTexture(cc);
+  color.colorSpace = THREE.SRGBColorSpace;
+  [bump, rough, color].forEach(t => { t.anisotropy = maxAniso; });
+  return { bump, rough, color, colorCtx: cg };
 }
 
 function drawGlyph(g, i, cx, cy, s, gold) {
@@ -294,10 +345,10 @@ async function fontsReady() {
   } catch (e) { /* fall back to system faces */ }
 }
 
-const { bump, rough } = backTextures();
+const { bump, rough, color: backColorTex, colorCtx } = backTextures();
 const backMat = new THREE.MeshPhysicalMaterial({
-  color: 0xeaa892, metalness: 1, roughness: 1, roughnessMap: rough,
-  bumpMap: bump, bumpScale: 1.6, clearcoat: 0.7, clearcoatRoughness: 0.12, envMapIntensity: 1.1,
+  color: 0xffffff, map: backColorTex, metalness: 1, roughness: 1, roughnessMap: rough,
+  bumpMap: bump, bumpScale: 1.6, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.15,
 });
 const edgeMat = new THREE.MeshPhysicalMaterial({ color: 0xb8705f, metalness: 1, roughness: 0.25 });
 
@@ -528,6 +579,108 @@ function shuffle() {
   gather = 0.55;
 }
 shuffleBtn.addEventListener('click', shuffle);
+
+// ---------- colors ----------
+const PRESETS = {
+  blackred:   { name: 'Black + red',        metal: { h: 0, s: 0, l: 9 },     etch: { h: 356, s: 82, l: 44 } },
+  midnight:   { name: 'Midnight navy',      metal: { h: 220, s: 16, l: 36 }, etch: { h: 236, s: 19, l: 58 } },
+  blackti:    { name: 'Black titanium',     metal: { h: 240, s: 4, l: 16 },  etch: { h: 220, s: 6, l: 64 } },
+  desert:     { name: 'Desert titanium',    metal: { h: 30, s: 24, l: 60 },  etch: { h: 24, s: 30, l: 36 } },
+  ember:      { name: 'Obsidian ember',     metal: { h: 20, s: 10, l: 8 },   etch: { h: 20, s: 92, l: 54 } },
+  deepblue:   { name: 'Deep blue',          metal: { h: 222, s: 45, l: 22 }, etch: { h: 210, s: 28, l: 72 } },
+  skynight:   { name: 'Night sky',          metal: { h: 225, s: 28, l: 12 }, etch: { h: 203, s: 60, l: 72 } },
+  starlight:  { name: 'Starlight',          metal: { h: 40, s: 26, l: 80 },  etch: { h: 35, s: 30, l: 50 } },
+  amethyst:   { name: 'Amethyst',           metal: { h: 275, s: 34, l: 15 }, etch: { h: 285, s: 42, l: 72 } },
+  bloodmoon:  { name: 'Blood moon',         metal: { h: 350, s: 55, l: 16 }, etch: { h: 12, s: 62, l: 58 } },
+  emerald:    { name: 'Emerald occult',     metal: { h: 162, s: 45, l: 12 }, etch: { h: 44, s: 62, l: 58 } },
+  oxblood:    { name: 'Oxblood + gold',     metal: { h: 355, s: 45, l: 21 }, etch: { h: 42, s: 66, l: 56 } },
+  plum:       { name: 'Plum noir',          metal: { h: 320, s: 26, l: 14 }, etch: { h: 345, s: 55, l: 74 } },
+  blackgold:  { name: 'Black + gold',       metal: { h: 0, s: 0, l: 9 },     etch: { h: 40, s: 72, l: 55 } },
+  rose:       { name: 'Rose gold',          metal: { h: 14, s: 66, l: 72 },  etch: { h: 16, s: 72, l: 82 } },
+  gunmetal:   { name: 'Gunmetal + silver',  metal: { h: 220, s: 8, l: 26 },  etch: { h: 220, s: 6, l: 80 } },
+};
+const pick = k => ({ metal: { ...PRESETS[k].metal }, etch: { ...PRESETS[k].etch } });
+let colors = pick('blackred');
+try {
+  const saved = JSON.parse(localStorage.getItem('rgd-colors') || 'null');
+  if (saved && saved.metal && saved.etch) colors = saved;
+} catch (e) { /* storage unavailable */ }
+
+const hsl = c => `hsl(${c.h}, ${c.s}%, ${c.l}%)`;
+const ids = ['H', 'S', 'L'];
+const colorPanel = document.getElementById('colorPanel');
+const colorBtn = document.getElementById('colorBtn');
+const valuesEl = document.getElementById('colorValues');
+
+function paintBack() {
+  drawBackPattern(colorCtx, BW, BH, hsl(colors.etch), hsl(colors.metal));
+  backColorTex.needsUpdate = true;
+  edgeMat.color.setStyle(hsl({ h: colors.metal.h, s: colors.metal.s, l: Math.min(100, colors.metal.l + 6) }));
+  document.getElementById('metalSwatch').style.background = hsl(colors.metal);
+  document.getElementById('etchSwatch').style.background = hsl(colors.etch);
+  valuesEl.textContent = `Metal ${hsl(colors.metal)} · Etching ${hsl(colors.etch)}`;
+  if (typeof markPreset === 'function') markPreset();
+  try { localStorage.setItem('rgd-colors', JSON.stringify(colors)); } catch (e) {}
+}
+function syncInputs() {
+  for (const part of ['metal', 'etch']) {
+    for (const k of ids) {
+      const v = colors[part][k.toLowerCase()];
+      document.getElementById(part + k).value = v;
+      document.getElementById(part + k + 'v').textContent = k === 'H' ? v + '°' : v + '%';
+    }
+  }
+}
+let paintQueued = false;
+for (const part of ['metal', 'etch']) {
+  for (const k of ids) {
+    document.getElementById(part + k).addEventListener('input', ev => {
+      colors[part][k.toLowerCase()] = Number(ev.target.value);
+      document.getElementById(part + k + 'v').textContent = k === 'H' ? ev.target.value + '°' : ev.target.value + '%';
+      if (!paintQueued) { paintQueued = true; requestAnimationFrame(() => { paintQueued = false; paintBack(); }); }
+    });
+  }
+}
+const presetsEl = document.getElementById('presets');
+function markPreset() {
+  const same = (a, b) => a.h === b.h && a.s === b.s && a.l === b.l;
+  presetsEl.querySelectorAll('button').forEach(b => {
+    const p = PRESETS[b.dataset.preset];
+    b.setAttribute('aria-pressed', String(same(p.metal, colors.metal) && same(p.etch, colors.etch)));
+  });
+}
+for (const [key, p] of Object.entries(PRESETS)) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.dataset.preset = key;
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  chip.style.background = `linear-gradient(135deg, ${hsl(p.metal)} 50%, ${hsl(p.etch)} 50%)`;
+  const label = document.createElement('span'); label.textContent = p.name;
+  b.append(chip, label);
+  b.addEventListener('click', () => { colors = pick(key); syncInputs(); paintBack(); });
+  presetsEl.appendChild(b);
+}
+function toggleColors(open) {
+  const show = open ?? colorPanel.hidden;
+  colorPanel.hidden = !show;
+  colorBtn.setAttribute('aria-expanded', String(show));
+  colorBtn.textContent = show ? 'Close' : 'Color';
+}
+colorBtn.addEventListener('click', () => toggleColors());
+document.getElementById('closeColors').addEventListener('click', () => toggleColors(false));
+document.getElementById('copyColors').addEventListener('click', async ev => {
+  const btn = ev.currentTarget;
+  try { await navigator.clipboard.writeText(valuesEl.textContent); btn.textContent = 'Copied'; }
+  catch (e) {
+    const r = document.createRange(); r.selectNodeContents(valuesEl);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    btn.textContent = 'Selected; copy it';
+  }
+  setTimeout(() => { btn.textContent = 'Copy values'; }, 1800);
+});
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && !colorPanel.hidden) toggleColors(false); });
+syncInputs();
+paintBack();
 
 // ---------- animation ----------
 const tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), fwd = new THREE.Vector3();
