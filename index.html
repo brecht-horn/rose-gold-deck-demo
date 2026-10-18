@@ -406,17 +406,28 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), q3 = new THREE.Quaternion();
+const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), q3 = new THREE.Quaternion(), q4 = new THREE.Quaternion();
+const fanTilt = new THREE.Quaternion();
 const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1);
-function fanTransform(slot, outPos, outQuat, pointer) {
+// Cards sit tangent to an upright cylinder whose radius steps out by STEP per card, so
+// each card lies on top of the one to its left and no two cards cross where they
+// overlap (checked numerically, lifted cards included). The pointer tilts the whole fan
+// as one rigid body, which keeps that spacing.
+const TWIST = 0.24, STEP = 0.03, LIFT_OUT = 0.25;
+function fanTransform(slot, outPos, outQuat, pointer, lift = 0, bob = 0) {
   const t = N > 1 ? (slot / (N - 1)) * 2 - 1 : 0;
   const a = t * maxA;
   const pivotY = 0.15 - fanR;
-  outPos.set(Math.sin(a) * fanR, pivotY + Math.cos(a) * fanR, slot * 0.014 - (1 - Math.cos(a)) * 0.9);
-  q1.setFromAxisAngle(AZ, -a);
-  q2.setFromAxisAngle(AY, Math.PI + t * 0.28 + pointer.x * 0.12);
-  q3.setFromAxisAngle(AX, -0.1 + pointer.y * 0.1);
+  const Rc = Math.sin(maxA) * fanR / TWIST;
+  const reach = fanR + 0.22 * lift;
+  const phi = Math.sin(a) * reach / Rc;
+  const r = Rc + (slot - (N - 1) / 2) * STEP + LIFT_OUT * lift;
+  outPos.set(r * Math.sin(phi), pivotY + Math.cos(a) * reach + bob, r * Math.cos(phi) - Rc);
+  q1.setFromAxisAngle(AY, phi); q2.setFromAxisAngle(AZ, -a); q3.setFromAxisAngle(AY, Math.PI);
   outQuat.copy(q1).multiply(q2).multiply(q3);
+  fanTilt.setFromAxisAngle(AY, pointer.x * 0.12).multiply(q4.setFromAxisAngle(AX, 0.1 - pointer.y * 0.1));
+  outPos.sub(lookAt).applyQuaternion(fanTilt).add(lookAt);
+  outQuat.premultiply(fanTilt);
   return a;
 }
 
@@ -731,11 +742,10 @@ function frame(now) {
         tmpQ.setFromAxisAngle(AY, Math.PI);
       }
       else {
-        const a = fanTransform(c.slot, tmpP, tmpQ, { x: pointer.x * par, y: pointer.y * par });
-        if (!reduceMotion) tmpP.y += Math.sin(clock * 0.9 + c.slot * 0.5) * 0.03;
         const liftTarget = c.i === hovered ? 1 : 0;
         c.lift += (liftTarget - c.lift) * damp(10, dt);
-        tmpP.x += Math.sin(a) * 0.22 * c.lift; tmpP.y += Math.cos(a) * 0.22 * c.lift; tmpP.z += 0.12 * c.lift;
+        const bob = reduceMotion ? 0 : Math.sin(clock * 0.9 + c.slot * 0.5) * 0.03;
+        fanTransform(c.slot, tmpP, tmpQ, { x: pointer.x * par, y: pointer.y * par }, c.lift, bob);
       }
       // keep the face-down rotation in sync for cards returning from focus
       if (Math.abs(c.flip - c.flipTarget) > 0.001) {
