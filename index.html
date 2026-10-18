@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Rose Gold Deck</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one full-bleed WebGL stage; a quiet mono caption rail pinned top and bottom. Single dark world by design. */
+  :root {
+    --ink: #f3e6df;
+    --muted: #a08f96;
+    --rose: #e2a48f;
+    --bg: #07060a;
+    --bg2: #1b1222;
+    --line: rgba(226, 164, 143, 0.38);
+    --display: "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(120% 85% at 50% 38%, var(--bg2), var(--bg) 72%);
+    color: var(--ink);
+    font-family: var(--mono);
+    overflow: hidden;
+  }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.07; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .rail {
+    position: fixed; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    pointer-events: none;
+  }
+  .rail.top { top: 0; padding-block: calc(14px + env(safe-area-inset-top, 0px)) 0; }
+  .rail.bottom { bottom: 0; padding-block: 0 calc(16px + env(safe-area-inset-bottom, 0px)); align-items: flex-end; }
+  .brand { font-family: var(--display); font-size: 19px; letter-spacing: 0.01em; text-transform: none; color: var(--ink); font-weight: 500; }
+  .tag { text-align: right; line-height: 1.6; }
+  #hint { max-width: 30ch; line-height: 1.6; }
+  .controls { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+  button {
+    font: inherit; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
+    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 999px;
+    padding: 9px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--rose); }
+  button:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+  #fallback {
+    position: fixed; inset: 0; display: grid; place-items: center; text-align: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-size: 13px; line-height: 1.7; color: var(--muted);
+  }
+</style>
+
+<div id="stage" aria-label="A fan of 22 tarot cards with rose gold backs. Tap a card to lift it, swipe to turn it over."></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="rail top">
+  <div class="brand">Rose Gold Deck</div>
+  <div class="tag">Prototype<br>three.js · 22 Majors</div>
+</div>
+
+<div class="rail bottom">
+  <div id="hint">Move your finger or mouse to tilt the deck. Tap a card to lift it.</div>
+  <div class="controls">
+    <button id="tilt" type="button" hidden>Tilt</button>
+    <button id="shuffle" type="button">Shuffle</button>
+    <button id="back" type="button" hidden>Return</button>
+  </div>
+</div>
+
+<div id="fallback" hidden>This prototype needs WebGL, which this browser isn't providing.</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const MAJORS = [
+  ['0', 'The Fool'], ['I', 'The Magician'], ['II', 'The High Priestess'], ['III', 'The Empress'],
+  ['IV', 'The Emperor'], ['V', 'The Hierophant'], ['VI', 'The Lovers'], ['VII', 'The Chariot'],
+  ['VIII', 'Strength'], ['IX', 'The Hermit'], ['X', 'Wheel of Fortune'], ['XI', 'Justice'],
+  ['XII', 'The Hanged Man'], ['XIII', 'Death'], ['XIV', 'Temperance'], ['XV', 'The Devil'],
+  ['XVI', 'The Tower'], ['XVII', 'The Star'], ['XVIII', 'The Moon'], ['XIX', 'The Sun'],
+  ['XX', 'Judgement'], ['XXI', 'The World'],
+];
+const N = MAJORS.length;
+const CW = 1, CH = 1.72, CR = 0.075;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const stage = document.getElementById('stage');
+const hintEl = document.getElementById('hint');
+const backBtn = document.getElementById('back');
+const shuffleBtn = document.getElementById('shuffle');
+const tiltBtn = document.getElementById('tilt');
+
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+} catch (e) {
+  document.getElementById('fallback').hidden = false;
+  throw e;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.85;
+
+const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+scene.add(camera);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.15));
+const key = new THREE.PointLight(0xffe6d8, 46, 0, 2);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x9a7bff, 0.9);
+rim.position.set(-4, 3, -3);
+scene.add(rim);
+const sweep = new THREE.PointLight(0xfff3ea, 0, 2.2, 2);
+camera.add(sweep);
+
+const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+
+// ---------- card geometry ----------
+function roundedRect(w, h, r) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+const shape = roundedRect(CW, CH, CR);
+const faceGeo = new THREE.ShapeGeometry(shape, 10);
+{
+  const p = faceGeo.attributes.position, uv = faceGeo.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + CW / 2) / CW, (p.getY(i) + CH / 2) / CH);
+  uv.needsUpdate = true;
+}
+const edgeGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.008, bevelEnabled: false, curveSegments: 10 });
+edgeGeo.translate(0, 0, -0.004);
+
+// ---------- textures ----------
+function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
+
+function drawBackPattern(g, w, h, line, base) {
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  g.strokeStyle = line; g.fillStyle = line; g.lineCap = 'round';
+  // fine guilloche lattice
+  g.globalAlpha = 0.35; g.lineWidth = 1;
+  for (let k = -h; k < w + h; k += 14) {
+    g.beginPath(); g.moveTo(k, 0); g.lineTo(k - h * 0.58, h); g.stroke();
+    g.beginPath(); g.moveTo(k, 0); g.lineTo(k + h * 0.58, h); g.stroke();
+  }
+  g.globalAlpha = 1;
+  // borders
+  const inset = (m, lw) => { g.lineWidth = lw; g.strokeRect(m, m, w - 2 * m, h - 2 * m); };
+  inset(18, 3); inset(30, 1.5);
+  // central sigil
+  const cx = w / 2, cy = h / 2;
+  g.fillStyle = base; g.beginPath(); g.arc(cx, cy, 168, 0, Math.PI * 2); g.fill();
+  g.fillStyle = line;
+  const ring = (r, lw) => { g.lineWidth = lw; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke(); };
+  ring(166, 3); ring(150, 1.5); ring(112, 2); ring(40, 2);
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2, r = 158;
+    g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, i % 4 === 0 ? 3.2 : 1.6, 0, Math.PI * 2); g.fill();
+  }
+  const star = (pts, ro, ri, rot, lw) => {
+    g.lineWidth = lw; g.beginPath();
+    for (let i = 0; i <= pts * 2; i++) {
+      const a = rot + (i / (pts * 2)) * Math.PI * 2, r = i % 2 ? ri : ro;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+  };
+  star(12, 108, 62, -Math.PI / 2, 2);
+  star(6, 92, 46, -Math.PI / 2, 1.5);
+  // crescent
+  g.beginPath(); g.arc(cx, cy, 26, 0, Math.PI * 2); g.fill();
+  g.fillStyle = base; g.beginPath(); g.arc(cx + 11, cy - 6, 23, 0, Math.PI * 2); g.fill();
+  // corner pips
+  g.fillStyle = line;
+  [[60, 60], [w - 60, 60], [60, h - 60], [w - 60, h - 60]].forEach(([x, y]) => {
+    g.beginPath(); g.moveTo(x, y - 12); g.lineTo(x + 8, y); g.lineTo(x, y + 12); g.lineTo(x - 8, y); g.closePath(); g.fill();
+  });
+}
+
+function backTextures() {
+  const W = 512, H = Math.round(512 * CH / CW);
+  const [bc, bg] = canvas(W, H); drawBackPattern(bg, W, H, '#e6e6e6', '#7a7a7a');
+  const [rc, rg] = canvas(W, H); drawBackPattern(rg, W, H, '#8c8c8c', '#2c2c2c');
+  const bump = new THREE.CanvasTexture(bc), rough = new THREE.CanvasTexture(rc);
+  [bump, rough].forEach(t => { t.anisotropy = maxAniso; });
+  return { bump, rough };
+}
+
+function drawGlyph(g, i, cx, cy, s, gold) {
+  g.strokeStyle = gold; g.fillStyle = gold; g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round';
+  const circle = (r, fill) => { g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); fill ? g.fill() : g.stroke(); };
+  const poly = (n, r, rot = -Math.PI / 2, inner = 0) => {
+    g.beginPath();
+    const steps = inner ? n * 2 : n;
+    for (let k = 0; k <= steps; k++) {
+      const a = rot + (k / steps) * Math.PI * 2, rr = inner && k % 2 ? inner : r;
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      k ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+  };
+  switch (i) {
+    case 0: circle(s); circle(s * 0.08, true); break;
+    case 10: circle(s); circle(s * 0.55); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.55, cy + Math.sin(a) * s * 0.55); g.lineTo(cx + Math.cos(a) * s, cy + Math.sin(a) * s); g.stroke(); } break;
+    case 16: g.strokeRect(cx - s * 0.28, cy - s * 0.9, s * 0.56, s * 1.8); g.beginPath(); g.moveTo(cx + s * 0.75, cy - s); g.lineTo(cx + s * 0.1, cy - s * 0.15); g.lineTo(cx + s * 0.45, cy - s * 0.1); g.lineTo(cx - s * 0.3, cy + s * 0.8); g.stroke(); break;
+    case 17: poly(8, s, -Math.PI / 2, s * 0.38); circle(s * 0.12, true); break;
+    case 18: g.beginPath(); g.arc(cx, cy, s * 0.8, 0, Math.PI * 2); g.fill(); g.fillStyle = '#160f1a'; g.beginPath(); g.arc(cx + s * 0.35, cy - s * 0.18, s * 0.72, 0, Math.PI * 2); g.fill(); break;
+    case 19: circle(s * 0.45); for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8, r2 = k % 2 ? s * 0.8 : s; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.58, cy + Math.sin(a) * s * 0.58); g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke(); } break;
+    case 21: g.beginPath(); g.ellipse(cx, cy, s * 0.62, s, 0, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.ellipse(cx, cy, s * 0.48, s * 0.86, 0, 0, Math.PI * 2); g.stroke(); break;
+    case 13: g.beginPath(); g.moveTo(cx, cy - s); g.lineTo(cx, cy + s); g.stroke(); g.beginPath(); g.arc(cx, cy - s * 0.35, s * 0.38, Math.PI, 0); g.stroke(); break;
+    default: {
+      const pts = 3 + (i % 6);
+      poly(pts, s, -Math.PI / 2, s * 0.45);
+      circle(s * 0.28);
+    }
+  }
+}
+
+function faceTexture(i) {
+  const W = 512, H = Math.round(512 * CH / CW);
+  const [c, g] = canvas(W, H);
+  const grd = g.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, '#1d1421'); grd.addColorStop(1, '#0e0b12');
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  for (let k = 0; k < 1400; k++) { g.fillStyle = `rgba(255,230,220,${Math.random() * 0.05})`; g.fillRect(Math.random() * W, Math.random() * H, 1, 1); }
+  const gold = '#dcb48f';
+  g.strokeStyle = gold; g.lineWidth = 3; g.strokeRect(20, 20, W - 40, H - 40);
+  g.lineWidth = 1; g.strokeRect(32, 32, W - 64, H - 64);
+  g.fillStyle = gold; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '500 64px "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif';
+  g.fillText(MAJORS[i][0], W / 2, 118);
+  g.lineWidth = 1; g.beginPath(); g.moveTo(W / 2 - 40, 168); g.lineTo(W / 2 + 40, 168); g.stroke();
+  drawGlyph(g, i, W / 2, H / 2 + 10, 120, gold);
+  g.font = '500 22px "IBM Plex Mono", ui-monospace, Menlo, monospace';
+  const name = MAJORS[i][1].toUpperCase();
+  if ('letterSpacing' in g) g.letterSpacing = '6px';
+  g.fillText(name, W / 2, H - 112);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
+  return t;
+}
+
+function spriteTexture() {
+  const [c, g] = canvas(64, 64);
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,235,225,1)'); grd.addColorStop(0.4, 'rgba(255,200,185,0.35)'); grd.addColorStop(1, 'rgba(255,200,185,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+
+// ---------- build ----------
+async function fontsReady() {
+  try {
+    await Promise.race([
+      Promise.all([
+        document.fonts.load('500 64px "Bodoni Moda"'),
+        document.fonts.load('500 22px "IBM Plex Mono"'),
+      ]),
+      new Promise(r => setTimeout(r, 2500)),
+    ]);
+  } catch (e) { /* fall back to system faces */ }
+}
+
+const { bump, rough } = backTextures();
+const backMat = new THREE.MeshPhysicalMaterial({
+  color: 0xeaa892, metalness: 1, roughness: 1, roughnessMap: rough,
+  bumpMap: bump, bumpScale: 1.6, clearcoat: 0.7, clearcoatRoughness: 0.12, envMapIntensity: 1.1,
+});
+const edgeMat = new THREE.MeshPhysicalMaterial({ color: 0xb8705f, metalness: 1, roughness: 0.25 });
+
+const cards = [];
+const pickables = [];
+
+await fontsReady();
+for (let i = 0; i < N; i++) {
+  const grp = new THREE.Group();
+  const front = new THREE.Mesh(faceGeo, new THREE.MeshStandardMaterial({ map: faceTexture(i), roughness: 0.6, metalness: 0 }));
+  front.position.z = 0.0045;
+  const back = new THREE.Mesh(faceGeo, backMat);
+  back.rotation.y = Math.PI; back.position.z = -0.0045;
+  const edge = new THREE.Mesh(edgeGeo, edgeMat);
+  grp.add(front, back, edge);
+  [front, back, edge].forEach(m => { m.userData.card = i; pickables.push(m); });
+  grp.position.set(0, -5, 0);
+  scene.add(grp);
+  cards.push({ i, grp, slot: i, flip: Math.PI, flipVel: 0, flipTarget: Math.PI, lift: 0, deal: i * 0.045 });
+}
+
+// drifting motes
+{
+  const count = 260, pos = new Float32Array(count * 3);
+  for (let k = 0; k < count; k++) { pos[k * 3] = (Math.random() - 0.5) * 14; pos[k * 3 + 1] = (Math.random() - 0.5) * 9; pos[k * 3 + 2] = -Math.random() * 6 - 0.5; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ size: 0.06, map: spriteTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55, color: 0xffc9b8 });
+  var motes = new THREE.Points(geo, mat);
+  scene.add(motes);
+}
+
+// backdrop that dims the fan behind a lifted card
+const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshBasicMaterial({ color: 0x050307, transparent: true, opacity: 0, depthWrite: false }));
+camera.add(backdrop);
+
+// ---------- layout ----------
+let aspect = 1, fanR = 3.6, maxA = 0.6, camDist = 7, focusDist = 4;
+const lookAt = new THREE.Vector3(0, -0.05, 0);
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  aspect = w / h; camera.aspect = aspect; camera.updateProjectionMatrix();
+  const portrait = aspect < 0.9;
+  fanR = portrait ? 3.0 : 3.6;
+  maxA = portrait ? 0.52 : 0.62;
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const fanW = 2 * Math.sin(maxA) * fanR + CW;
+  const fanH = fanR * (1 - Math.cos(maxA)) + CH;
+  const dW = fanW / (2 * t * aspect) * (portrait ? 0.95 : 1.32);
+  const dH = fanH / (2 * t) * 1.75;
+  camDist = Math.max(dW, dH);
+  focusDist = Math.max(CH / (0.72 * 2 * t), CW / (0.8 * 2 * t * aspect));
+  backdrop.position.set(0, 0, -(focusDist + 0.7));
+}
+addEventListener('resize', resize);
+resize();
+
+const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), q3 = new THREE.Quaternion();
+const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1);
+function fanTransform(slot, outPos, outQuat, pointer) {
+  const t = N > 1 ? (slot / (N - 1)) * 2 - 1 : 0;
+  const a = t * maxA;
+  const pivotY = 0.15 - fanR;
+  outPos.set(Math.sin(a) * fanR, pivotY + Math.cos(a) * fanR, slot * 0.014 - (1 - Math.cos(a)) * 0.9);
+  q1.setFromAxisAngle(AZ, -a);
+  q2.setFromAxisAngle(AY, Math.PI + t * 0.28 + pointer.x * 0.12);
+  q3.setFromAxisAngle(AX, -0.1 + pointer.y * 0.1);
+  outQuat.copy(q1).multiply(q2).multiply(q3);
+  return a;
+}
+
+// ---------- interaction ----------
+const ray = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+let focused = -1, hovered = -1, gather = 0;
+let drag = null;
+
+function setHint(msg) {
+  if (msg) { hintEl.textContent = msg; return; }
+  const move = tilt.on ? 'Tilt your phone to move the light.' : 'Move your finger or mouse to tilt the deck.';
+  hintEl.textContent = focused < 0
+    ? move + ' Tap a card to lift it.'
+    : 'Swipe sideways to turn the card over. Tap outside it to put it back.';
+  backBtn.hidden = focused < 0;
+}
+
+// ---------- device tilt ----------
+const tilt = { on: false, neutral: null, got: false };
+const coarse = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (typeof DeviceOrientationEvent !== 'undefined' && coarse) tiltBtn.hidden = false;
+function screenAngle() {
+  const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+  return ((a % 360) + 360) % 360;
+}
+function onOrient(e) {
+  if (e.beta == null || e.gamma == null) return;
+  tilt.got = true;
+  let x = e.gamma, y = e.beta;
+  const a = screenAngle();
+  if (a === 90) { x = e.beta; y = -e.gamma; }
+  else if (a === 270) { x = -e.beta; y = e.gamma; }
+  else if (a === 180) { x = -e.gamma; y = -e.beta; }
+  if (!tilt.neutral) tilt.neutral = { x, y };
+  const range = 22;
+  pointer.tx = Math.max(-1, Math.min(1, (x - tilt.neutral.x) / range));
+  pointer.ty = Math.max(-1, Math.min(1, -(y - tilt.neutral.y) / range));
+}
+tiltBtn.addEventListener('click', async () => {
+  if (tilt.on) { tilt.neutral = null; setHint('Recentered. Hold the phone the way you like and tilt from there.'); setTimeout(() => setHint(), 2200); return; }
+  try {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') { setHint('Tilt was not allowed. You can still drag your finger to move the light.'); return; }
+    }
+    addEventListener('deviceorientation', onOrient);
+    tilt.on = true; tilt.neutral = null; tilt.got = false;
+    tiltBtn.textContent = 'Recenter';
+    setHint();
+    setTimeout(() => {
+      if (!tilt.got) {
+        tilt.on = false; removeEventListener('deviceorientation', onOrient);
+        tiltBtn.textContent = 'Tilt';
+        setHint('No tilt data reached this page. Inside a preview, motion sensors are blocked; open the direct link on your phone.');
+      }
+    }, 1800);
+  } catch (e) {
+    setHint('Tilt is not available here. Open the direct link on your phone, or drag your finger to move the light.');
+  }
+});
+
+function hit(ev) {
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects(pickables, false);
+  return hits.length ? hits[0].object.userData.card : -1;
+}
+
+const el = renderer.domElement;
+el.addEventListener('pointermove', ev => {
+  const r = el.getBoundingClientRect();
+  if (!tilt.on && (!drag || focused < 0)) {
+    pointer.tx = ((ev.clientX - r.left) / r.width) * 2 - 1;
+    pointer.ty = -(((ev.clientY - r.top) / r.height) * 2 - 1);
+  }
+  if (drag) {
+    const dx = ev.clientX - drag.x;
+    drag.moved = Math.max(drag.moved, Math.hypot(dx, ev.clientY - drag.y));
+    if (drag.flipping) {
+      const c = cards[focused];
+      const now = performance.now();
+      c.flip = drag.startFlip + dx * 0.0085;
+      drag.vel = (c.flip - drag.lastFlip) / Math.max(1, now - drag.lastT) * 1000;
+      drag.lastFlip = c.flip; drag.lastT = now;
+    }
+  } else if (focused < 0 && ev.pointerType === 'mouse') {
+    hovered = hit(ev);
+    el.style.cursor = hovered >= 0 ? 'pointer' : 'default';
+  }
+});
+
+el.addEventListener('pointerdown', ev => {
+  el.setPointerCapture(ev.pointerId);
+  const onCard = hit(ev);
+  drag = { x: ev.clientX, y: ev.clientY, t: performance.now(), moved: 0, flipping: false, vel: 0 };
+  if (focused >= 0 && onCard === focused) {
+    const c = cards[focused];
+    drag.flipping = true; drag.startFlip = c.flip; drag.lastFlip = c.flip; drag.lastT = performance.now();
+    c.flipVel = 0;
+  }
+  if (ev.pointerType !== 'mouse' && focused < 0) hovered = onCard;
+});
+
+el.addEventListener('pointerup', ev => {
+  if (!drag) return;
+  const upDx = ev.clientX - drag.x;
+  drag.moved = Math.max(drag.moved, Math.hypot(upDx, ev.clientY - drag.y));
+  if (drag.flipping && drag.moved >= 8 && Math.abs(cards[focused].flip - drag.startFlip) < 0.01) {
+    cards[focused].flip = drag.startFlip + upDx * 0.0085;
+  }
+  const tap = drag.moved < 8 && performance.now() - drag.t < 450;
+  const onCard = hit(ev);
+  if (drag.flipping) {
+    const c = cards[focused];
+    if (tap) {
+      c.flipTarget = Math.round(c.flip / Math.PI) * Math.PI + Math.PI;
+    } else {
+      const projected = c.flip + drag.vel * 0.18;
+      c.flipTarget = Math.round(projected / Math.PI) * Math.PI;
+      c.flipVel = drag.vel;
+    }
+    if (Math.abs(Math.cos(c.flipTarget)) > 0.5 && Math.cos(c.flipTarget) > 0) pulseSweep();
+  } else if (tap) {
+    if (focused < 0 && onCard >= 0) focus(onCard);
+    else if (focused >= 0 && onCard !== focused) unfocus();
+  }
+  drag = null;
+  if (ev.pointerType !== 'mouse') hovered = -1;
+});
+el.addEventListener('pointercancel', () => { drag = null; });
+
+function focus(i) {
+  focused = i; hovered = -1;
+  const c = cards[i]; c.flipTarget = Math.round(c.flip / (2 * Math.PI)) * 2 * Math.PI + Math.PI;
+  try { navigator.vibrate && navigator.vibrate(8); } catch (e) {}
+  setHint();
+}
+function unfocus() {
+  if (focused < 0) return;
+  const c = cards[focused];
+  c.flipTarget = Math.round((c.flip - Math.PI) / (2 * Math.PI)) * 2 * Math.PI + Math.PI;
+  focused = -1; setHint();
+}
+backBtn.addEventListener('click', unfocus);
+addEventListener('keydown', ev => { if (ev.key === 'Escape') unfocus(); });
+
+let sweepT = -1;
+function pulseSweep() { sweepT = 0; try { navigator.vibrate && navigator.vibrate(12); } catch (e) {} }
+
+function shuffle() {
+  unfocus();
+  const order = [...Array(N).keys()];
+  const rnd = new Uint32Array(N);
+  crypto.getRandomValues(rnd);
+  for (let k = N - 1; k > 0; k--) { const j = rnd[k] % (k + 1); [order[k], order[j]] = [order[j], order[k]]; }
+  order.forEach((cardIdx, slot) => { const c = cards[cardIdx]; c.slot = slot; c.deal = clock + 0.6 + slot * 0.03; c.fromStack = true; });
+  gather = 0.55;
+}
+shuffleBtn.addEventListener('click', shuffle);
+
+// ---------- animation ----------
+const tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), fwd = new THREE.Vector3();
+const camBase = new THREE.Vector3();
+let last = performance.now(), clock = 0;
+setHint();
+
+function damp(k, dt) { return 1 - Math.exp(-k * dt); }
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; clock += dt;
+  const par = reduceMotion ? 0.3 : 1;
+  pointer.x += (pointer.tx - pointer.x) * damp(5, dt);
+  pointer.y += (pointer.ty - pointer.y) * damp(5, dt);
+
+  camBase.set(pointer.x * 0.75 * par, 0.25 + pointer.y * 0.45 * par, camDist);
+  camera.position.lerp(camBase, damp(6, dt));
+  camera.lookAt(lookAt);
+  camera.updateMatrixWorld();
+
+  key.position.set(pointer.x * 3.2, 1.4 + pointer.y * 2.2, 3.2);
+  if (gather > 0) gather = Math.max(0, gather - dt);
+
+  backdrop.material.opacity += ((focused >= 0 ? 0.72 : 0) - backdrop.material.opacity) * damp(7, dt);
+
+  for (const c of cards) {
+    const g = c.grp;
+    if (c.i === focused) {
+      camera.getWorldDirection(fwd);
+      tmpP.copy(camera.position).addScaledVector(fwd, focusDist);
+      // flip spring
+      if (!drag || !drag.flipping) {
+        const k = 90, d = 2 * Math.sqrt(k) * 0.82;
+        c.flipVel += ((c.flipTarget - c.flip) * k - c.flipVel * d) * dt;
+        c.flip += c.flipVel * dt;
+      }
+      q1.setFromAxisAngle(AY, c.flip);
+      const tk = tilt.on ? 1.6 : 1;
+      q3.setFromAxisAngle(AX, -pointer.y * 0.18 * par * tk);
+      q2.setFromAxisAngle(AY, pointer.x * 0.22 * par * tk);
+      tmpQ.copy(camera.quaternion).multiply(q2).multiply(q3).multiply(q1);
+      g.position.lerp(tmpP, damp(9, dt));
+      g.quaternion.slerp(tmpQ, damp(10, dt));
+    } else {
+      const started = clock > c.deal;
+      if (!started || gather > 0) {
+        if (c.fromStack) tmpP.set(0, 0.15, 0.4 + c.slot * 0.004); else tmpP.set(0, -4.5, 1);
+        tmpQ.setFromAxisAngle(AY, Math.PI);
+      }
+      else {
+        const a = fanTransform(c.slot, tmpP, tmpQ, { x: pointer.x * par, y: pointer.y * par });
+        if (!reduceMotion) tmpP.y += Math.sin(clock * 0.9 + c.slot * 0.5) * 0.03;
+        const liftTarget = c.i === hovered ? 1 : 0;
+        c.lift += (liftTarget - c.lift) * damp(10, dt);
+        tmpP.x += Math.sin(a) * 0.22 * c.lift; tmpP.y += Math.cos(a) * 0.22 * c.lift; tmpP.z += 0.12 * c.lift;
+      }
+      // keep the face-down rotation in sync for cards returning from focus
+      if (Math.abs(c.flip - c.flipTarget) > 0.001) {
+        c.flip += (c.flipTarget - c.flip) * damp(8, dt);
+      }
+      g.position.lerp(tmpP, damp(started ? 7 : 12, dt));
+      g.quaternion.slerp(tmpQ, damp(8, dt));
+    }
+  }
+
+  // light sweep across a card as it lands face up
+  if (sweepT >= 0) {
+    sweepT += dt;
+    const p = Math.min(1, sweepT / 0.55);
+    sweep.position.set(-1.1 + 2.2 * p, 0.6 - 1.2 * p, -focusDist + 0.55);
+    sweep.intensity = Math.sin(p * Math.PI) * 6;
+    if (p >= 1) { sweepT = -1; sweep.intensity = 0; }
+  }
+
+  if (motes) {
+    motes.rotation.y += dt * 0.01;
+    motes.position.y = Math.sin(clock * 0.1) * 0.2;
+  }
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+
+</body>
+</html>
