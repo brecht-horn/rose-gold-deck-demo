@@ -186,6 +186,14 @@
     .tg-title { font-size: 19px; }
     .rail.bottom .controls button { padding: 9px 12px; }
   }
+  /* a short phone (375x667): a tighter sheet and header give the thumb close-up the room */
+  @media (max-height: 720px) and (orientation: portrait) {
+    .ask { gap: 10px; padding: 14px 14px 13px; }
+    .field { gap: 5px; }
+    .q { font-size: 20px; }
+    .ask input { min-height: 44px; padding-block: 10px; }
+    .tg-line { line-height: 1.5; }
+  }
   @media (prefers-reduced-motion: reduce) {
     #caption p, .ask { transition-duration: 0.5s; transform: none; filter: none; }
   }
@@ -796,6 +804,10 @@ seg2(wU, ULNAR, 5, 0.14, 0);
 seg2(ULNAR, FP.j[1], 5, 0.14, 1);
 seg2(T.j[0], T.j[1], 0, 0.3, 1);
 seg2(FI.j[1], FM.j[1], 5, 0.18, 2); seg2(FM.j[1], FR.j[1], 5, 0.18, 2); seg2(FR.j[1], FP.j[1], 5, 0.18, 2);
+// while the ring finger is gone (Saturn in its place) its two knuckle rungs go with it and one rung bridges the middle
+// and little knuckles instead, so the palm stays closed and no lines meet at the empty knuckle under Saturn
+SEGS[SEGS.length - 2].ringRung = SEGS[SEGS.length - 1].ringRung = true;
+seg2(FM.j[1], FP.j[1], 5, 0.18, 2); SEGS[SEGS.length - 1].bridge = true;
 for (const f of FINGERS) seg2(f.j[1], f.j[2], f.g, 0.32, 2);
 seg2(T.j[1], T.j[2], 0, 0.32, 2);
 for (const f of FINGERS) seg2(f.j[2], f.j[3], f.g, 0.32, 3);
@@ -1325,8 +1337,20 @@ const faceGeo = new THREE.ShapeGeometry(cardShape, 10);
   for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + CW / 2) / CW, (p.getY(i) + CH / 2) / CH);
   uv.needsUpdate = true;
 }
-const edgeGeo = new THREE.ExtrudeGeometry(cardShape, { depth: 0.008, bevelEnabled: false, curveSegments: 10 });
-edgeGeo.translate(0, 0, -0.004);
+// the card's rim: only the extrusion's side walls. Its two caps lay 0.5 mm inside the back and the face, close
+// enough at the fan's distance to z-fight with them in blocky tiles on the Mac GPU, and they are never seen anyway.
+const edgeGeo = (() => {
+  const ex = new THREE.ExtrudeGeometry(cardShape, { depth: 0.008, bevelEnabled: false, curveSegments: 10 });
+  ex.translate(0, 0, -0.004);
+  const side = ex.groups.find(g => g.materialIndex === 1) || { start: 0, count: ex.attributes.position.count };
+  const g = new THREE.BufferGeometry();
+  for (const k of ['position', 'normal', 'uv']) {
+    const a = ex.attributes[k];
+    if (a) g.setAttribute(k, new THREE.BufferAttribute(a.array.slice(side.start * a.itemSize, (side.start + side.count) * a.itemSize), a.itemSize));
+  }
+  ex.dispose();
+  return g;
+})();
 const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 function canvas2d(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
 
@@ -1477,7 +1501,7 @@ const blankFaceMat = new THREE.MeshStandardMaterial({ color: 0x150e19, roughness
 const cardScene = new THREE.Scene();
 cardScene.environment = ENV;
 cardScene.environmentIntensity = 0.85;
-const cardCam = new THREE.PerspectiveCamera(FOV, 1, 0.1, 400);     // fixed at the origin, looking down -z
+const cardCam = new THREE.PerspectiveCamera(FOV, 1, 1.0, 120);     // fixed at the origin, looking down -z; no card comes nearer than ~3.5
 cardScene.add(cardCam);
 cardScene.add(new THREE.AmbientLight(0xffffff, 0.15));
 const fanRoot = new THREE.Group(); cardScene.add(fanRoot);          // the deck's world: the fan is laid out in here
@@ -1554,12 +1578,12 @@ function fanPose(slot, outPos, outQuat, ptr, lift, bob) {
    ===================================================================== */
 let W = 1, H = 1, aspect = 1;
 // extents of the THUMB figure around the camera's focus point, in scene units at that depth (measured at boot)
-const FIG = { up: 0.48, down: 0.92, left: 0.25, right: 0.37 };
+const FIG = { up: 0.48, down: 0.92, left: 0.25, right: 0.37, tipX: 0 };
 // the open hand as the end shot sees it, in scene units around the pivot (measured at boot)
 const OPEN = { up: 0.96, down: 0.86, width: 1.6, handCxRel: 0.1, tipAboveSat: 0.85, ringTipY: 0.8, ringLen: 0.85 };
 const framing = {
   dAll: 6, dThumb: 2, shiftAll: 0.06, shiftThumbY: 0.26, shiftThumbX: 0, arcK: 1,
-  dSlide: 4, sySlide: 0, dZoom: 2, syZoom: 0, dChoose: 5, sxChoose: 0, syChoose: 0, dPick: 5, syPick: 0, dEnd: 6, syEnd: 0,
+  dPull: 6, syPull: 0, dSlide: 4, sySlide: 0, dZoom: 2, syZoom: 0, dChoose: 5, sxChoose: 0, syChoose: 0, dPick: 5, syPick: 0, dEnd: 6, syEnd: 0,
 };
 // screen layout in CSS px (rails, fan, the lifted card) and card-camera depths
 const LAY = { top: 64, bottom: 80, capBottom: 78, fanTop: 500, fanBottom: 700, fanL: 16, fanR: 374, liftX: 0, liftY: -0.2, liftZ: 6, floatZ: 7.8, satChooseY: 400, satPickY: 160 };
@@ -1617,6 +1641,17 @@ function layoutFan(portrait, short) {
   FAN.Df = Df; FAN.nx = nx; FAN.ny = ny;
   LAY.fanTop = b.y0; LAY.fanBottom = b.y1; LAY.fanL = b.x0; LAY.fanR = b.x1;
 }
+// the name/birthday sheet's box where it comes to rest (measured even while it is hidden), so the thumb close-up
+// and the thumb's header can both keep clear of it
+function measureSheet() {
+  const was = askWrap.hidden;
+  if (was) { askWrap.style.visibility = 'hidden'; askWrap.hidden = false; }
+  const wr = askWrap.getBoundingClientRect();
+  const r = { left: wr.left + askForm.offsetLeft, top: wr.top + askForm.offsetTop };
+  r.right = r.left + askForm.offsetWidth; r.bottom = r.top + askForm.offsetHeight;
+  if (was) { askWrap.hidden = true; askWrap.style.visibility = ''; }
+  return r;
+}
 function resize() {
   W = stage.clientWidth || innerWidth; H = stage.clientHeight || innerHeight;
   renderer.setSize(W, H, false);
@@ -1644,10 +1679,17 @@ function resize() {
   // free band: below the thumb's header (eyebrow, title and the Sun line, which sits above the tip) and above the
   // sheet (or left of it).
   framing.shiftThumbX = portrait ? -0.12 : side ? -0.36 : 0;
-  const sheetH = askForm.offsetHeight || 252, sheetW = Math.min(360, W - 32);
-  const bandTop = LAY.top + (tagT.hMax || 100) + 40, bandBot = side ? H - 64 : H - 68 - sheetH - 14;
-  const lookX = W / 2 * (1 + framing.shiftThumbX);
-  const rightEdge = side ? W - Math.max(0.07 * W, 16) - sheetW - 16 : W - 16;
+  LAY.sheet = measureSheet();
+  const bandTop = LAY.top + (tagT.hMax || 100) + 28, bandBot = side ? H - 64 : LAY.sheet.top - 14;
+  let lookX = W / 2 * (1 + framing.shiftThumbX);
+  // landscape: the thumb's header is centred over the thumb, so the thumb moves left far enough for the header
+  // to clear the sheet beside it (844x390 put the Sun line under the sheet)
+  if (side) {
+    const tipDx = FIG.tipX * H / (2 * TAN * framing.dThumb || 1);       // last fit's px per unit (close enough)
+    lookX = Math.max(16 + tagT.w / 2 - tipDx, Math.min(lookX, LAY.sheet.left - 18 - tagT.w / 2 - tipDx));
+    framing.shiftThumbX = 2 * lookX / W - 1;
+  }
+  const rightEdge = side ? LAY.sheet.left - 16 : W - 16;
   const fitPx = Math.max(40, Math.min(
     (bandBot - bandTop) / (FIG.up + FIG.down),
     (rightEdge - lookX) / FIG.right, (lookX - 16) / FIG.left));             // px per world unit at the thumb
@@ -1699,8 +1741,22 @@ function resize() {
   LAY.liftX = short ? FAN.nx : 0;
   LAY.liftPx = cardPx;
   LAY.floatZ = LAY.liftZ * 1.3;
-  // end: the whole hand, lowered so both headers and the chosen card fit above it
   const ppuAll = H / (2 * TAN * framing.dAll);
+  // pull-out, portrait: the whole open hand between the thumb's header (eyebrow, title and its card) and the caption,
+  // so the fingers never rise into the header (on a 375x667 phone the overview put the index fingertip under it).
+  // Wider screens keep the overview: the header has room beside the hand there.
+  framing.dPull = framing.dAll; framing.syPull = framing.shiftAll;
+  if (portrait) {
+    const fs = Math.max(22, Math.min(31, 0.014 * W + 16)), capPull = short ? 0 : 2 * fs * 1.24 + 4;
+    const top = LAY.top + (tagR.hHead || 46) + 47 + 26;
+    const bot = short ? H - LAY.bottom - 8 : H - LAY.capBottom - capPull - 12;
+    const needP = OPEN.up + OPEN.down;
+    const ppuPull = Math.max(60, Math.min(ppuAll, (bot - top) / needP));
+    const freeP = Math.max(0, bot - top - needP * ppuPull);
+    framing.dPull = dAtPpu(ppuPull);
+    framing.syPull = ndcY(top + freeP * 0.5 + OPEN.up * ppuPull);
+  }
+  // end: the whole hand, lowered so both headers and the chosen card fit above it
   const A = LAY.top + (tagR.hEnd || 84) + 22;
   const need = FLOAT_H + FLOAT_GAP + 0.03 + OPEN.ringTipY + OPEN.down;
   const ppuEnd = Math.max(60, Math.min(ppuAll, (H - LAY.bottom - A) / need));
@@ -1763,7 +1819,7 @@ const STAG_OPEN = [0.1, 0, 0.06, 0.12, 0.18];      // the hand unfurls index to 
 const st = {
   pose: new Float32Array(NP), yaw: 0, pitch: 0, roll: 0,
   starsIn: 0, formT: -1, lines: 0,
-  dolly: 1, arcX: 0, wThumb: 0, wRing: 0, wZoom: 0, wChoose: 0, wPick: 0, wEnd: 0,
+  dolly: 1, arcX: 0, wThumb: 0, wPull: 0, wRing: 0, wZoom: 0, wChoose: 0, wPick: 0, wEnd: 0,
   math: 0, caption: '', pulse: 0, tagT: 0, tagCard: 0, tagR: 0, tagRCard: 0, sun: 0,
   hi: 0, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, fingerA: 1, planetA: 0, ringsA: 0, annA: 0, floatW: 0,
 };
@@ -1792,7 +1848,7 @@ function evalA(t) {
   st.pitch = lerp(-0.04, ROT_T.pitch, eZ) - Math.sin(Math.PI * eT) * (reduceMotion ? 0.03 : 0.1);
   st.dolly = lerp(1.2, 1.0, segE(t, [0, TA.turn[0] + TA.turn[1]], E.sine));
   st.arcX = Math.sin(Math.PI * eT) * (reduceMotion ? 0.05 : 0.28);
-  st.wThumb = E.quart(clamp01(wZoom));
+  st.wThumb = E.quart(clamp01(wZoom)); st.wPull = 0;
   ringOff();
   st.math = 0; st.caption = ''; st.pulse = 0;
   st.tagT = segE(t, TA.tag, E.sine); st.tagCard = 0;
@@ -1808,6 +1864,7 @@ function evalB(t) {
   st.dolly = 1;
   st.arcX = -Math.sin(Math.PI * eO) * (reduceMotion ? 0.04 : 0.22) * framing.arcK;
   st.wThumb = 1 - segE(t, TB.out, E.sine);
+  st.wPull = segE(t, TB.out, E.sine);
   st.sun = 1 - segE(t, TB.out, E.sine);
   st.wRing = segE(t, TB.push, E.inOut);
   st.wZoom = segE(t, TB.zoom, E.inOut);
@@ -2235,7 +2292,7 @@ function textBox(node) {                // the box of the text itself (the math 
   return r.width > 1 ? r : null;
 }
 function makeTag(node, lead, grp) {
-  return { el: node, lead, grp, w: 160, h: 60, hMax: 0, hHead: 0, hEnd: 0, x: null, y: null, spot: 'above', next: null, swap: 1, rect: null, align: '', showCard: false, swapAt: 0, crowded: 0, movedAt: -9 };
+  return { el: node, lead, grp, w: 160, h: 60, hMax: 0, hHead: 0, hEnd: 0, x: null, y: null, spot: 'above', next: null, swap: 1, rect: null, align: '', showCard: false, swapAt: 0, crowded: 0, movedAt: -9, prev: null };
 }
 const tagT = makeTag(thumbTagEl, leadT, 0), tagR = makeTag(ringTagEl, leadR, 3);
 let tagsCompact = false;
@@ -2252,8 +2309,9 @@ function hideTag(tag) {
   tag.el.style.opacity = '0'; tag.lead.style.opacity = '0';
   tag.x = null; tag.next = null; tag.swap = 1; tag.rect = null;
 }
-function placeTag(tag, alpha, ax, ay, dt, blocks, peer = null) {
-  if (alpha <= 0.001 || !Number.isFinite(ax) || !Number.isFinite(ay)) { hideTag(tag); return null; }
+function placeTag(tag, alpha, ax, ay, dt, blocks, peer = null, ghost = false, peerAx = null) {
+  // a ghost is placed (and keeps its spot) while still invisible, so the other header can keep clear of where it will be
+  if ((alpha <= 0.001 && !ghost) || !Number.isFinite(ax) || !Number.isFinite(ay)) { hideTag(tag); return null; }
   const { w, h } = tag, gap = 24;
   const top = LAY.top, bottom = H - LAY.bottom;
   const cx = lx => Math.max(16, Math.min(W - 16 - w, lx));
@@ -2261,10 +2319,10 @@ function placeTag(tag, alpha, ax, ay, dt, blocks, peer = null) {
   const spotXY = k => {
     if (k.includes('P')) {
       const lx = k.endsWith('PL') ? peer.left - 16 - w : peer.right + 16;
-      return [cx(lx), cy(k.startsWith('above') ? ay - gap - h : top)];
+      return [cx(lx), cy(k.startsWith('above') && !tag.pinTop ? ay - gap - h : top)];
     }
     const lx = k.endsWith('LL') ? ax - w - 40 : k.endsWith('RR') ? ax + 40 : k.endsWith('L') ? ax - w + 20 : k.endsWith('R') ? ax - 20 : ax - w / 2;
-    const ly = k.startsWith('above') ? ay - gap - h : k.startsWith('high') ? ay - gap * 2.6 - h : top;
+    const ly = tag.pinTop || !(k.startsWith('above') || k.startsWith('high')) ? top : k.startsWith('above') ? ay - gap - h : ay - gap * 2.6 - h;
     return [cx(lx), cy(ly)];
   };
   projectHand();
@@ -2273,30 +2331,48 @@ function placeTag(tag, alpha, ax, ay, dt, blocks, peer = null) {
     let c = handHits(lx - p, ly - p, lx + w + p, ly + h + p, ax, ay, tag.grp);
     for (const r of blocks) if (r && lx < r.right + 10 && lx + w > r.left - 10 && ly < r.bottom + 10 && ly + h > r.top - 10) c += 500;
     if (peer && lx < peer.right + 8 && lx + w > peer.left - 8 && ly < peer.bottom + 8 && ly + h > peer.top - 8) c += 5000;   // never on the other header
+    // side by side, the headers keep their fingers' order, so the two leaders never cross
+    if (peer && peerAx !== null && ly < peer.bottom && ly + h > peer.top && (lx + w / 2 - (peer.left + peer.right) / 2) * (ax - peerAx) < 0) c += 300;
     return c;
   };
   const spots = peer ? SPOTS.concat(PEER_SPOTS) : SPOTS;
   if (!spots.includes(tag.spot)) tag.spot = 'above';
-  const best = p => {                               // the first clear spot in order, else the least crowded
-    let bk = spots[0], bc = Infinity;
-    for (const k of spots) { const c = cost(k, p); if (c === 0) return { k, c }; if (c < bc) { bk = k; bc = c; } }
-    return { k: bk, c: bc };
+  const best = (p, skip) => {                       // the first clear spot in order, else the least crowded
+    let bk = null, bc = Infinity;
+    for (const k of spots) { if (skip && skip(k)) continue; const c = cost(k, p); if (c === 0) return { k, c }; if (c < bc) { bk = k; bc = c; } }
+    return { k: bk || spots[0], c: bc };
   };
   let snap = false;
-  // hysteresis: a spot must stay crowded for a moment, and a header that just moved stays put a while, so a turning
-  // hand never makes it hop from spot to spot
-  const crowdedNow = tag.x !== null && !tag.next && cost(tag.spot, 18) > 0;
+  // hysteresis: a header leaves its spot only once stars actually reach it (6 px) and stay a moment, never within
+  // 1.4 s of its last move, and never straight back to the spot it just left, so a moving camera does not make it hop
+  // from spot to spot (v2 hopped up to five times in the ring beat on a 375 px phone, once back and forth in 0.8 s)
+  const crowdedNow = tag.x !== null && !tag.next && cost(tag.spot, 6) > 0;
   tag.crowded = crowdedNow ? tag.crowded + dt : 0;
-  if (tag.x === null) { tag.spot = best(5).k; snap = true; tag.movedAt = clock; }
-  else if (crowdedNow && tag.crowded > 0.22 && clock - tag.movedAt > 0.7) {
-    // the hand is closing in on the header: leave early for a spot with a wide margin, else for any clearer spot
-    const wide = best(18);
-    if (wide.c === 0 && wide.k !== tag.spot) tag.next = wide.k;
-    else { const cur = cost(tag.spot, 5), b = best(5); if (cur > 0 && b.k !== tag.spot && b.c < cur - 1) tag.next = b.k; }
+  // sitting on the other header is never waited out
+  const onPeer = !!peer && tag.x !== null && !tag.next && tag.x < peer.right + 8 && tag.x + w > peer.left - 8 && tag.y < peer.bottom + 8 && tag.y + h > peer.top - 8;
+  const urgent = onPeer || (crowdedNow && cost(tag.spot, 0) >= 500);   // on the other header, the caption, the arithmetic, the sheet or a card
+  // the usual reasons to move: stars reaching it for a while, or the hand sweeping right through it (the pull-out). On
+  // the top row (pinned while the camera travels) every other spot is a sideways shuffle along the same row, so a
+  // pinned header holds its place and lets dim stars pass behind it, or (clearOnly, at the pick) moves only to a clear spot.
+  const restless = crowdedNow && (!tag.pinTop || tag.clearOnly)
+    && ((tag.crowded > 0.3 && clock - tag.movedAt > 1.4) || (tag.crowded > 0.1 && clock - tag.movedAt > 0.6 && cost(tag.spot, 0) > 6));
+  // a header parked beside the other one (a peer spot, the last resort) goes back to one of its own spots once one is
+  // clear, so it does not end the run far from its finger on a long leader
+  const homeward = !tag.pinTop && !crowdedNow && !urgent && tag.spot.includes('P') && clock - tag.movedAt > 1.2;
+  if (tag.x === null) { tag.spot = best(5).k; snap = true; tag.movedAt = clock; tag.prev = null; }
+  else if (urgent || restless || homeward) {
+    // leave for a spot with a wide margin, else for any clearer spot; a spot within a few px of where the header
+    // already is would only blink it in place (seen at the pick on a phone, 'top' to 'topL' 3 px apart)
+    const [cx0, cy0] = spotXY(tag.spot);
+    const moves = k => { const [x, y] = spotXY(k); return Math.abs(x - cx0) > 12 || Math.abs(y - cy0) > 12; };
+    const skip = k => k === tag.spot || !moves(k) || (k === tag.prev && clock - tag.movedAt < 3.5) || (homeward && k.includes('P'));
+    const wide = best(18, skip);
+    if (wide.c === 0) tag.next = wide.k;
+    else if (!homeward && (urgent || !tag.clearOnly)) { const cur = cost(tag.spot, 5), b = best(5, skip); if (cur > 0 && b.c < cur - 1) tag.next = b.k; }
   }
   if (tag.next) {                                   // switching spots cross-fades instead of sliding across the hand
     tag.swap = Math.max(0, tag.swap - dt / 0.16);
-    if (tag.swap === 0) { tag.spot = tag.next; tag.next = null; snap = true; tag.movedAt = clock; tag.crowded = 0; }
+    if (tag.swap === 0) { tag.prev = tag.spot; tag.spot = tag.next; tag.next = null; snap = true; tag.movedAt = clock; tag.crowded = 0; }
   } else tag.swap = Math.min(1, tag.swap + dt / 0.24);
   const align = tag.spot.endsWith('L') ? 'end' : tag.spot.endsWith('R') ? 'start' : '';   // (PL ends in L, PR in R)
   if (align !== tag.align) { tag.align = align; if (align) tag.el.dataset.align = align; else delete tag.el.dataset.align; }
@@ -2347,11 +2423,24 @@ function updateTags(dt) {
   if (capShown) blocks.push(textBox(captionP));
   if (phase === 'pick') blocks.push(liftRect());
   if (st.floatW > 0.05 && PK.floatRect) blocks.push(PK.floatRect);
-  // the thumb first (when both show, the ring header makes way for it)
+  // the thumb's header also keeps off the sheet, from the close-up on (before it shows, so it never has to hop off it)
+  const tBlocks = blocks.slice();
+  if (phase === 'await' || (phase === 'A' && st.wThumb > 0.3) || (phase === 'B' && !askWrap.hidden)) tBlocks.push(LAY.sheet);
+  // While the camera travels (the pull-out; the ring beat, the choice and the turn; the start of the move back while
+  // the card floats to the finger) a header keeps to the top row and only follows its finger sideways: the framings
+  // keep that band clear, so it never rides down into the hand. (The pull-out keeps that band only in portrait; wider
+  // screens leave the thumb's header free to sit beside the hand.)
+  tagT.pinTop = aspect < 0.8 && phase === 'B' && tB >= TB.out[0] - 0.3;
+  tagR.pinTop = phase === 'B' || phase === 'choose' || phase === 'pick' || (phase === 'C' && tC < TC.float[0] + TC.float[1] * 0.6);
+  tagR.clearOnly = phase === 'pick' || phase === 'C';
+  // the thumb first (when both show, the ring header makes way for it). After the pick the thumb's header is placed
+  // from the start of the move back, before it shows (a ghost), so the ring's header (already up, with its card)
+  // routes around the spot the thumb's will take instead of being landed on.
   let tr = null;
-  if (st.tagT > 0.001) {
+  const thumbGhost = phase === 'C' || phase === 'end';
+  if (st.tagT > 0.001 || thumbGhost) {
     screenOf(capLocal(T.j[3].pos, T.j[2].pos, BONE_TD.r1, aL), aT);
-    tr = placeTag(tagT, st.tagT, aT.x, aT.y, dt, blocks);
+    tr = placeTag(tagT, st.tagT, aT.x, aT.y, dt, tBlocks, null, thumbGhost);
   } else hideTag(tagT);
   // ring finger: above its tip; over Saturn from the moment it takes the finger's place; over the chosen card once it is there
   if (result && st.tagR > 0.001) {
@@ -2359,7 +2448,10 @@ function updateTags(dt) {
     const wS = Math.max(st.wZoom, st.wPick) * (1 - st.wEnd);
     if (wS > 0) { screenOf(ringRestLocal(aL), aS); aS.y -= RING_OUT * 0.5 * H / (2 * TAN * aS.z); aR.lerp(aS, wS); }
     if (st.floatW > 0) { aL.copy(FR.j[4].pos); aL.y += FLOAT_GAP + FLOAT_H; screenOf(aL, aC); aR.lerp(aC, st.floatW); }
-    placeTag(tagR, st.tagR, aR.x, aR.y, dt, blocks, tr);
+    // the thumb's ghost only counts once the camera has nearly settled on the whole hand (earlier, its spot is still
+    // travelling and the ring's header would dodge it twice)
+    const peer = tr && (st.tagT > 0.001 || phase === 'end' || tC > TC.thumbBack[0] - 0.8) ? tr : null;
+    placeTag(tagR, st.tagR, aR.x, aR.y, dt, blocks, peer, false, peer ? aT.x : null);
   } else hideTag(tagR);
 }
 
@@ -2392,6 +2484,11 @@ function updateCamera(par) {
   camPos.set(st.arcX, 0.06, framing.dAll * st.dolly);
   camLook.set(0, 0, 0);
   SY = framing.shiftAll; SX = 0;
+  // the pull-out's own framing of the whole hand (see resize)
+  if (st.wPull > 0) {
+    shotP.set(st.arcX, 0.06, framing.dPull); camPos.lerp(shotP, st.wPull);
+    SY = lerp(SY, framing.syPull, st.wPull);
+  }
   // thumb close-up, tracking the live thumb
   if (st.wThumb > 0) {
     handInner.localToWorld(thumbFocusLocal(vA));
@@ -2489,7 +2586,8 @@ function updateLines() {
   for (let k = 0; k < NS; k++) {
     const s = SEGS[k], A = s.a.pos, B = s.b.pos;
     const local = clamp01((p - s.level * 0.16) / 0.36), e = E.out(local);
-    const a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * CURL[s.fin] : 1) * Math.min(1, local * 3);
+    const a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * CURL[s.fin] : 1) * Math.min(1, local * 3)
+      * (s.ringRung ? st.fingerA : s.bridge ? 1 - st.fingerA : 1);
     lp[k * 6] = A.x; lp[k * 6 + 1] = A.y; lp[k * 6 + 2] = A.z;
     lp[k * 6 + 3] = A.x + (B.x - A.x) * e; lp[k * 6 + 4] = A.y + (B.y - A.y) * e; lp[k * 6 + 5] = A.z + (B.z - A.z) * e;
     la[k * 2] = a; la[k * 2 + 1] = a * (0.5 + 0.5 * e);
@@ -2837,6 +2935,7 @@ resize();
   joints.forEach(j => take(j.pos));
   dust.forEach(dd => { if (!dd.arm) take(dustTarget(dd, q)); });
   for (const k in ext) FIG[k] = ext[k] * 1.04;
+  { p.copy(T.j[3].pos); handInner.localToWorld(p); p.applyMatrix4(camera.matrixWorldInverse); FIG.tipX = p.x / -p.z * d0; }   // the header's anchor, right of the focus
   // and the open hand as the ring beat and the end shot see it (hand-local axes, pivot at the origin)
   applyPose(POSES.open);
   handRoot.rotation.set(-0.04, 0, 0); handRoot.updateMatrixWorld(true);
