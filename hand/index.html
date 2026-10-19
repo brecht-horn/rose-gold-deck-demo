@@ -1,0 +1,1797 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel=icon href="data:,"><style>body{margin:0}[hidden]{display:none!important}</style></head><body><title>Constellation Hand</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one full-bleed WebGL sky; a quiet mono caption rail pinned top and bottom; the narrative line,
+     the name/birthday sheet and the math note float just above the bottom rail. Single dark world by design. */
+  :root {
+    --ink: #f3e6df;
+    --muted: #a08f96;
+    --rose: #e2a48f;
+    --bg: #040306;
+    --bg2: #120c17;
+    --line: rgba(226, 164, 143, 0.38);
+    --panel: rgba(12, 9, 15, 0.82);
+    --display: "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(120% 85% at 50% 40%, var(--bg2), var(--bg) 70%);
+    color: var(--ink);
+    font-family: var(--mono);
+    overflow: hidden;
+  }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  .vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(118% 82% at 50% 44%, rgba(0, 0, 0, 0) 34%, rgba(2, 1, 4, 0.5) 64%, rgba(0, 0, 0, 0.9) 100%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 18%, rgba(0, 0, 0, 0) 76%, rgba(0, 0, 0, 0.6));
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .rail {
+    position: fixed; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    pointer-events: none;
+  }
+  .rail.top { top: 0; padding-block: calc(14px + env(safe-area-inset-top, 0px)) 0; }
+  .rail.bottom { bottom: 0; padding-block: 0 calc(16px + env(safe-area-inset-bottom, 0px)); align-items: flex-end; }
+  .brand { font-family: var(--display); font-size: 19px; letter-spacing: 0.01em; text-transform: none; color: var(--ink); font-weight: 500; }
+  .tag { text-align: right; line-height: 1.6; }
+  #hint { max-width: 30ch; line-height: 1.6; }
+  .controls { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+  button {
+    font: inherit; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
+    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 999px;
+    padding: 9px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--rose); }
+  button:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+  button.cta { border-color: var(--rose); background: rgba(226, 164, 143, 0.12); }
+
+  /* narrative line */
+  #caption {
+    position: fixed; left: 0; right: 0; bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    display: flex; justify-content: center; pointer-events: none;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #caption p {
+    margin: 0; max-width: 23ch; text-align: center; text-wrap: balance;
+    font-family: var(--display); font-weight: 500; font-size: clamp(22px, 1.4vw + 16px, 31px); line-height: 1.24;
+    color: var(--ink); letter-spacing: 0.005em;
+    text-shadow: 0 0 22px rgba(4, 3, 6, 0.9), 0 0 2px rgba(4, 3, 6, 0.9);
+    opacity: 0; transform: translateY(8px); filter: blur(5px);
+    transition: opacity 1.1s ease, transform 1.1s cubic-bezier(.2, .7, .2, 1), filter 1.1s ease;
+  }
+  #caption p.on { opacity: 1; transform: none; filter: none; }
+
+  /* name + birthday sheet */
+  #askWrap {
+    position: fixed; left: 0; right: 0; bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    display: flex; justify-content: center; pointer-events: none;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .ask {
+    pointer-events: auto; width: min(360px, 100%); box-sizing: border-box; display: grid; gap: 14px;
+    background: var(--panel); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px 16px;
+    opacity: 0; transform: translateY(12px);
+    transition: opacity 0.9s ease, transform 0.9s cubic-bezier(.2, .7, .2, 1);
+  }
+  .ask.on { opacity: 1; transform: none; }
+  .wide #askWrap {
+    top: 0; bottom: 0; align-items: center; justify-content: flex-end;
+    padding-right: max(7vw, env(safe-area-inset-right, 0px));
+  }
+  .field { display: grid; gap: 7px; }
+  .q { font-family: var(--display); font-weight: 500; font-size: 22px; line-height: 1.2; color: var(--ink); }
+  .field-label { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .ask input {
+    font: 400 16px/1.25 var(--mono); color: var(--ink); width: 100%; box-sizing: border-box; min-height: 46px; margin: 0;
+    background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(226, 164, 143, 0.26); border-radius: 10px;
+    padding: 11px 12px; -webkit-appearance: none; appearance: none;
+  }
+  .ask input:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(226, 164, 143, 0.15); }
+  .ask input::placeholder { color: rgba(243, 230, 223, 0.36); }
+  .ask input[type="date"] { display: block; }
+  .ask input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+  .ask input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85) sepia(0.4); opacity: 0.6; cursor: pointer; }
+  .ask-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .ask-note { font-size: 10.5px; line-height: 1.55; letter-spacing: 0.03em; color: var(--muted); }
+  .ask-note[data-error] { color: #f0a5a0; }
+  button.primary { border-color: var(--rose); background: rgba(226, 164, 143, 0.14); padding: 12px 20px; flex: 0 0 auto; }
+
+  /* card label that rides beside the thumb */
+  #cardLabel {
+    position: fixed; left: 0; top: 0; pointer-events: none; display: flex; align-items: center; gap: 10px;
+    opacity: 0; will-change: transform, opacity;
+  }
+  .mini {
+    min-width: 26px; height: 42px; padding: 0 4px; flex: 0 0 auto; box-sizing: border-box; border: 1px solid var(--rose); border-radius: 4px;
+    display: grid; place-items: center; font-family: var(--display); font-size: 11px; letter-spacing: -0.02em; color: var(--rose);
+    background: rgba(18, 11, 17, 0.7); box-shadow: 0 0 16px rgba(226, 164, 143, 0.22);
+  }
+  .lab-text { display: grid; gap: 2px; }
+  .lab-eyebrow { font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  .lab-name {
+    font-family: var(--display); font-weight: 500; font-size: 19px; color: var(--ink); white-space: nowrap;
+    text-shadow: 0 0 14px rgba(4, 3, 6, 0.95);
+  }
+  #leader { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  #leader line { stroke: var(--rose); stroke-width: 1; stroke-opacity: 0.55; }
+
+  /* the arithmetic, in mono */
+  #math {
+    position: fixed; left: 0; right: 0; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); pointer-events: none;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    text-align: center; font-size: 12px; line-height: 1.8; letter-spacing: 0.02em; color: var(--ink); opacity: 0;
+    text-shadow: 0 0 12px rgba(4, 3, 6, 0.95);
+  }
+  #math .part { display: block; }                /* one line per idea; long birth chains wrap only between steps */
+  #math .step { white-space: nowrap; }
+  #math .arrow { color: var(--rose); }
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  /* landscape: the arithmetic takes the column the sheet just left, clear of the hand */
+  .wide #math {
+    left: auto; right: max(7vw, env(safe-area-inset-right, 0px)); top: 50%; bottom: auto; transform: translateY(-50%);
+    padding: 0; width: max-content; max-width: 40vw; text-align: left;
+  }
+  #fallback {
+    position: fixed; inset: 0; display: grid; place-items: center; text-align: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-size: 13px; line-height: 1.7; color: var(--muted);
+  }
+  @media (min-width: 700px) { #caption p { max-width: 31ch; } }
+  /* short landscape (a phone on its side): no room under the hand, so the narrative line takes the open column
+     on the pinky side. The thumb side stays free for the card label and the arithmetic. */
+  .short #caption {
+    right: auto; top: 0; bottom: 0; align-items: center; justify-content: flex-start;
+    width: min(31vw, 300px); padding-left: max(5vw, env(safe-area-inset-left, 0px)); padding-right: 0;
+  }
+  .short #caption p { max-width: none; text-align: left; font-size: 21px; line-height: 1.28; }
+  @media (max-width: 420px) {
+    #hint { max-width: 22ch; }
+    .lab-name { white-space: normal; max-width: 7.4em; font-size: 18px; line-height: 1.15; }
+    .rail.bottom .controls button { padding: 9px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #caption p, .ask { transition-duration: 0.5s; transform: none; filter: none; }
+  }
+</style>
+
+<div id="stage" aria-label="A hand drawn in stars forms out of the night sky, turns, and settles on the thumb."></div>
+<div class="vignette" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div class="rail top">
+  <div class="brand">Constellation Hand</div>
+  <div class="tag">Prototype<br>three.js · The thumb</div>
+</div>
+
+<div id="caption" aria-live="polite"><p></p></div>
+
+<svg id="leader" aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0" /></svg>
+<div id="cardLabel" aria-live="polite">
+  <div class="mini" id="labNum">VI</div>
+  <div class="lab-text">
+    <span class="lab-eyebrow">Your thumb</span>
+    <span class="lab-name" id="labName">The Lovers</span>
+  </div>
+</div>
+<div id="math" aria-live="polite"></div>
+
+<div id="askWrap" hidden>
+  <form class="ask" id="ask" novalidate autocomplete="off">
+    <div class="field">
+      <label class="q" for="name">What should we call you?</label>
+      <input id="name" name="name" type="text" placeholder="Brecht" maxlength="40" autocomplete="given-name" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+    </div>
+    <div class="field">
+      <label class="field-label" for="dob">Date of birth</label>
+      <input id="dob" name="dob" type="date" value="1997-03-14" min="1900-01-01" max="2099-12-31">
+    </div>
+    <div class="ask-foot">
+      <span class="ask-note" id="askNote">Leave either blank to use the example: Brecht, 14 March 1997.</span>
+      <button type="submit" class="primary" id="reveal">Reveal</button>
+    </div>
+  </form>
+</div>
+
+<div class="rail bottom">
+  <div id="hint">Move to drift through the stars.</div>
+  <div class="controls">
+    <button id="tilt" type="button" hidden>Tilt</button>
+    <button id="skip" type="button">Skip</button>
+    <button id="replay" type="button">Replay</button>
+  </div>
+</div>
+
+<div id="fallback" hidden>This prototype needs WebGL, which this browser isn't providing.</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+const MAJORS = [
+  ['0', 'The Fool'], ['I', 'The Magician'], ['II', 'The High Priestess'], ['III', 'The Empress'],
+  ['IV', 'The Emperor'], ['V', 'The Hierophant'], ['VI', 'The Lovers'], ['VII', 'The Chariot'],
+  ['VIII', 'Strength'], ['IX', 'The Hermit'], ['X', 'Wheel of Fortune'], ['XI', 'Justice'],
+  ['XII', 'The Hanged Man'], ['XIII', 'Death'], ['XIV', 'Temperance'], ['XV', 'The Devil'],
+  ['XVI', 'The Tower'], ['XVII', 'The Star'], ['XVIII', 'The Moon'], ['XIX', 'The Sun'],
+  ['XX', 'Judgement'], ['XXI', 'The World'],
+];
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const qs = new URLSearchParams(location.search);
+
+/* =====================================================================
+   The thumb rule (locked). Method T birth card + name number, counted
+   through the 22 Majors.
+   ===================================================================== */
+const digitsOf = n => String(n).split('').map(Number);
+function birthCard(y, m, d) {
+  const C = y >= 2000 ? 20 : 19;              // 19 for 1900-1999, 20 for 2000-2099
+  const YY = y % 100;
+  const S = m + d + C + YY;
+  const steps = [`${m} + ${d} + ${C} + ${YY} = ${S}`];
+  let v = S;
+  if (v >= 100) {                              // three digits: first two (as one number) + last digit
+    const a = Math.floor(v / 10), b = v % 10;
+    v = a + b; steps.push(`${a} + ${b} = ${v}`);
+  }
+  while (v > 21) {                             // still above 21: digit sum, repeated
+    const ds = digitsOf(v);
+    v = ds.reduce((s, x) => s + x, 0); steps.push(`${ds.join(' + ')} = ${v}`);
+  }
+  if (v >= 1 && v <= 9) { steps.push(`${v} + 9 = ${v + 9}`); v += 9; }   // single digit: its partner
+  return { S, card: v, steps };
+}
+function nameNumber(raw) {
+  const first = String(raw || '').trim().split(/\s+/)[0] || '';
+  const letters = first.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z]/g, '');
+  let sum = 0;
+  for (const ch of letters) sum += ch.charCodeAt(0) - 96;
+  return { first, letters, sum };
+}
+function thumbCard(name, date) {
+  const birth = date ? birthCard(date.y, date.m, date.d) : null;
+  const start = birth ? birth.card : 0;        // no birthday: start from The Fool
+  const n = nameNumber(name);
+  const thumb = n.letters ? (start + n.sum) % 22 : start;
+  return { birth, start, name: n, thumb };
+}
+function mathParts(r) {
+  const parts = [];
+  parts.push(r.birth ? r.birth.steps.join(' → ') : 'No birthday, so we start at 0');
+  if (r.name.letters) {
+    parts.push(`${r.name.first} = ${r.name.sum}`);
+    parts.push(`(${r.start} + ${r.name.sum}) mod 22 = ${r.thumb}`);
+  } else {
+    parts.push('No a–z letters in the name, so the thumb is the birth card');
+  }
+  return parts;
+}
+function selfCheck() {
+  const fails = [];
+  const eq = (label, got, want) => { if (got !== want) fails.push(`${label}: got ${got}, want ${want}`); };
+  const a = thumbCard('Brecht', { y: 1997, m: 3, d: 14 });
+  eq('1997-03-14 sum', a.birth.S, 133);
+  eq('1997-03-14 birth card', a.birth.card, 16);
+  eq('16 is The Tower', MAJORS[16][1], 'The Tower');
+  eq('Brecht name number', a.name.sum, 56);
+  eq('Brecht + 1997-03-14 thumb', a.thumb, 6);
+  eq('6 is The Lovers', MAJORS[a.thumb][1], 'The Lovers');
+  const b = birthCard(1950, 2, 21);
+  eq('1950-02-21 sum', b.S, 92);
+  eq('1950-02-21 birth card', b.card, 11);
+  eq('11 is Justice', MAJORS[11][1], 'Justice');
+  const c = birthCard(1999, 12, 31);
+  eq('1999-12-31 sum', c.S, 161);
+  eq('1999-12-31 birth card', c.card, 17);
+  eq('17 is The Star', MAJORS[17][1], 'The Star');
+  eq('1999-01-10 (129 → 12 + 9) birth card', birthCard(1999, 1, 10).card, 21);
+  eq('2001-01-08 (30 → 3, partner) birth card', birthCard(2001, 1, 8).card, 12);
+  eq('accents stripped (Zoë)', nameNumber('Zoë').sum, 46);
+  eq('no birthday starts at The Fool', thumbCard('Brecht', null).thumb, 12);
+  if (fails.length) console.error('[thumb rule] self-check failed:\n' + fails.join('\n'));
+  return fails;
+}
+const thumbCheck = selfCheck();
+
+/* =====================================================================
+   Elements
+   ===================================================================== */
+const stage = document.getElementById('stage');
+const hintEl = document.getElementById('hint');
+const tiltBtn = document.getElementById('tilt');
+const skipBtn = document.getElementById('skip');
+const replayBtn = document.getElementById('replay');
+const captionP = document.querySelector('#caption p');
+const askWrap = document.getElementById('askWrap');
+const askForm = document.getElementById('ask');
+const nameIn = document.getElementById('name');
+const dobIn = document.getElementById('dob');
+const askNote = document.getElementById('askNote');
+const labelEl = document.getElementById('cardLabel');
+const labNum = document.getElementById('labNum');
+const labName = document.getElementById('labName');
+const leader = document.querySelector('#leader line');
+const mathEl = document.getElementById('math');
+
+/* =====================================================================
+   Renderer, camera, shared uniforms
+   ===================================================================== */
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+} catch (e) {
+  document.getElementById('fallback').hidden = false;
+  throw e;
+}
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+renderer.setPixelRatio(DPR);
+renderer.setClearColor(0x040306, 1);
+stage.appendChild(renderer.domElement);
+const glc = renderer.getContext();
+const pointRange = glc.getParameter(glc.ALIASED_POINT_SIZE_RANGE);
+const MAX_POINT = Math.min((pointRange && pointRange[1]) || 256, 300 * DPR);
+
+const scene = new THREE.Scene();
+const FOV = 34;
+const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+const camera = new THREE.PerspectiveCamera(FOV, 1, 0.05, 200);
+
+const U = {
+  uTime: { value: 0 },
+  uScale: { value: 800 },
+  uMaxSize: { value: MAX_POINT },
+  uMinSize: { value: 2.0 * DPR },
+  uDotTo: { value: 7.0 * DPR },
+};
+const OCC = { uOcc: { value: new THREE.Vector4(0, 0, -50, 0.001) }, uOccA: { value: 0 } };
+const ONES = [1, 1, 1, 1, 1, 1];
+const GA = [1, 1, 1, 1, 1, 1];        // per-group alpha: 0 thumb, 1 index, 2 middle, 3 ring, 4 pinky, 5 palm
+const GB = [1, 1, 1, 1, 1, 1];        // per-group brightness
+
+/* ---------- glow textures (radial-gradient canvases) ---------- */
+function glowTexture(spikes) {
+  const S = 128, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.06, 'rgba(255,255,255,0.9)');
+  grd.addColorStop(0.18, 'rgba(255,255,255,0.32)');
+  grd.addColorStop(0.42, 'rgba(255,255,255,0.08)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, S, S);
+  if (spikes) {
+    g.globalCompositeOperation = 'lighter';
+    for (const horiz of [true, false]) {
+      const lg = horiz ? g.createLinearGradient(0, 0, S, 0) : g.createLinearGradient(0, 0, 0, S);
+      lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,0.6)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = lg;
+      if (horiz) g.fillRect(0, S / 2 - 1, S, 2); else g.fillRect(S / 2 - 1, 0, 2, S);
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter;
+  return t;
+}
+const GLOW = glowTexture(false);
+const FLARE = glowTexture(true);
+
+/* ---------- shaders ---------- */
+const OCC_GLSL = /* glsl */`
+  uniform vec4 uOcc;      // planet centre (view space) + radius
+  uniform float uOccA;    // planet presence 0..1
+  uniform float uOccAny;  // 1 = dim anything inside the disc (hand); 0 = hide only what is behind it (rings)
+  float occl(vec3 p) {
+    if (uOccA <= 0.001) return 1.0;
+    if (uOccAny < 0.5 && p.z >= uOcc.z) return 1.0;
+    vec2 q = p.xy * (uOcc.z / min(p.z, -0.001));
+    float d = length(q - uOcc.xy);
+    float inside = 1.0 - smoothstep(uOcc.w * 0.9, uOcc.w * 1.06, d);
+    return 1.0 - inside * uOccA * (uOccAny > 0.5 ? 0.72 : 1.0);
+  }
+`;
+const PTS_VS = /* glsl */`
+  attribute float aSize;
+  attribute float aAlpha;
+  attribute vec3 aColor;
+  attribute float aPhase;
+  attribute float aGroup;
+  uniform float uTime, uScale, uRef, uAtten, uTwinkle, uOpacity, uMaxSize, uMinSize, uSizeMul, uDotTo;
+  uniform float uGA[6];
+  uniform float uGB[6];
+  varying vec3 vColor;
+  varying float vAlpha;
+  varying float vSmall;
+  ${OCC_GLSL}
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    int g = int(aGroup + 0.5);
+    float gb = uGB[g];
+    float sp = 0.5 + fract(aPhase * 7.31) * 1.6;
+    float tw = 1.0 - uTwinkle * (0.5 + 0.5 * sin(uTime * sp + aPhase * 6.2831));
+    float d = max(0.05, -mv.z);
+    float px = aSize * uSizeMul * uScale / (pow(d, uAtten) * pow(uRef, 1.0 - uAtten)) * (0.7 + 0.3 * gb);
+    float a = aAlpha * uOpacity * uGA[g] * tw * occl(mv.xyz);
+    if (px < uMinSize) { a *= px / uMinSize; px = uMinSize; }
+    vSmall = 1.0 - smoothstep(uMinSize, uDotTo, px);
+    gl_PointSize = min(px, uMaxSize);
+    vAlpha = a;
+    vColor = aColor * gb;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const PTS_FS = /* glsl */`
+  uniform sampler2D uMap;
+  varying vec3 vColor;
+  varying float vAlpha;
+  varying float vSmall;
+  void main() {
+    float r = clamp(1.0 - length(gl_PointCoord - 0.5) * 2.0, 0.0, 1.0);
+    float m = mix(texture2D(uMap, gl_PointCoord).a, r * r * 1.4, vSmall) * vAlpha;
+    if (m < 0.002) discard;
+    gl_FragColor = vec4(vColor * m, 1.0);
+  }
+`;
+const LINE_VS = /* glsl */`
+  attribute float aAlpha;
+  attribute float aGroup;
+  attribute vec3 aColor;
+  uniform float uOpacity;
+  uniform float uGA[6];
+  uniform float uGB[6];
+  varying float vA;
+  varying vec3 vC;
+  ${OCC_GLSL}
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    int g = int(aGroup + 0.5);
+    vA = aAlpha * uOpacity * uGA[g] * occl(mv.xyz);
+    vC = aColor * uGB[g];
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const LINE_FS = /* glsl */`
+  varying float vA;
+  varying vec3 vC;
+  void main() { gl_FragColor = vec4(vC * vA, 1.0); }
+`;
+const additive = {
+  transparent: true, depthWrite: false, depthTest: false,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+  blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+};
+function pointsMaterial({ map = GLOW, twinkle = 0, opacity = 1, atten = 1, ref = 5, groups = false, occ = false, occAny = 0 } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: U.uTime, uScale: U.uScale, uMaxSize: U.uMaxSize, uMinSize: U.uMinSize, uDotTo: U.uDotTo,
+      uMap: { value: map }, uTwinkle: { value: twinkle }, uOpacity: { value: opacity },
+      uAtten: { value: atten }, uRef: { value: ref }, uSizeMul: { value: 1 },
+      uGA: { value: groups ? GA : ONES }, uGB: { value: groups ? GB : ONES },
+      uOcc: OCC.uOcc, uOccA: occ ? OCC.uOccA : { value: 0 }, uOccAny: { value: occAny },
+    },
+    vertexShader: PTS_VS, fragmentShader: PTS_FS, ...additive,
+  });
+}
+function lineMaterial({ opacity = 1, groups = false, occ = false, occAny = 0 } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uOpacity: { value: opacity },
+      uGA: { value: groups ? GA : ONES }, uGB: { value: groups ? GB : ONES },
+      uOcc: OCC.uOcc, uOccA: occ ? OCC.uOccA : { value: 0 }, uOccAny: { value: occAny },
+    },
+    vertexShader: LINE_VS, fragmentShader: LINE_FS, ...additive,
+  });
+}
+function attr(geo, name, arr, size) { geo.setAttribute(name, new THREE.BufferAttribute(arr, size)); return geo.attributes[name]; }
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* =====================================================================
+   Background: muted gradient sky (WebGL) + three star layers
+   ===================================================================== */
+const bgMat = new THREE.ShaderMaterial({
+  uniforms: { uAspect: { value: 1 }, uPar: { value: new THREE.Vector2() } },
+  vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: /* glsl */`
+    varying vec2 vUv;
+    uniform float uAspect;
+    uniform vec2 uPar;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) - uPar * 0.03;
+      float r = length(p - vec2(0.0, 0.06));
+      vec3 c = mix(vec3(0.060, 0.042, 0.078), vec3(0.011, 0.008, 0.015), smoothstep(0.0, 0.92, r));
+      vec2 a = p - vec2(-0.55, -0.42); c += vec3(0.070, 0.032, 0.030) * exp(-dot(a, a) * 3.0);
+      vec2 b = p - vec2(0.62, 0.46);   c += vec3(0.030, 0.026, 0.070) * exp(-dot(b, b) * 2.4);
+      c += (hash(gl_FragCoord.xy) - 0.5) * (1.6 / 255.0);
+      gl_FragColor = vec4(c, 1.0);
+    }
+  `,
+  depthTest: false, depthWrite: false,
+});
+const bgQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat);
+bgQuad.frustumCulled = false; bgQuad.renderOrder = -100;
+scene.add(bgQuad);
+
+const STAR_TINTS = [[1, 0.95, 0.9], [1, 0.95, 0.9], [0.86, 0.9, 1], [1, 0.84, 0.78], [0.9, 0.86, 1]];
+function starLayer(count, place, sizeR, alphaR, twinkle) {
+  const pos = new Float32Array(count * 3), size = new Float32Array(count), alpha = new Float32Array(count);
+  const color = new Float32Array(count * 3), phase = new Float32Array(count), group = new Float32Array(count).fill(5);
+  for (let i = 0; i < count; i++) {
+    const p = place();
+    pos.set(p, i * 3);
+    const bright = Math.random() < 0.08;
+    size[i] = rand(sizeR[0], sizeR[1]) * (bright ? 1.7 : 1);
+    alpha[i] = rand(alphaR[0], alphaR[1]) * (bright ? 1.4 : 1);
+    color.set(pick(STAR_TINTS), i * 3);
+    phase[i] = Math.random();
+  }
+  const geo = new THREE.BufferGeometry();
+  attr(geo, 'position', pos, 3); attr(geo, 'aSize', size, 1); attr(geo, 'aAlpha', alpha, 1);
+  attr(geo, 'aColor', color, 3); attr(geo, 'aPhase', phase, 1); attr(geo, 'aGroup', group, 1);
+  const pts = new THREE.Points(geo, pointsMaterial({ twinkle: reduceMotion ? twinkle * 0.4 : twinkle, atten: 0, ref: 1 }));
+  pts.frustumCulled = false;
+  return pts;
+}
+function onCap(rMin, rMax, maxDeg) {
+  return () => {
+    const ct = rand(Math.cos(THREE.MathUtils.degToRad(maxDeg)), 1), s = Math.sqrt(1 - ct * ct), ph = rand(0, Math.PI * 2);
+    const r = rand(rMin, rMax);
+    return [s * Math.cos(ph) * r, s * Math.sin(ph) * r * 0.9, -ct * r];
+  };
+}
+const skyFar = new THREE.Group(), skyMid = new THREE.Group(), skyNear = new THREE.Group();
+scene.add(skyFar, skyMid, skyNear);
+skyFar.add(starLayer(reduceMotion ? 200 : 260, onCap(46, 60, 74), [0.0011, 0.0019], [0.25, 0.6], 0.35));
+skyMid.add(starLayer(reduceMotion ? 80 : 105, onCap(16, 26, 64), [0.0016, 0.0029], [0.3, 0.75], 0.55));
+skyNear.add(starLayer(22, () => {
+  for (;;) {
+    const x = rand(-5.5, 5.5), y = rand(-4.2, 4.2), z = rand(-7, -3);
+    if (Math.abs(x) > 1.6 || Math.abs(y) > 1.9) return [x, y, z];
+  }
+}, [0.0035, 0.006], [0.12, 0.28], 0.3));
+
+// a few faint background constellations, anchored near the screen corners so they never cross the hand
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const skyConst = new THREE.Group();
+skyMid.add(skyConst);
+const CONST_ANCHORS = [[-0.74, 0.7, 11], [0.72, -0.6, 23], [0.8, 0.66, 37], [-0.82, -0.5, 51]];
+function buildConstellations() {
+  for (const c of [...skyConst.children]) { skyConst.remove(c); c.geometry.dispose(); c.material.dispose(); }
+  const D = 22, camZ = framing.dAll * 1.2, half = D * TAN, portrait = aspect < 0.8;
+  const segPos = [], starPos = [];
+  for (const [nx, ny, seed] of CONST_ANCHORS) {
+    const r = mulberry32(seed), rr = (a, b) => a + r() * (b - a);
+    let p = new THREE.Vector3(nx * half * aspect, ny * half + 0.06, camZ - D);
+    let ang = Math.atan2(ny, nx * aspect) + Math.PI + rr(-0.5, 0.5);   // start heading back toward the centre...
+    const n = 4 + Math.floor(r() * 3), chain = [p.clone()];
+    const step = (portrait ? 0.62 : 1) * half * 0.2;
+    for (let k = 1; k < n; k++) {
+      ang += rr(-0.8, 0.8);
+      const q = p.clone().add(new THREE.Vector3(Math.cos(ang), Math.sin(ang), rr(-0.15, 0.15)).multiplyScalar(step * rr(0.7, 1.15)));
+      // ...but keep every star in the outer ring of the frame
+      const ex = Math.abs(q.x) / (half * aspect), ey = Math.abs(q.y) / half;
+      if (Math.max(ex, ey) < 0.55) { ang += Math.PI * 0.6; k--; continue; }
+      p = q; chain.push(p);
+    }
+    chain.forEach((c, k) => { starPos.push(c.toArray()); if (k) segPos.push(chain[k - 1].toArray(), c.toArray()); });
+  }
+  const lg = new THREE.BufferGeometry();
+  const lp = new Float32Array(segPos.flat()), cnt = lp.length / 3;
+  attr(lg, 'position', lp, 3);
+  attr(lg, 'aAlpha', new Float32Array(cnt).fill(0.08), 1);
+  attr(lg, 'aGroup', new Float32Array(cnt).fill(5), 1);
+  attr(lg, 'aColor', Float32Array.from({ length: cnt * 3 }, (_, i) => [0.86, 0.72, 0.8][i % 3]), 3);
+  const lines = new THREE.LineSegments(lg, lineMaterial());
+  lines.frustumCulled = false;
+  skyConst.add(lines);
+  let k = 0;
+  skyConst.add(starLayer(starPos.length, () => starPos[k++], [0.0026, 0.0034], [0.55, 0.8], 0.25));
+}
+
+/* =====================================================================
+   The hand: a forward-kinematics skeleton (cm, scaled to scene units)
+   Hand-local frame: wrist at origin, fingers +Y, palm faces +Z, thumb on +X.
+   ===================================================================== */
+const CM = 0.1;
+const V = (x, y, z = 0) => new THREE.Vector3(x * CM, y * CM, z * CM);
+const ZERO = new THREE.Vector3();
+const skel = new THREE.Group();      // not in the scene: matrices are hand-local
+const joints = [];
+function joint(obj, off, group, kind) {
+  const j = { obj, off: off.clone(), group, kind, pos: new THREE.Vector3(), idx: joints.length };
+  joints.push(j);
+  return j;
+}
+const wR = joint(skel, V(2.15, 0.1), 5, 'wrist');
+const wU = joint(skel, V(-2.35, 0.1), 5, 'wrist');
+
+// thumb: metacarpal + 2 phalanges, set low on the palm's radial side
+const T_LEN = [4.3, 3.15, 2.65].map(x => x * CM);
+const tBase = new THREE.Group(); tBase.position.copy(V(1.65, 1.5, 0.5)); tBase.rotation.order = 'ZXY'; skel.add(tBase);
+const tProx = new THREE.Group(); tProx.position.y = T_LEN[0]; tBase.add(tProx);
+const tDist = new THREE.Group(); tDist.position.y = T_LEN[1]; tProx.add(tDist);
+const T = {
+  j: [joint(tBase, ZERO, 0, 'base'), joint(tProx, ZERO, 0, 'knuckle'), joint(tDist, ZERO, 0, 'pip'), joint(tDist, new THREE.Vector3(0, T_LEN[2], 0), 0, 'tip')],
+};
+
+// index, middle, ring, pinky: metacarpal + 3 phalanges. Slender: middle longest, ring a touch shorter, index shorter, pinky clearly shortest.
+const FINGERS = [
+  { g: 1, base: [1.55, 2.3], mcp: [2.42, 9.3], len: [3.42, 2.28, 1.98], rs: 0.95 },
+  { g: 2, base: [0.45, 2.4], mcp: [0.8, 9.72], len: [3.82, 2.55, 2.16], rs: 1.0 },
+  { g: 3, base: [-0.6, 2.3], mcp: [-0.84, 9.34], len: [3.58, 2.38, 2.04], rs: 0.93 },
+  { g: 4, base: [-1.6, 2.1], mcp: [-2.38, 8.4], len: [2.76, 1.86, 1.66], rs: 0.8 },
+];
+for (const f of FINGERS) {
+  const dx = f.mcp[0] - f.base[0], dy = f.mcp[1] - f.base[1];
+  f.metaLen = Math.hypot(dx, dy) * CM;
+  f.L = f.len.map(x => x * CM);
+  f.meta = new THREE.Group(); f.meta.position.copy(V(f.base[0], f.base[1])); f.meta.rotation.z = -Math.atan2(dx, dy); skel.add(f.meta);
+  f.prox = new THREE.Group(); f.prox.position.y = f.metaLen; f.prox.rotation.order = 'ZXY'; f.meta.add(f.prox);
+  f.mid = new THREE.Group(); f.mid.position.y = f.L[0]; f.prox.add(f.mid);
+  f.dist = new THREE.Group(); f.dist.position.y = f.L[1]; f.mid.add(f.dist);
+  f.j = [
+    joint(f.meta, ZERO, 5, 'base'),
+    joint(f.prox, ZERO, f.g, 'knuckle'),
+    joint(f.mid, ZERO, f.g, 'pip'),
+    joint(f.dist, ZERO, f.g, 'dip'),
+    joint(f.dist, new THREE.Vector3(0, f.L[2], 0), f.g, 'tip'),
+  ];
+}
+const [FI, FM, FR, FP] = FINGERS;
+const ULNAR = joint(skel, V(-3.28, 5.2), 5, 'base');   // the outer edge of the palm, so the outline closes without x-ray metacarpals
+// A curled finger tucks its last two bones into the palm. Drawn at full strength they stack into a ladder of
+// zigzags with bright fingertips in the middle of the fist, so they recede with each finger's own curl (0 open, 1 fist).
+const CURL = new Float32Array(4);
+const JFADE = new Float32Array(joints.length), JFIN = new Int8Array(joints.length).fill(-1);
+FINGERS.forEach((f, k) => { JFIN[f.j[3].idx] = JFIN[f.j[4].idx] = k; JFADE[f.j[3].idx] = 0.5; JFADE[f.j[4].idx] = 0.88; });
+function updateCurl(p) {
+  for (let k = 0; k < 4; k++) CURL[k] = E.sine(clamp01((p[7 + k * 4] - 30 * DEG) / (60 * DEG)));
+}
+const TIPS = [T.j[3], FI.j[4], FM.j[4], FR.j[4], FP.j[4]];
+const PIVOT = V(0.6, 8.6);            // the hand turns about its own centre, not the wrist
+
+/* ---------- poses (degrees) ----------
+   [thumb spread, thumb palmar abduction, thumb twist, thumb MCP, thumb IP,
+    then index, middle, ring, pinky: spread (toward the thumb +), MCP, PIP, DIP]   */
+const DEG = Math.PI / 180;
+const mkPose = a => Float32Array.from(a, x => x * DEG);
+const POSES = {
+  open:  mkPose([30, 22, -62, 6, 12,    -3, 4, 7, 4,    -2, 5, 8, 5,    -1, 7, 10, 6,     -1, 9, 12, 8]),
+  one:   mkPose([15.5, 32.5, -82.5, 33, 55,   1, -3, 0, 2,    -1, 84, 100, 60,  -3, 86, 100, 60,  -6, 88, 98, 58]),
+  thumb: mkPose([31.5, 15.5, -75, -19.5, -26, 1, 76, 98, 54,  -1, 84, 100, 58,  -3, 86, 100, 58,  -6, 88, 98, 56]),
+};
+const PARAM_GROUP = [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4];
+const NP = PARAM_GROUP.length;
+
+function applyPose(p) {
+  tBase.rotation.set(p[1], p[2], -p[0]);
+  tProx.rotation.x = p[3];
+  tDist.rotation.x = p[4];
+  for (let k = 0; k < 4; k++) {
+    const f = FINGERS[k], o = 5 + k * 4;
+    f.prox.rotation.set(p[o + 1], 0, -p[o]);
+    f.mid.rotation.x = p[o + 2];
+    f.dist.rotation.x = p[o + 3];
+  }
+  skel.updateMatrixWorld(true);
+  for (const j of joints) j.pos.copy(j.off).applyMatrix4(j.obj.matrixWorld);
+}
+
+/* =====================================================================
+   Hand render objects: joint stars, tip flares, constellation lines, dust
+   ===================================================================== */
+const handRoot = new THREE.Group(); handRoot.rotation.order = 'YXZ'; scene.add(handRoot);
+const handInner = new THREE.Group(); handInner.position.copy(PIVOT).negate(); handRoot.add(handInner);
+
+// --- joint stars ---
+const KIND = { tip: [0.104, 1.0], knuckle: [0.08, 0.86], pip: [0.07, 0.8], dip: [0.062, 0.74], base: [0.044, 0.5], wrist: [0.058, 0.62] };
+const NJ = joints.length;
+const jGeo = new THREE.BufferGeometry();
+const jPos = attr(jGeo, 'position', new Float32Array(NJ * 3), 3);
+const jSize = attr(jGeo, 'aSize', new Float32Array(NJ), 1);
+const jAlpha = attr(jGeo, 'aAlpha', new Float32Array(NJ), 1);
+attr(jGeo, 'aColor', new Float32Array(NJ * 3), 3);
+attr(jGeo, 'aPhase', new Float32Array(NJ).map(() => Math.random()), 1);
+attr(jGeo, 'aGroup', Float32Array.from(joints, j => j.group), 1);
+const jBaseSize = new Float32Array(NJ), jBaseAlpha = new Float32Array(NJ);
+joints.forEach((j, i) => {
+  const [s, a] = KIND[j.kind];
+  jBaseSize[i] = s * rand(0.86, 1.14);
+  jBaseAlpha[i] = a;
+  jGeo.attributes.aColor.array.set(j.kind === 'tip' ? [1, 0.96, 0.92] : j.kind === 'knuckle' ? [1, 0.9, 0.84] : [0.98, 0.87, 0.82], i * 3);
+});
+const jointStars = new THREE.Points(jGeo, pointsMaterial({ twinkle: reduceMotion ? 0.06 : 0.16, atten: 0.72, ref: 5, groups: true, occAny: 1, occ: true }));
+jointStars.frustumCulled = false; jointStars.renderOrder = 3;
+handInner.add(jointStars);
+
+// --- tip flares (soft four-point spikes on the five fingertips) ---
+const fGeo = new THREE.BufferGeometry();
+const fPos = attr(fGeo, 'position', new Float32Array(5 * 3), 3);
+const fAlpha = attr(fGeo, 'aAlpha', new Float32Array(5), 1);
+attr(fGeo, 'aSize', new Float32Array([0.2, 0.17, 0.19, 0.17, 0.15]), 1);
+attr(fGeo, 'aColor', new Float32Array(15).fill(1), 3);
+attr(fGeo, 'aPhase', new Float32Array(5).map(() => Math.random()), 1);
+attr(fGeo, 'aGroup', new Float32Array(TIPS.map(j => j.group)), 1);
+const tipFlares = new THREE.Points(fGeo, pointsMaterial({ map: FLARE, twinkle: reduceMotion ? 0.1 : 0.4, atten: 0.72, ref: 5, groups: true, occAny: 1, occ: true }));
+tipFlares.frustumCulled = false; tipFlares.renderOrder = 4;
+handInner.add(tipFlares);
+
+// --- constellation lines along the bones (wrist outward = draw order) ---
+const SEGS = [];
+const seg2 = (a, b, group, alpha, level) => SEGS.push({ a, b, group, alpha, level });
+// the palm is drawn as an outline (wrist, outer edge, knuckle arc), not as metacarpal bones
+seg2(wU, wR, 5, 0.1, 0);
+seg2(wR, T.j[0], 5, 0.16, 0);
+seg2(wU, ULNAR, 5, 0.14, 0);
+seg2(ULNAR, FP.j[1], 5, 0.14, 1);
+seg2(T.j[0], T.j[1], 0, 0.3, 1);
+seg2(FI.j[1], FM.j[1], 5, 0.18, 2); seg2(FM.j[1], FR.j[1], 5, 0.18, 2); seg2(FR.j[1], FP.j[1], 5, 0.18, 2);
+for (const f of FINGERS) seg2(f.j[1], f.j[2], f.g, 0.32, 2);
+seg2(T.j[1], T.j[2], 0, 0.32, 2);
+for (const f of FINGERS) seg2(f.j[2], f.j[3], f.g, 0.32, 3);
+seg2(T.j[2], T.j[3], 0, 0.32, 3);
+for (const f of FINGERS) seg2(f.j[3], f.j[4], f.g, 0.32, 4);
+// in a fist: the proximal bone (the top of the fist) stays, the tucked middle and distal bones recede
+for (const s of SEGS) { s.fin = s.group >= 1 && s.group <= 4 ? s.group - 1 : -1; s.fade = [0, 0, 0.15, 0.55, 0.9][s.level]; }
+const NS = SEGS.length;
+const lGeo = new THREE.BufferGeometry();
+const lPos = attr(lGeo, 'position', new Float32Array(NS * 6), 3);
+const lAlpha = attr(lGeo, 'aAlpha', new Float32Array(NS * 2), 1);
+attr(lGeo, 'aGroup', Float32Array.from({ length: NS * 2 }, (_, i) => SEGS[i >> 1].group), 1);
+attr(lGeo, 'aColor', Float32Array.from({ length: NS * 6 }, (_, i) => [0.95, 0.72, 0.64][i % 3]), 3);
+const boneLines = new THREE.LineSegments(lGeo, lineMaterial({ groups: true, occAny: 1, occ: true }));
+boneLines.frustumCulled = false; boneLines.renderOrder = 1;
+handInner.add(boneLines);
+
+// --- volumetric dust: capsules around the phalanges, a rounded palm slab, a fading forearm ---
+const BONES = [];
+const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06) => BONES.push({ a, b, frame, r0: r0 * CM, r1: r1 * CM, group, count, tip, t0 });
+bone(T.j[0], T.j[1], tBase, 1.18, 0.9, 0, 44, false, 0.1);
+bone(T.j[1], T.j[2], tProx, 0.88, 0.8, 0, 40, false);
+bone(T.j[2], T.j[3], tDist, 0.78, 0.6, 0, 40, true);
+const FCOUNTS = { 1: [30, 22, 21], 2: [34, 24, 23], 3: [30, 22, 21], 4: [24, 17, 17] };
+for (const f of FINGERS) {
+  const c = FCOUNTS[f.g], s = f.rs;
+  bone(f.j[1], f.j[2], f.prox, 0.82 * s, 0.74 * s, f.g, c[0], false, -0.12);
+  bone(f.j[2], f.j[3], f.mid, 0.72 * s, 0.64 * s, f.g, c[1], false);
+  bone(f.j[3], f.j[4], f.dist, 0.62 * s, 0.48 * s, f.g, c[2], true);
+}
+// lengths: each bone ends at the next joint group's offset along local +Y of its frame
+BONES.forEach(b => { b.len = (b.b.obj === b.frame) ? b.b.off.y : b.b.obj.position.y; });
+// a curled finger's distal bone hides in the palm; its dust thins with the curl (see CURL)
+BONES.forEach(b => { b.fin = b.group >= 1 && b.group <= 4 ? b.group - 1 : -1; b.fade = b.fin < 0 ? 0 : b.tip ? 0.5 : b.a.kind === 'pip' ? 0.2 : 0; });
+
+const PALM = [
+  [2.15, 0.25], [2.65, 1.5], [2.95, 3.2], [3.05, 5.2], [3.0, 7.2], [2.95, 8.9],
+  [2.1, 9.55], [0.8, 9.95], [-0.8, 9.6], [-2.05, 8.85], [-2.95, 8.4],
+  [-3.15, 6.8], [-3.2, 4.6], [-2.95, 2.4], [-2.45, 0.25],
+];
+function inPoly(x, y) {
+  let inside = false;
+  for (let i = 0, j = PALM.length - 1; i < PALM.length; j = i++) {
+    const [xi, yi] = PALM[i], [xj, yj] = PALM[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function edgeDist(x, y) {
+  let best = 1e9;
+  for (let i = 0, j = PALM.length - 1; i < PALM.length; j = i++) {
+    const [ax, ay] = PALM[j], [bx, by] = PALM[i];
+    const vx = bx - ax, vy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
+    best = Math.min(best, Math.hypot(x - ax - vx * t, y - ay - vy * t));
+  }
+  return best;
+}
+const palmHalf = (x, y) => {
+  const e = Math.min(1, edgeDist(x, y) / 1.6);
+  let h = 0.5 + 0.62 * Math.sin(e * Math.PI / 2);
+  const th = Math.exp(-((x - 2.0) ** 2 / 1.6 + (y - 3.2) ** 2 / 4.0));        // thenar pad
+  const hy = Math.exp(-((x + 2.2) ** 2 / 1.4 + (y - 3.6) ** 2 / 5.0));        // hypothenar pad
+  return { front: h + 0.5 * th + 0.25 * hy, back: h * 0.85 };
+};
+
+const dust = [];   // { bone, t, c, s, jit } or { stat: Vector3 }, plus size/alpha/color/group
+const DUST_TINTS = [[0.96, 0.84, 0.8], [0.96, 0.84, 0.8], [0.8, 0.74, 0.98], [1, 0.9, 0.84]];
+function addDust(rec, group, alphaMul = 1) {
+  rec.group = group;
+  const spark = Math.random() < 0.14;
+  rec.size = rand(0.018, 0.03) * (spark ? 1.35 : 1);
+  rec.alpha = rand(0.4, 0.75) * alphaMul * (spark ? 1.5 : 1);
+  rec.color = pick(DUST_TINTS);
+  dust.push(rec);
+}
+BONES.forEach((b, bi) => {
+  for (let k = 0; k < b.count; k++) {
+    let t;
+    if (b.tip && Math.random() < 0.26) t = 1 + Math.random() * (b.r1 / b.len);
+    else t = rand(b.t0, 1.04);
+    const ph = Math.random() * Math.PI * 2;
+    addDust({ bone: bi, t, c: Math.cos(ph), s: Math.sin(ph), jit: rand(0.9, 1.05) }, b.group);
+  }
+});
+{
+  // each static star keeps its surface normal (hand-local) so the dust can be rim-lit like the capsules
+  const add = (x, y, z, a = 1, nx = 0, ny = 0, nz = 1) => { addDust({ stat: V(x, y, z), n: new THREE.Vector3(nx, ny, nz).normalize() }, 5, a); return dust[dust.length - 1]; };
+  let n = 0;
+  while (n < 140) {                                       // front and back faces of the palm
+    const x = rand(-3.3, 3.2), y = rand(0.1, 10.0);
+    if (!inPoly(x, y)) continue;
+    const h = palmHalf(x, y), front = Math.random() < 0.55;
+    add(x, y, front ? h.front * rand(0.9, 1.03) : -h.back * rand(0.9, 1.03), front ? 1 : 0.85, 0, 0, front ? 1 : -1);
+    n++;
+  }
+  let per = 0;                                            // rounded rim carries the silhouette
+  const edges = PALM.map((p, i) => { const q = PALM[(i + 1) % PALM.length]; const L = Math.hypot(q[0] - p[0], q[1] - p[1]); per += L; return { p, q, L }; });
+  for (let k = 0; k < 120; k++) {
+    let d = Math.random() * per, e = edges[0];
+    for (const ed of edges) { if (d <= ed.L) { e = ed; break; } d -= ed.L; }
+    const t = d / e.L, x = e.p[0] + (e.q[0] - e.p[0]) * t, y = e.p[1] + (e.q[1] - e.p[1]) * t;
+    if (y > 8.6 && x > -2.6 && x < 2.7) { k--; continue; }   // the knuckle edge is covered by the fingers
+    const nx = (e.q[1] - e.p[1]) / e.L, ny = -(e.q[0] - e.p[0]) / e.L;   // outward normal (polygon is clockwise in x-right/y-up)
+    const psi = rand(-Math.PI / 2, Math.PI / 2), h = 0.62;
+    add(x + nx * Math.cos(psi) * h * 0.55, y + ny * Math.cos(psi) * h * 0.55, Math.sin(psi) * h * (psi > 0 ? 1.15 : 0.9), 1,
+      nx * Math.cos(psi), ny * Math.cos(psi), Math.sin(psi));
+  }
+  for (let k = 0; k < 56; k++) {                          // forearm, fading into the dark
+    const t = Math.pow(Math.random(), 0.8), ph = Math.random() * Math.PI * 2;
+    add(Math.cos(ph) * (2.3 + 0.3 * t), -0.2 - t * 6.5, Math.sin(ph) * (1.55 + 0.25 * t), Math.pow(1 - t, 2.9), Math.cos(ph), 0, Math.sin(ph)).arm = true;
+  }
+}
+const ND = dust.length;
+const dGeo = new THREE.BufferGeometry();
+const dPos = attr(dGeo, 'position', new Float32Array(ND * 3), 3);
+const dSize = attr(dGeo, 'aSize', Float32Array.from(dust, d => d.size), 1);
+const dAlpha = attr(dGeo, 'aAlpha', Float32Array.from(dust, d => d.alpha), 1);
+attr(dGeo, 'aColor', Float32Array.from({ length: ND * 3 }, (_, i) => dust[(i / 3) | 0].color[i % 3]), 3);
+attr(dGeo, 'aPhase', Float32Array.from(dust, () => Math.random()), 1);
+attr(dGeo, 'aGroup', Float32Array.from(dust, d => d.group), 1);
+const dustPts = new THREE.Points(dGeo, pointsMaterial({ twinkle: reduceMotion ? 0.12 : 0.32, atten: 0.85, ref: 5, groups: true, occAny: 1, occ: true }));
+dustPts.frustumCulled = false; dustPts.renderOrder = 2;
+handInner.add(dustPts);
+
+function dustTarget(d, out, nrm) {
+  if (d.stat) { if (nrm) nrm.copy(d.n); return out.copy(d.stat); }
+  const b = BONES[d.bone], A = b.a.pos, m = b.frame.matrixWorld.elements;
+  let along, r, u = 0;
+  if (d.t > 1) {
+    u = Math.min(1, (d.t - 1) * b.len / b.r1);
+    r = b.r1 * Math.sqrt(Math.max(0, 1 - u * u)); along = b.len + u * b.r1;
+  } else {
+    r = b.r0 + (b.r1 - b.r0) * Math.max(0, d.t); along = d.t * b.len;
+  }
+  r *= d.jit;
+  const cx = d.c * r, cz = d.s * r * 0.86;
+  if (nrm) {                                   // surface normal: radial on the shaft, bending toward the axis over the tip cap
+    const q = Math.sqrt(Math.max(0, 1 - u * u)), nc = d.c * q, ns = d.s * q;
+    nrm.set(m[0] * nc + m[8] * ns + m[4] * u, m[1] * nc + m[9] * ns + m[5] * u, m[2] * nc + m[10] * ns + m[6] * u);
+  }
+  return out.set(
+    A.x + m[4] * along + m[0] * cx + m[8] * cz,
+    A.y + m[5] * along + m[1] * cx + m[9] * cz,
+    A.z + m[6] * along + m[2] * cx + m[10] * cz,
+  );
+}
+
+/* =====================================================================
+   Formation: every hand star starts as a sky star and flies home
+   ===================================================================== */
+const NF = NJ + ND;
+const fStart = new Float32Array(NF * 3), fSwirl = new Float32Array(NF * 3), fDelay = new Float32Array(NF), fDur = new Float32Array(NF);
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3(), tmpD = new THREE.Vector3();
+function prepareFormation() {
+  applyPose(POSES.open);
+  const camZ = framing.dAll * 1.2;
+  for (let i = 0; i < NF; i++) {
+    const target = i < NJ ? joints[i].pos : dustTarget(dust[i - NJ], tmpA);
+    let sx, sy, sz;
+    if (reduceMotion) {
+      sx = target.x + rand(-0.06, 0.06); sy = target.y + rand(-0.06, 0.06); sz = target.z + rand(-0.06, 0.06);
+    } else {
+      const zw = rand(-6.5, 0.8), half = (camZ - zw) * TAN;
+      sx = rand(-1, 1) * half * aspect * 0.98 + PIVOT.x;
+      sy = rand(-1, 1) * half * 0.95 + PIVOT.y;
+      sz = zw;
+    }
+    fStart[i * 3] = sx; fStart[i * 3 + 1] = sy; fStart[i * 3 + 2] = sz;
+    tmpB.set(target.x - sx, target.y - sy, target.z - sz);
+    const dist = tmpB.length();
+    tmpC.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+    tmpB.normalize();
+    tmpC.addScaledVector(tmpB, -tmpC.dot(tmpB)).normalize().multiplyScalar(reduceMotion ? 0 : dist * rand(0.1, 0.28));
+    fSwirl[i * 3] = tmpC.x; fSwirl[i * 3 + 1] = tmpC.y; fSwirl[i * 3 + 2] = tmpC.z;
+    if (i < NJ) { fDelay[i] = rand(0.0, 0.32); fDur[i] = rand(0.52, 0.66); }
+    else { fDelay[i] = rand(0.06, 0.42); fDur[i] = rand(0.46, 0.58); }
+  }
+}
+
+/* =====================================================================
+   The ring, Saturn's rings and the planet
+   ===================================================================== */
+const ringGroup = new THREE.Group(); handInner.add(ringGroup);
+const RING_N = 72;
+{
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(RING_N * 3), size = new Float32Array(RING_N), al = new Float32Array(RING_N);
+  for (let i = 0; i < RING_N; i++) {
+    const a = (i / RING_N) * Math.PI * 2 + rand(-0.03, 0.03), jewel = i % 12 === 0;
+    pos.set([Math.cos(a) * rand(0.985, 1.015), rand(-0.02, 0.02), Math.sin(a) * rand(0.985, 1.015)], i * 3);
+    size[i] = jewel ? 0.05 : rand(0.016, 0.026);
+    al[i] = jewel ? 1 : rand(0.45, 0.85);
+  }
+  attr(g, 'position', pos, 3); attr(g, 'aSize', size, 1); attr(g, 'aAlpha', al, 1);
+  attr(g, 'aColor', Float32Array.from({ length: RING_N * 3 }, (_, i) => [1, 0.84, 0.66][i % 3]), 3);
+  attr(g, 'aPhase', Float32Array.from({ length: RING_N }, () => Math.random()), 1);
+  attr(g, 'aGroup', new Float32Array(RING_N).fill(5), 1);
+  var ringStars = new THREE.Points(g, pointsMaterial({ twinkle: 0.3, atten: 0.72, ref: 5, occ: true }));
+  ringStars.frustumCulled = false; ringStars.renderOrder = 6;
+  ringGroup.add(ringStars);
+}
+function circleLine(n, r, alpha, color) {
+  const g = new THREE.BufferGeometry(), pos = new Float32Array(n * 6);
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+    pos.set([Math.cos(a0) * r, 0, Math.sin(a0) * r, Math.cos(a1) * r, 0, Math.sin(a1) * r], i * 6);
+  }
+  attr(g, 'position', pos, 3);
+  attr(g, 'aAlpha', new Float32Array(n * 2).fill(alpha), 1);
+  attr(g, 'aGroup', new Float32Array(n * 2).fill(5), 1);
+  attr(g, 'aColor', Float32Array.from({ length: n * 6 }, (_, i) => color[i % 3]), 3);
+  const l = new THREE.LineSegments(g, lineMaterial({ occ: true }));
+  l.frustumCulled = false; l.renderOrder = 5;
+  return l;
+}
+const ringLineA = circleLine(128, 1.0, 0.55, [1, 0.82, 0.64]);
+const ringLineB = circleLine(128, 0.93, 0.3, [1, 0.78, 0.66]);
+ringGroup.add(ringLineA, ringLineB);
+// Saturn's ring system: particle bands with a Cassini-like gap (ring-local units; outer ring = 1)
+{
+  const n = reduceMotion ? 220 : 300, g = new THREE.BufferGeometry();
+  const pos = new Float32Array(n * 3), size = new Float32Array(n), al = new Float32Array(n), col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    let r;
+    do { r = rand(0.56, 0.97); } while (r > 0.8 && r < 0.84 && Math.random() < 0.9);
+    const a = Math.random() * Math.PI * 2;
+    pos.set([Math.cos(a) * r, rand(-0.006, 0.006), Math.sin(a) * r], i * 3);
+    size[i] = rand(0.011, 0.02);
+    al[i] = rand(0.3, 0.75) * (r < 0.8 ? 1 : 0.75);
+    col.set(r < 0.7 ? [0.95, 0.86, 0.72] : [1, 0.88, 0.76], i * 3);
+  }
+  attr(g, 'position', pos, 3); attr(g, 'aSize', size, 1); attr(g, 'aAlpha', al, 1); attr(g, 'aColor', col, 3);
+  attr(g, 'aPhase', Float32Array.from({ length: n }, () => Math.random()), 1);
+  attr(g, 'aGroup', new Float32Array(n).fill(5), 1);
+  var bands = new THREE.Points(g, pointsMaterial({ twinkle: 0.35, atten: 0.72, ref: 5, occ: true }));
+  bands.frustumCulled = false; bands.renderOrder = 6;
+  ringGroup.add(bands);
+}
+const ringMats = [ringStars.material, ringLineA.material, ringLineB.material];
+
+const R_PLANET = 0.2;
+const planetGroup = new THREE.Group(); handInner.add(planetGroup);
+{
+  const n = reduceMotion ? 300 : 440, g = new THREE.BufferGeometry();
+  const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), band = new Float32Array(n), ph = new Float32Array(n);
+  const ga = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) {
+    const y = 1 - 2 * (i + 0.5) / n, r = Math.sqrt(1 - y * y), th = i * ga;
+    const x = Math.cos(th) * r, z = Math.sin(th) * r;
+    nrm.set([x, y, z], i * 3);
+    pos.set([x * R_PLANET, y * R_PLANET, z * R_PLANET], i * 3);
+    band[i] = 0.5 + 0.5 * Math.sin(y * 13.0 + Math.sin(th * 2.0) * 0.25);
+    ph[i] = Math.random();
+  }
+  attr(g, 'position', pos, 3); attr(g, 'normal', nrm, 3); attr(g, 'aBand', band, 1); attr(g, 'aPhase', ph, 1);
+  var planetMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: U.uTime, uScale: U.uScale, uMinSize: U.uMinSize, uOpacity: { value: 0 }, uMap: { value: GLOW } },
+    vertexShader: /* glsl */`
+      attribute float aBand;
+      attribute float aPhase;
+      uniform float uTime, uScale, uMinSize, uOpacity;
+      varying float vA;
+      varying vec3 vC;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vec3 n = normalize(normalMatrix * normal);
+        float front = smoothstep(-0.25, 0.45, n.z);
+        float limb = pow(1.0 - abs(n.z), 2.2);
+        float tw = 0.8 + 0.2 * sin(uTime * (0.8 + aPhase) + aPhase * 6.2831);
+        vA = uOpacity * (0.04 + 0.96 * front) * (0.42 + 0.58 * aBand) * tw + uOpacity * limb * front * 0.35;
+        vC = mix(vec3(0.92, 0.76, 0.58), vec3(1.0, 0.93, 0.82), aBand);
+        float px = 0.022 * uScale / pow(max(0.05, -mv.z), 0.72) / pow(5.0, 0.28);
+        if (px < uMinSize) { vA *= px / uMinSize; px = uMinSize; }
+        gl_PointSize = px;
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uMap;
+      varying float vA;
+      varying vec3 vC;
+      void main() {
+        float m = texture2D(uMap, gl_PointCoord).a * vA;
+        if (m < 0.002) discard;
+        gl_FragColor = vec4(vC * m, 1.0);
+      }
+    `,
+    ...additive,
+  });
+  const planetPts = new THREE.Points(g, planetMat);
+  planetPts.frustumCulled = false; planetPts.renderOrder = 7;
+  planetGroup.add(planetPts);
+  // soft body and halo
+  const hg = new THREE.BufferGeometry();
+  attr(hg, 'position', new Float32Array(6), 3);
+  attr(hg, 'aSize', new Float32Array([R_PLANET * 7.5, R_PLANET * 2.9]), 1);
+  attr(hg, 'aAlpha', new Float32Array([0.32, 0.5]), 1);
+  attr(hg, 'aColor', new Float32Array([1, 0.8, 0.6, 0.95, 0.78, 0.6]), 3);
+  attr(hg, 'aPhase', new Float32Array([0.2, 0.7]), 1);
+  attr(hg, 'aGroup', new Float32Array([5, 5]), 1);
+  var halo = new THREE.Points(hg, pointsMaterial({ twinkle: 0.05, atten: 1, ref: 5 }));
+  halo.frustumCulled = false; halo.renderOrder = 6;
+  planetGroup.add(halo);
+}
+planetGroup.visible = false; ringGroup.visible = false;
+const Q_SAT = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.42, 0, -0.34));
+
+/* =====================================================================
+   Framing (depends on aspect)
+   ===================================================================== */
+let W = 1, H = 1, aspect = 1;
+// extents of the THUMB figure around the camera's focus point, in scene units at that depth (measured at boot)
+const FIG = { up: 0.48, down: 0.92, left: 0.25, right: 0.37 };
+const framing = { dAll: 6, dThumb: 2, shiftAll: 0.06, shiftThumbY: 0.26, shiftThumbX: 0, ringPush: 0.88, ringCenter: 0.45, ringLift: 0.1, arcK: 1 };
+function resize() {
+  W = stage.clientWidth || innerWidth; H = stage.clientHeight || innerHeight;
+  renderer.setSize(W, H, false);
+  aspect = W / H; camera.aspect = aspect;
+  U.uScale.value = (H * DPR) / (2 * TAN);
+  bgMat.uniforms.uAspect.value = aspect;
+  const portrait = aspect < 0.8;
+  const handH = 2.25, handW = 1.42;
+  framing.dAll = Math.max(handH / (2 * TAN) * (portrait ? 1.22 : 1.55), handW / (2 * TAN * aspect) * 1.14);
+  const side = aspect > 1.15;                       // landscape: the sheet sits on the right, the thumb on the left
+  framing.shiftAll = portrait ? 0.1 : 0.12;
+  // Thumb close-up: fit the whole thumbs-up (thumb tip to the heel of the fist, measured at boot as FIG) into the
+  // free band: below the top rail with room for the label beside the tip, and above the sheet (or left of it).
+  framing.shiftThumbX = portrait ? -0.12 : side ? -0.36 : 0;
+  const sheetH = askForm.offsetHeight || 252, sheetW = Math.min(360, W - 32);
+  const bandTop = 88, bandBot = side ? H - 64 : H - 68 - sheetH - 14;
+  const lookX = W / 2 * (1 + framing.shiftThumbX);
+  const rightEdge = side ? W - Math.max(0.07 * W, 16) - sheetW - 16 : W - 16;
+  const fitPx = Math.max(40, Math.min(
+    (bandBot - bandTop) / (FIG.up + FIG.down),
+    (rightEdge - lookX) / FIG.right, (lookX - 16) / FIG.left));             // px per world unit at the thumb
+  framing.dThumb = Math.max(Math.max(1.75 / (2 * TAN), 0.95 / (2 * TAN * aspect)), H / (2 * TAN * fitPx));
+  const px = H / (2 * TAN * framing.dThumb);
+  const lookY = (bandTop + bandBot) / 2 - (FIG.down - FIG.up) / 2 * px;     // centre the figure in the band
+  framing.shiftThumbY = 1 - 2 * lookY / H;
+  // ring beat: a gentle push toward the ring finger, lifted so the wrist clears the two-line caption
+  framing.ringPush = portrait ? 0.96 : 0.88;
+  framing.ringCenter = portrait ? 0.62 : 0.45;
+  const short = side && H < 520;                   // a phone on its side: the caption moves to the pinky-side column
+  framing.ringLift = short ? 0 : portrait ? 0.06 : 0.12;
+  framing.arcK = portrait ? 0.3 : 1;              // the camera's sideways arc on the pull-back; a narrow screen has no room for it
+  document.documentElement.classList.toggle('wide', side);
+  document.documentElement.classList.toggle('short', short);
+  buildConstellations();
+  measureLabel();
+}
+
+/* =====================================================================
+   The sequence
+   ===================================================================== */
+const E = {
+  lin: t => t,
+  sine: t => 0.5 - 0.5 * Math.cos(Math.PI * t),
+  inOut: t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+  quart: t => (t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2),
+  out: t => 1 - Math.pow(1 - t, 3),
+};
+const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const segE = (t, w, e = E.inOut) => e(clamp01((t - w[0]) / w[1]));
+
+const MA = reduceMotion ? 0.6 : 1;        // motion durations, phase A
+const HA = reduceMotion ? 0.8 : 1;        // holds, phase A
+const TA = (() => {
+  const o = {}; let c = 0;
+  o.stars = [0, 1.2 * MA];
+  c = 1.5 * HA;                            // stars twinkle ~1.5 s
+  o.form = [c, 2.5 * MA]; c += 2.5 * MA;   // stars fly home ~2.5 s
+  o.lines = [c - 0.3 * MA, 1.0 * MA]; c += 0.7 * MA;
+  c += 1.0 * HA;                           // hold ~1 s
+  o.turn = [c, 1.8 * MA]; c += 1.8 * MA;   // turn to the back, into ONE
+  c += 0.35 * HA;
+  o.zoom = [c, 2.2 * MA]; c += 2.2 * MA;   // push to the thumb, into THUMB
+  o.end = c + 0.6 * HA;                    // settle, then the sheet
+  return o;
+})();
+const MB = reduceMotion ? 0.75 : 1;
+const TB = (() => {
+  const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  return {
+    label: w(0.15, 0.9), math: w(0.5, 0.9), pulse: s(0.1),
+    out: w(3.8, 3.6), open: w(4.0, 3.0), labelDip: w(3.85, 0.4), labelRet: w(6.7, 0.6),
+    mathOff: w(5.7, 0.8), cap1: [s(6.4), s(9.7)],
+    labelOff: w(9.7, 0.8),
+    hi: w(10.0, 1.0), push: w(10.0, 2.4), cap2: [s(10.4), s(19.9)],
+    ringIn: w(11.0, 0.5), slide: w(11.0, 2.5),
+    fade: w(14.0, 1.2), grow: w(14.1, 2.7), planet: w(14.6, 2.2),
+    planetOut: w(19.3, 1.5), ringOut: w(19.3, 1.5), unfade: w(19.7, 1.3), hiOff: w(19.7, 1.2), pull: w(19.5, 2.4),
+    labelBack: w(21.2, 0.9),
+    end: s(22.2),
+  };
+})();
+const STAG_ONE = [0.28, 0, 0.02, 0.08, 0.14];      // thumb folds last
+const STAG_THUMB = [0.22, 0, 0.04, 0.06, 0.08];    // index curls, then the thumb comes out
+const STAG_OPEN = [0.1, 0, 0.06, 0.12, 0.18];      // the hand unfurls index to pinky
+
+const st = {
+  pose: new Float32Array(NP), yaw: 0, pitch: 0, roll: 0,
+  starsIn: 0, formT: -1, lines: 0,
+  dolly: 1, arcX: 0, wThumb: 0, wRing: 0,
+  label: 0, math: 0, caption: 0, pulse: 0,
+  hi: 0, ringA: 0, slide: 0, grow: 0, fingerA: 1, planetA: 0, bandsA: 0,
+};
+function blendPose(out, a, b, w, stag) {
+  for (let k = 0; k < NP; k++) {
+    const g = PARAM_GROUP[k], e = E.inOut(clamp01((w - stag[g]) / 0.7));
+    out[k] = a[k] + (b[k] - a[k]) * e;
+  }
+}
+let ROT_T = { yaw: 2.3, pitch: -0.06, roll: 1.0 };   // refined from the THUMB pose at load
+
+function evalA(t) {
+  st.starsIn = segE(t, TA.stars, E.sine);
+  st.formT = t - TA.form[0];
+  st.lines = clamp01((t - TA.lines[0]) / TA.lines[1]);
+  const wTurn = (t - TA.turn[0]) / TA.turn[1], wZoom = (t - TA.zoom[0]) / TA.zoom[1];
+  if (wZoom > 0) blendPose(st.pose, POSES.one, POSES.thumb, wZoom, STAG_THUMB);
+  else blendPose(st.pose, POSES.open, POSES.one, wTurn, STAG_ONE);
+  const eT = E.inOut(clamp01(wTurn)), eZ = E.inOut(clamp01(wZoom));
+  st.yaw = lerp(lerp(0, Math.PI, eT), ROT_T.yaw, eZ);
+  st.roll = lerp(0, ROT_T.roll, eZ);
+  st.pitch = lerp(-0.04, ROT_T.pitch, eZ) - Math.sin(Math.PI * eT) * (reduceMotion ? 0.03 : 0.1);
+  st.dolly = lerp(1.2, 1.0, segE(t, [0, TA.turn[0] + TA.turn[1]], E.sine));
+  st.arcX = Math.sin(Math.PI * eT) * (reduceMotion ? 0.05 : 0.28);
+  st.wThumb = E.quart(clamp01(wZoom));
+  st.wRing = 0;
+  st.label = 0; st.math = 0; st.caption = 0; st.pulse = 0;
+  st.hi = 0; st.ringA = 0; st.slide = 0; st.grow = 0; st.fingerA = 1; st.planetA = 0; st.bandsA = 0;
+}
+function evalB(t) {
+  st.starsIn = 1; st.formT = 1e4; st.lines = 1;
+  blendPose(st.pose, POSES.thumb, POSES.open, (t - TB.open[0]) / TB.open[1], STAG_OPEN);
+  const eO = E.inOut(clamp01((t - TB.out[0]) / TB.out[1]));
+  st.yaw = lerp(ROT_T.yaw, Math.PI * 2, eO);
+  st.roll = lerp(ROT_T.roll, 0, eO);
+  st.pitch = lerp(ROT_T.pitch, -0.04, eO);
+  st.dolly = 1;
+  st.arcX = -Math.sin(Math.PI * eO) * (reduceMotion ? 0.04 : 0.22) * framing.arcK;
+  st.wThumb = 1 - segE(t, TB.out, E.sine);
+  st.wRing = segE(t, TB.push, E.inOut) * (1 - segE(t, TB.pull, E.inOut));
+  // the label steps aside while the hand turns over, then returns beside the open thumb
+  const dip = segE(t, TB.labelDip, E.sine) * (1 - segE(t, TB.labelRet, E.sine));
+  st.label = Math.max(segE(t, TB.label) * (1 - segE(t, TB.labelOff)) * (1 - dip), segE(t, TB.labelBack));
+  st.math = segE(t, TB.math) * (1 - segE(t, TB.mathOff));
+  st.pulse = t > TB.pulse ? Math.exp(-(t - TB.pulse) * 2.2) * Math.min(1, (t - TB.pulse) * 8) : 0;
+  st.caption = (t >= TB.cap1[0] && t < TB.cap1[1]) ? 1 : (t >= TB.cap2[0] && t < TB.cap2[1]) ? 2 : 0;
+  st.hi = segE(t, TB.hi) * (1 - segE(t, TB.hiOff));
+  st.slide = segE(t, TB.slide, E.inOut);
+  st.ringA = segE(t, TB.ringIn, E.sine) * (1 - segE(t, TB.ringOut, E.sine));
+  st.grow = segE(t, TB.grow, E.inOut);
+  st.fingerA = clamp01(1 - segE(t, TB.fade, E.sine) + segE(t, TB.unfade, E.sine));
+  st.planetA = segE(t, TB.planet, E.sine) * (1 - segE(t, TB.planetOut, E.sine));
+  st.bandsA = Math.pow(st.grow, 1.6) * (1 - segE(t, TB.ringOut, E.sine));
+}
+
+/* ---------- state machine ---------- */
+let phase = 'A', tA = 0, tB = 0, freeze = qs.has('freeze');
+let debugPose = null;
+let result = null;
+function setPhase(p) {
+  phase = p;
+  skipBtn.hidden = !(p === 'A' || p === 'B');
+  replayBtn.hidden = !skipBtn.hidden;
+  replayBtn.classList.toggle('cta', p === 'end');
+}
+function showAsk(on) {
+  if (on) {
+    askWrap.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => askForm.classList.add('on')));
+  } else {
+    askForm.classList.remove('on');
+    setTimeout(() => { if (!askForm.classList.contains('on')) askWrap.hidden = true; }, 700);
+  }
+}
+function enterAwait() { setPhase('await'); showAsk(true); }
+function readInputs() {
+  const name = nameIn.value.trim() || 'Brecht';
+  let date = { y: 1997, m: 3, d: 14 };
+  const v = dobIn.value;
+  if (v) {
+    const [y, m, d] = v.split('-').map(Number);       // never new Date(str): that is UTC midnight
+    if (!(y >= 1900 && y <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return { error: 'Pick a date between 1900 and 2099.' };
+    date = { y, m, d };
+  }
+  return { name, date };
+}
+function reveal() {
+  const inp = readInputs();
+  if (inp.error) { askNote.textContent = inp.error; askNote.setAttribute('data-error', ''); return; }
+  askNote.removeAttribute('data-error');
+  askNote.textContent = 'Leave either blank to use the example: Brecht, 14 March 1997.';
+  result = thumbCard(inp.name, inp.date);
+  const [num, title] = MAJORS[result.thumb];
+  labNum.textContent = num;
+  labName.textContent = `${num} · ${title}`;
+  mathEl.replaceChildren();
+  // screen readers hear spoken joins ("then", a full stop per line); the eye gets the rose arrow and the line breaks
+  const sr = t => { const e = document.createElement('span'); e.className = 'sr'; e.textContent = t; return e; };
+  mathParts(result).forEach(p => {
+    const line = document.createElement('span'); line.className = 'part';
+    p.split(' → ').forEach((s, i) => {
+      if (i) { const a = document.createElement('span'); a.className = 'arrow'; a.textContent = ' →'; a.setAttribute('aria-hidden', 'true'); line.append(a, sr(' then'), ' '); }
+      const step = document.createElement('span'); step.className = 'step'; step.textContent = s; line.append(step);
+    });
+    line.append(sr('. '));
+    mathEl.append(line);
+  });
+  labelEl.setAttribute('aria-label', `Your thumb card: ${num}, ${title}`);
+  measureLabel();
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  showAsk(false);
+  tB = 0; setPhase('B');
+}
+askForm.addEventListener('submit', ev => { ev.preventDefault(); reveal(); });
+function restart() {
+  tA = 0; tB = 0; result = null;
+  showAsk(false);
+  setCaption(0);
+  prepareFormation();
+  setPhase('A');
+  setHint();
+}
+replayBtn.addEventListener('click', restart);
+skipBtn.addEventListener('click', () => {
+  if (phase === 'A') tA = TA.end;
+  else if (phase === 'B') tB = TB.end;
+});
+
+/* ---------- captions ---------- */
+const CAPTIONS = ['', 'Everyone is dealt a hand. Here is yours.', 'The ring finger. Love and commitment, held by Saturn, keeper of rings.'];
+let capShown = 0, capTimer = 0;
+function setCaption(id) {
+  if (id === capShown) return;
+  const wasOn = capShown !== 0;
+  capShown = id;
+  captionP.classList.remove('on');
+  clearTimeout(capTimer);
+  capTimer = setTimeout(() => {
+    captionP.textContent = CAPTIONS[id];
+    if (id) requestAnimationFrame(() => captionP.classList.add('on'));
+  }, wasOn ? 800 : 0);
+}
+
+/* =====================================================================
+   Pointer and device tilt (ported from the deck)
+   ===================================================================== */
+const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+function setHint(msg) {
+  if (msg) { hintEl.textContent = msg; return; }
+  hintEl.textContent = tilt.on ? 'Tilt your phone to drift through the stars.' : coarse ? 'Drag to drift through the stars.' : 'Move the mouse to drift through the stars.';
+}
+
+// ---------- device tilt ----------
+const tilt = { on: false, neutral: null, got: false };
+const coarse = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (typeof DeviceOrientationEvent !== 'undefined' && coarse) tiltBtn.hidden = false;
+function screenAngle() {
+  const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+  return ((a % 360) + 360) % 360;
+}
+function onOrient(e) {
+  if (e.beta == null || e.gamma == null) return;
+  tilt.got = true;
+  let x = e.gamma, y = e.beta;
+  const a = screenAngle();
+  if (a === 90) { x = e.beta; y = -e.gamma; }
+  else if (a === 270) { x = -e.beta; y = e.gamma; }
+  else if (a === 180) { x = -e.gamma; y = -e.beta; }
+  if (!tilt.neutral) tilt.neutral = { x, y };
+  const range = 22;
+  pointer.tx = Math.max(-1, Math.min(1, (x - tilt.neutral.x) / range));
+  pointer.ty = Math.max(-1, Math.min(1, -(y - tilt.neutral.y) / range));
+}
+tiltBtn.addEventListener('click', async () => {
+  if (tilt.on) { tilt.neutral = null; setHint('Recentered. Hold the phone the way you like and tilt from there.'); setTimeout(() => setHint(), 2200); return; }
+  try {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') { setHint('Tilt was not allowed. You can still drag your finger to drift through the stars.'); return; }
+    }
+    addEventListener('deviceorientation', onOrient);
+    tilt.on = true; tilt.neutral = null; tilt.got = false;
+    tiltBtn.textContent = 'Recenter';
+    setHint();
+    setTimeout(() => {
+      if (!tilt.got) {
+        tilt.on = false; removeEventListener('deviceorientation', onOrient);
+        tiltBtn.textContent = 'Tilt';
+        setHint('No tilt data reached this page. Inside a preview, motion sensors are blocked; open the direct link on your phone.');
+      }
+    }, 1800);
+  } catch (e) {
+    setHint('Tilt is not available here. Open the direct link on your phone, or drag your finger to drift through the stars.');
+  }
+});
+
+const el = renderer.domElement;
+el.addEventListener('pointermove', ev => {
+  if (tilt.on) return;
+  const r = el.getBoundingClientRect();
+  pointer.tx = ((ev.clientX - r.left) / r.width) * 2 - 1;
+  pointer.ty = -(((ev.clientY - r.top) / r.height) * 2 - 1);
+});
+
+/* =====================================================================
+   Card label beside the thumb
+   ===================================================================== */
+let labW = 160, labH = 44, labSide = 'right', labX = null, labY = null;
+function measureLabel() { labW = labelEl.offsetWidth || labW; labH = labelEl.offsetHeight || labH; }
+const scr = new THREE.Vector3();
+// screen positions of the visible hand stars, so the label can find a patch of empty sky
+const scrPts = new Float32Array((NJ + ND) * 2), scrThumb = new Uint8Array(NJ + ND);
+const mvp = new THREE.Matrix4();
+let nScr = 0;
+function projectHand() {
+  nScr = 0;
+  mvp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(handInner.matrixWorld);
+  const e = mvp.elements;
+  const push = (p, i, a, g) => {
+    if (a < 0.12) return;
+    const x = p[i], y = p[i + 1], z = p[i + 2], w = e[3] * x + e[7] * y + e[11] * z + e[15];
+    if (w <= 0) return;
+    scrPts[nScr * 2] = ((e[0] * x + e[4] * y + e[8] * z + e[12]) / w * 0.5 + 0.5) * W;
+    scrPts[nScr * 2 + 1] = (-(e[1] * x + e[5] * y + e[9] * z + e[13]) / w * 0.5 + 0.5) * H;
+    scrThumb[nScr] = g === 0 ? 1 : 0;
+    nScr++;
+  };
+  for (let i = 0; i < NJ; i++) push(jPos.array, i * 3, jAlpha.array[i] * GA[joints[i].group], joints[i].group);
+  for (let i = 0; i < ND; i++) push(dPos.array, i * 3, dAlpha.array[i] * GA[dust[i].group], dust[i].group);
+}
+function handHits(l, t, r, b, ex, ey) {
+  // the label is tied to the thumb tip by its leader, so the tip's own glow and the end of the thumb never count
+  let n = 0;
+  for (let k = 0; k < nScr; k++) {
+    const x = scrPts[k * 2], y = scrPts[k * 2 + 1];
+    if (x <= l || x >= r || y <= t || y >= b) continue;
+    const d2 = (x - ex) ** 2 + (y - ey) ** 2;
+    if (d2 > 484 && !(scrThumb[k] && d2 < 2025)) n++;
+  }
+  return n;
+}
+const boxRange = document.createRange();
+function textBox(el) {                // the box of the text itself (the math and caption blocks are full width)
+  boxRange.selectNodeContents(el);
+  const r = boxRange.getBoundingClientRect();
+  return r.width > 1 ? r : null;
+}
+let labSwap = 1, labNext = null;     // switching spots cross-fades instead of sliding the label across the hand
+const labDebug = { side: labSide };
+function placeLabel(alpha, dt) {
+  if (alpha <= 0.001) {
+    labelEl.style.opacity = '0'; leader.style.opacity = '0';
+    labX = null; labNext = null; labSwap = 1;
+    return;
+  }
+  scr.copy(T.j[3].pos);
+  handInner.localToWorld(scr);
+  scr.project(camera);
+  const x = (scr.x * 0.5 + 0.5) * W, y = (-scr.y * 0.5 + 0.5) * H;
+  const top = 64, bottom = H - 140, gap = 32, pad = 5;
+  const cx = lx => Math.max(16, Math.min(W - 16 - labW, lx));
+  const cy = ly => Math.max(top, Math.min(bottom - labH, ly));
+  const spots = {
+    right: [x + gap, y - labH / 2],
+    left: [x - gap - labW, y - labH / 2],
+    above: [cx(x - labW * 0.3), y - gap - labH],
+    below: [cx(x - labW * 0.3), y + gap],
+    aboveFar: [cx(x - labW * 0.5), cy(y - gap * 2.6 - labH)],
+    belowFar: [cx(x - labW * 0.5), cy(y + gap * 2.6)],
+    top: [cx(x - labW * 0.75), top],                 // open sky above the fingertips (a phone-width open hand)
+    bottom: [cx(x - labW * 0.75), bottom - labH],
+  };
+  const fits = ([lx, ly]) => lx >= 16 && lx + labW <= W - 16 && ly >= top && ly + labH <= bottom;
+  // never park the label on the hand, or on the math note or caption while they show
+  projectHand();
+  const blocks = [];
+  if (st.math > 0.02) blocks.push(textBox(mathEl));
+  if (capShown) blocks.push(textBox(captionP));
+  const cost = (k, p = pad) => {
+    const [lx, ly] = spots[k];
+    if (!fits(spots[k])) return 1e6;
+    let c = handHits(lx - p, ly - p, lx + labW + p, ly + labH + p, x, y);
+    for (const r of blocks) if (r && lx < r.right + 12 && lx + labW > r.left - 12 && ly < r.bottom + 12 && ly + labH > r.top - 12) c += 500;
+    return c;
+  };
+  const order = st.wThumb > 0.5
+    ? ['right', 'left', 'above', 'below', 'aboveFar', 'belowFar', 'top', 'bottom']
+    : ['right', 'above', 'aboveFar', 'below', 'left', 'belowFar', 'top', 'bottom'];
+  const pick = (p = pad) => {                        // the first clear spot in order, else the least crowded
+    let best = order[0], bc = Infinity;
+    for (const k of order) { const c = cost(k, p); if (c === 0) return { k, c }; if (c < bc) { best = k; bc = c; } }
+    return { k: best, c: bc };
+  };
+  let snap = false;
+  if (labX === null) { labSide = pick().k; snap = true; }
+  else if (!labNext && cost(labSide, 18) > 0) {
+    // the hand is closing in on the label: leave early for a spot with a wide margin, else for any clear spot
+    const wide = pick(18);
+    if (wide.c === 0 && wide.k !== labSide) labNext = wide.k;
+    else {
+      const cur = cost(labSide), b = pick();
+      if (cur > 0 && b.k !== labSide && b.c < cur - 1) labNext = b.k;
+    }
+  }
+  if (labNext) {
+    labSwap = Math.max(0, labSwap - dt / 0.16);
+    if (labSwap === 0) { labSide = labNext; labNext = null; snap = true; }
+  } else labSwap = Math.min(1, labSwap + dt / 0.24);
+  labDebug.side = labSide;
+  let [tx, ty] = spots[labSide];
+  tx = cx(tx); ty = cy(ty);
+  if (snap) { labX = tx; labY = ty; }
+  else { const k = 1 - Math.exp(-14 * dt); labX += (tx - labX) * k; labY += (ty - labY) * k; }
+  const a = alpha * E.sine(labSwap);
+  labelEl.style.opacity = a.toFixed(3);
+  labelEl.style.transform = `translate3d(${labX.toFixed(1)}px, ${labY.toFixed(1)}px, 0)`;
+  // leader: from just off the star to the nearest point of the label
+  const ax = Math.max(labX - 5, Math.min(labX + labW + 5, x)), ay = Math.max(labY - 5, Math.min(labY + labH + 5, y));
+  const dx = ax - x, dy = ay - y, dl = Math.hypot(dx, dy) || 1;
+  const show = dl > 18 ? 1 : 0;
+  leader.style.opacity = (a * show).toFixed(3);
+  leader.setAttribute('x1', (x + dx / dl * 11).toFixed(1)); leader.setAttribute('y1', (y + dy / dl * 11).toFixed(1));
+  leader.setAttribute('x2', ax.toFixed(1)); leader.setAttribute('y2', ay.toFixed(1));
+}
+
+/* =====================================================================
+   Per-frame update
+   ===================================================================== */
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), vD = new THREE.Vector3();
+const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qSpin = new THREE.Quaternion();
+const AXY = new THREE.Vector3(0, 1, 0);
+const VIEW_T = new THREE.Vector3(0.08, 0.06, 1).normalize();
+const idlePose = new Float32Array(NP);
+const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new THREE.Vector3();
+const RIM_FLOOR = 0.3, RIM_GAIN = 0.95;
+let ringSpin = 0, planetSpin = 0;
+
+function thumbFocusLocal(out) { return out.copy(T.j[1].pos).lerp(T.j[3].pos, 0.25); }
+function ringRestLocal(out) { return out.copy(FR.j[1].pos).lerp(FR.j[2].pos, 0.3); }
+function planetCenterLocal(out) { return out.copy(FR.j[1].pos).lerp(FR.j[4].pos, 0.45); }
+
+function updateCamera(par) {
+  // overview
+  camPos.set(st.arcX, 0.06, framing.dAll * st.dolly);
+  camLook.set(0, 0, 0);
+  let sy = framing.shiftAll, sx = 0;
+  // thumb close-up, tracking the live thumb
+  if (st.wThumb > 0) {
+    handInner.localToWorld(thumbFocusLocal(vA));
+    vB.copy(vA).addScaledVector(VIEW_T, framing.dThumb);
+    camPos.lerp(vB, st.wThumb); camLook.lerp(vA, st.wThumb);
+    sy = lerp(sy, framing.shiftThumbY, st.wThumb); sx = lerp(0, framing.shiftThumbX, st.wThumb);
+  }
+  // ring-finger push
+  if (st.wRing > 0) {
+    handInner.localToWorld(planetCenterLocal(vA)).multiplyScalar(framing.ringCenter);
+    vB.set(vA.x, vA.y + 0.05, vA.z + framing.dAll * framing.ringPush);
+    camPos.lerp(vB, st.wRing); camLook.lerp(vA, st.wRing);
+    sy += framing.ringLift * st.wRing;
+  }
+  const k = Math.min(1, camPos.distanceTo(camLook) / framing.dAll);
+  camPos.x += pointer.x * 0.24 * par * k;
+  camPos.y += pointer.y * 0.15 * par * k;
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  camera.projectionMatrix.elements[8] = -sx;
+  camera.projectionMatrix.elements[9] = -sy;
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+}
+
+function updateHandPoints() {
+  const FD = TA.form[1];
+  const ft = st.formT / FD;
+  const forming = ft < 1.6;
+  const jp = jPos.array, ja = jAlpha.array, js = jSize.array;
+  for (let i = 0; i < NJ; i++) {
+    const tg = joints[i].pos;
+    let x = tg.x, y = tg.y, z = tg.z, a = jBaseAlpha[i] * (JFIN[i] < 0 ? 1 : 1 - JFADE[i] * CURL[JFIN[i]]), s = jBaseSize[i];
+    if (forming) {
+      const p = clamp01((ft - fDelay[i]) / fDur[i]), e = E.inOut(p), sw = Math.sin(Math.PI * e);
+      x = lerp(fStart[i * 3], tg.x, e) + fSwirl[i * 3] * sw;
+      y = lerp(fStart[i * 3 + 1], tg.y, e) + fSwirl[i * 3 + 1] * sw;
+      z = lerp(fStart[i * 3 + 2], tg.z, e) + fSwirl[i * 3 + 2] * sw;
+      const arrived = ft - (fDelay[i] + fDur[i]);
+      const flash = arrived > 0 ? Math.exp(-arrived * FD * 3.2) : 0;
+      a *= lerp(0.42, 1, E.sine(p)) * st.starsIn * (1 + 0.7 * flash);
+      s *= lerp(0.55, 1, p) * (1 + 0.9 * flash);
+    }
+    jp[i * 3] = x; jp[i * 3 + 1] = y; jp[i * 3 + 2] = z;
+    ja[i] = a; js[i] = s;
+  }
+  jPos.needsUpdate = true; jAlpha.needsUpdate = true; jSize.needsUpdate = true;
+
+  // tip flares only after the hand has formed
+  const fp = fPos.array, fa = fAlpha.array, flareOn = clamp01((ft - 0.85) / 0.4);
+  TIPS.forEach((j, k) => {
+    fp[k * 3] = jp[j.idx * 3]; fp[k * 3 + 1] = jp[j.idx * 3 + 1]; fp[k * 3 + 2] = jp[j.idx * 3 + 2];
+    fa[k] = 0.38 * flareOn * (k ? 1 - CURL[k - 1] : 1);          // a fingertip tucked into the fist does not flare
+  });
+  fPos.needsUpdate = true; fAlpha.needsUpdate = true;
+
+  // rim light: dust on the silhouette (surface turned edge-on to the camera) glows, dust facing the camera recedes,
+  // so every phalanx reads as a slender tube and the palm as a rounded slab from any angle
+  camLocal.copy(camera.position); handInner.worldToLocal(camLocal);
+  const dp = dPos.array, da = dAlpha.array;
+  for (let i = 0; i < ND; i++) {
+    const d = dust[i], tg = dustTarget(d, vC, nrmV), fi = NJ + i;
+    const vx = camLocal.x - tg.x, vy = camLocal.y - tg.y, vz = camLocal.z - tg.z;
+    const rim = 1 - Math.abs(nrmV.x * vx + nrmV.y * vy + nrmV.z * vz) / (Math.hypot(vx, vy, vz) || 1);
+    const b = d.stat ? null : BONES[d.bone];
+    const lit = (RIM_FLOOR + RIM_GAIN * rim * Math.sqrt(rim)) * (b && b.fin >= 0 ? 1 - b.fade * CURL[b.fin] : 1);
+    if (forming) {
+      const p = clamp01((ft - fDelay[fi]) / fDur[fi]), e = E.inOut(p), sw = Math.sin(Math.PI * e);
+      dp[i * 3] = lerp(fStart[fi * 3], tg.x, e) + fSwirl[fi * 3] * sw;
+      dp[i * 3 + 1] = lerp(fStart[fi * 3 + 1], tg.y, e) + fSwirl[fi * 3 + 1] * sw;
+      dp[i * 3 + 2] = lerp(fStart[fi * 3 + 2], tg.z, e) + fSwirl[fi * 3 + 2] * sw;
+      da[i] = d.alpha * lerp(0.5, lit, p) * st.starsIn;
+    } else {
+      dp[i * 3] = tg.x; dp[i * 3 + 1] = tg.y; dp[i * 3 + 2] = tg.z;
+      da[i] = d.alpha * lit;
+    }
+  }
+  dPos.needsUpdate = true; dAlpha.needsUpdate = true;
+}
+
+function updateLines() {
+  const lp = lPos.array, la = lAlpha.array, p = st.lines;
+  // the palm scaffolding (wrist, metacarpals, knuckle rungs) only reads while the hand is open and faces us;
+  // in a fist or side-on it turns into an x-ray ladder, so it fades with the curl and the edge-on angle
+  let curl = 0;
+  for (let k = 0; k < 4; k++) curl += clamp01(st.pose[6 + k * 4] / (85 * DEG)) / 4;
+  palmN.set(0, 0, 1).transformDirection(handInner.matrixWorld);
+  vD.copy(camera.position).sub(handRoot.position).normalize();
+  const structK = (1 - 0.9 * curl) * (0.3 + 0.7 * Math.abs(palmN.dot(vD)));
+  for (let k = 0; k < NS; k++) {
+    const s = SEGS[k], A = s.a.pos, B = s.b.pos;
+    const local = clamp01((p - s.level * 0.16) / 0.36), e = E.out(local);
+    const a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * CURL[s.fin] : 1) * Math.min(1, local * 3);
+    lp[k * 6] = A.x; lp[k * 6 + 1] = A.y; lp[k * 6 + 2] = A.z;
+    lp[k * 6 + 3] = A.x + (B.x - A.x) * e; lp[k * 6 + 4] = A.y + (B.y - A.y) * e; lp[k * 6 + 5] = A.z + (B.z - A.z) * e;
+    la[k * 2] = a; la[k * 2 + 1] = a * (0.5 + 0.5 * e);
+  }
+  lPos.needsUpdate = true; lAlpha.needsUpdate = true;
+}
+
+// ring path: from just above the fingertip down to where a ring sits
+const ringPath = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const ringRad = [0.05, 0.05, 0.062, 0.072, 0.077].map(r => r * 1.32);
+function updateRing(dt) {
+  const on = st.ringA > 0.001 || st.planetA > 0.001;
+  ringGroup.visible = on; planetGroup.visible = st.planetA > 0.001;
+  OCC.uOccA.value = st.planetA;
+  if (!on) return;
+  // slide position along the finger
+  const tip = FR.j[4].pos, dip = FR.j[3].pos, pip = FR.j[2].pos;
+  ringPath[0].copy(tip).sub(dip).normalize().multiplyScalar(0.06).add(tip);
+  ringPath[1].copy(tip); ringPath[2].copy(dip); ringPath[3].copy(pip); ringRestLocal(ringPath[4]);
+  const lens = [0, 0, 0, 0]; let total = 0;
+  for (let k = 0; k < 4; k++) { lens[k] = ringPath[k].distanceTo(ringPath[k + 1]); total += lens[k]; }
+  let d = st.slide * total, k = 0;
+  while (k < 3 && d > lens[k]) { d -= lens[k]; k++; }
+  const f = lens[k] ? Math.min(1, d / lens[k]) : 0;
+  vA.copy(ringPath[k]).lerp(ringPath[k + 1], f);
+  const rFinger = lerp(ringRad[k], ringRad[k + 1], f);
+  // orientation follows the finger: distal bone near the tip, proximal near the base
+  FR.dist.getWorldQuaternion(qA); FR.prox.getWorldQuaternion(qB);
+  qA.slerp(qB, E.sine(st.slide));
+  const spinSpeed = reduceMotion ? 0.5 : lerp(2.4, 0.35, st.grow);
+  ringSpin += dt * spinSpeed;
+  qSpin.setFromAxisAngle(AXY, ringSpin);
+  planetCenterLocal(vB);
+  ringGroup.position.copy(vA).lerp(vB, st.grow);
+  ringGroup.quaternion.copy(qA).slerp(Q_SAT, st.grow).multiply(qSpin);
+  const restore = 1 - 0.15 * segE(tB, TB.ringOut, E.sine);
+  ringGroup.scale.setScalar(lerp(rFinger, R_PLANET * 2.3, st.grow) * restore);
+  const ra = st.ringA;
+  ringStars.material.uniforms.uOpacity.value = ra;
+  ringStars.material.uniforms.uSizeMul.value = lerp(0.8, 1.15, st.grow);
+  ringLineA.material.uniforms.uOpacity.value = ra * lerp(1, 0.5, st.grow);
+  ringLineB.material.uniforms.uOpacity.value = ra * lerp(1, 0.25, st.grow);
+  bands.material.uniforms.uOpacity.value = st.bandsA;
+  // planet
+  planetSpin += dt * 0.22;
+  planetGroup.position.copy(vB);
+  qSpin.setFromAxisAngle(AXY, planetSpin);
+  planetGroup.quaternion.copy(Q_SAT).multiply(qSpin);
+  planetGroup.scale.setScalar(lerp(0.7, 1, E.out(st.planetA)));
+  planetMat.uniforms.uOpacity.value = st.planetA;
+  halo.material.uniforms.uOpacity.value = st.planetA;
+  // occlusion uniforms (view space)
+  vD.copy(vB); handInner.localToWorld(vD); vD.applyMatrix4(camera.matrixWorldInverse);
+  OCC.uOcc.value.set(vD.x, vD.y, vD.z, R_PLANET * planetGroup.scale.x);
+}
+
+function updateGroups() {
+  const dim = 1 - 0.5 * st.hi;
+  const fist = 1 - 0.42 * st.wThumb;          // on the thumb close-up the curled fingers recede so the thumb leads
+  for (let g = 0; g < 6; g++) { GA[g] = dim * (g === 0 ? 1 : g === 5 ? lerp(1, fist, 0.6) : fist); GB[g] = 1; }
+  GA[3] = st.fingerA * lerp(1, 1.25, st.hi) * fist;
+  GB[3] = 1 + st.hi * (0.5 + 0.12 * Math.sin(clock * 3.1));
+  GB[0] = 1 + 0.2 * st.wThumb + 0.75 * st.pulse;
+}
+
+/* ---------- loop ---------- */
+let last = performance.now(), clock = 0, frames = 0;
+window.__frames = 0;
+function damp(k, dt) { return 1 - Math.exp(-k * dt); }
+
+function frame(now) {
+  const rdt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = freeze ? 0 : rdt;
+  clock += rdt; U.uTime.value = clock;
+  const par = reduceMotion ? 0.3 : 1;
+  pointer.x += (pointer.tx - pointer.x) * damp(5, rdt);
+  pointer.y += (pointer.ty - pointer.y) * damp(5, rdt);
+
+  if (debugPose) {
+    Object.assign(st, debugPose.st);
+    st.pose.set(debugPose.pose);
+  } else if (phase === 'A') {
+    tA += dt;
+    if (tA >= TA.end) { tA = TA.end; evalA(tA); enterAwait(); } else evalA(tA);
+  } else if (phase === 'await') {
+    evalA(TA.end);
+  } else if (phase === 'B') {
+    tB += dt;
+    if (tB >= TB.end) { tB = TB.end; setPhase('end'); }
+    evalB(tB);
+  } else {
+    evalB(TB.end);
+  }
+
+  // gentle idle life in the fingers once the hand exists
+  const life = clamp01(st.formT / TA.form[1] - 0.9) * (reduceMotion ? 0.35 : 1);
+  for (let k = 0; k < NP; k++) idlePose[k] = st.pose[k];
+  for (let f = 0; f < 4; f++) idlePose[6 + f * 4] += Math.sin(clock * 0.7 + f * 1.3) * 1.3 * DEG * life;
+  idlePose[3] += Math.sin(clock * 0.55 + 2.0) * 1.2 * DEG * life;
+  applyPose(idlePose);
+  updateCurl(idlePose);
+
+  handRoot.rotation.set(st.pitch - pointer.y * 0.08 * par, st.yaw + pointer.x * 0.13 * par, st.roll);
+  handRoot.position.set(0, Math.sin(clock * 0.6) * 0.014 * life, 0);
+  handRoot.updateMatrixWorld(true);
+
+  updateCamera(par);
+  updateGroups();
+  updateHandPoints();
+  updateLines();
+  updateRing(rdt);
+
+  skyNear.position.set(pointer.x * 0.22 * par, pointer.y * 0.14 * par, 0);
+  skyMid.position.set(pointer.x * 0.06 * par, pointer.y * 0.04 * par, 0);
+  skyFar.rotation.z = clock * 0.0025;
+  bgMat.uniforms.uPar.value.set(pointer.x * par, pointer.y * par);
+  const skyA = 0.25 + 0.75 * st.starsIn;
+  for (const lay of [skyFar, skyMid, skyNear, skyConst]) for (const c of lay.children) if (c.material && c.material.uniforms) c.material.uniforms.uOpacity.value = skyA;
+
+  setCaption(st.caption);
+  placeLabel(result ? st.label : 0, rdt);
+  mathEl.style.opacity = st.math.toFixed(3);
+
+  renderer.render(scene, camera);
+  window.__frames = ++frames;
+  requestAnimationFrame(frame);
+}
+
+/* ---------- boot ---------- */
+addEventListener('resize', resize);
+resize();
+{
+  // aim THUMB so the thumb stands straight up once the hand is rolled
+  applyPose(POSES.thumb);
+  const d = vA.copy(T.j[3].pos).sub(T.j[1].pos);
+  ROT_T = { yaw: Math.PI * 0.56, pitch: -0.06, roll: Math.atan2(d.x, d.y) };
+  // measure the thumbs-up as the close-up camera sees it, so resize() can fit it to any screen
+  handRoot.rotation.set(ROT_T.pitch, ROT_T.yaw, ROT_T.roll); handRoot.position.set(0, 0, 0);
+  handRoot.updateMatrixWorld(true);
+  const focus = handInner.localToWorld(thumbFocusLocal(new THREE.Vector3())), d0 = 3;
+  camera.position.copy(focus).addScaledVector(VIEW_T, d0); camera.lookAt(focus); camera.updateMatrixWorld();
+  const p = new THREE.Vector3(), q = new THREE.Vector3(), ext = { up: 0, down: 0, left: 0, right: 0 };
+  const take = v => {
+    p.copy(v); handInner.localToWorld(p); p.applyMatrix4(camera.matrixWorldInverse);
+    const u = p.x / -p.z * d0, w = p.y / -p.z * d0;
+    ext.up = Math.max(ext.up, w); ext.down = Math.max(ext.down, -w); ext.left = Math.max(ext.left, -u); ext.right = Math.max(ext.right, u);
+  };
+  joints.forEach(j => take(j.pos));
+  dust.forEach(dd => { if (!dd.arm) take(dustTarget(dd, q)); });
+  for (const k in ext) FIG[k] = ext[k] * 1.04;
+  resize();
+}
+prepareFormation();
+setPhase('A');
+setHint();
+
+// debug hooks (harmless in production): ?t=seconds into the intro, ?b=seconds after Reveal, ?freeze, ?pose=open|one|thumb
+if (qs.has('pose') && POSES[qs.get('pose')]) {
+  const n = k => (qs.has(k) ? Number(qs.get(k)) * DEG : null);
+  debugPose = {
+    pose: POSES[qs.get('pose')],
+    st: { starsIn: 1, formT: 1e4, lines: 1, yaw: n('yaw') ?? 0, pitch: n('pitch') ?? 0, roll: n('roll') ?? 0, dolly: 1, arcX: 0, wThumb: qs.get('view') === 'thumb' ? 1 : 0, wRing: 0, label: 0, math: 0, caption: 0, hi: 0, ringA: 0, grow: 0, fingerA: 1, planetA: 0, bandsA: 0, pulse: 0 },
+  };
+  skipBtn.hidden = true;
+}
+if (qs.has('t')) tA = Math.min(TA.end, Number(qs.get('t')) || 0);
+if (qs.has('b')) { reveal(); tB = Math.min(TB.end, Number(qs.get('b')) || 0); }
+window.__seq = {
+  get phase() { return phase; }, get tA() { return tA; }, get tB() { return tB; }, TA, TB, st,
+  jumpA(t) { setPhase('A'); tA = t; }, jumpB(t) { if (!result) reveal(); tB = t; }, reveal, restart,
+  joints: () => joints.map(j => j.pos.toArray().map(v => +v.toFixed(4))),
+  fk(poseDeg) { applyPose(Float32Array.from(poseDeg, x => x * DEG)); return joints.map(j => j.pos.toArray().map(v => +(v / CM).toFixed(3))); },
+  setDebugPose(p, s) { debugPose = { pose: Float32Array.from(p, x => x * DEG), st: Object.assign({}, debugPose ? debugPose.st : {}, s) }; },
+  thumbCheck,
+  get labelSide() { return labDebug.side; },
+  FIG, framing,
+  // screen-space [x, y, alpha, kind] for every visible hand, ring and planet star (layout tests)
+  project() {
+    const out = [], u = new THREE.Vector3();
+    const add = (x, y, z, obj, a, kind) => {
+      u.set(x, y, z); obj.localToWorld(u); u.project(camera);
+      if (u.z > -1 && u.z < 1 && a > 0.001) out.push([Math.round((u.x * 0.5 + 0.5) * W), Math.round((-u.y * 0.5 + 0.5) * H), +a.toFixed(3), kind]);
+    };
+    const jp = jPos.array, ja = jAlpha.array, dp = dPos.array, da = dAlpha.array;
+    for (let i = 0; i < NJ; i++) add(jp[i * 3], jp[i * 3 + 1], jp[i * 3 + 2], handInner, ja[i] * GA[joints[i].group], 'j');
+    for (let i = 0; i < ND; i++) add(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2], handInner, da[i] * GA[dust[i].group], dust[i].arm ? 'arm' : 'd');
+    if (ringGroup.visible) {
+      const rp = ringStars.geometry.attributes.position.array;
+      for (let i = 0; i < RING_N; i++) add(rp[i * 3], rp[i * 3 + 1], rp[i * 3 + 2], ringStars, ringStars.material.uniforms.uOpacity.value, 'ring');
+    }
+    if (planetGroup.visible) {
+      const pp = planetGroup.children[0].geometry.attributes.position.array;
+      for (let i = 0; i < pp.length / 3; i += 4) add(pp[i * 3], pp[i * 3 + 1], pp[i * 3 + 2], planetGroup.children[0], planetMat.uniforms.uOpacity.value, 'planet');
+    }
+    return out;
+  },
+};
+requestAnimationFrame(frame);
+</script>
+</body></html>
