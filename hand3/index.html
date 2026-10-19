@@ -719,6 +719,8 @@ function applyPose(p) {
    ===================================================================== */
 const handRoot = new THREE.Group(); handRoot.rotation.order = 'YXZ'; scene.add(handRoot);
 const handInner = new THREE.Group(); handInner.position.copy(PIVOT).negate(); handRoot.add(handInner);
+// the hand's stars, lines and band (not the planet): behind the deck it can draw back around the planet (see BODY_K)
+const handBody = new THREE.Group(); handInner.add(handBody);
 
 // --- joint stars ---
 // v2: joint stars ~12% larger and ~10% brighter so the silhouette reads at normal screen brightness
@@ -740,7 +742,7 @@ joints.forEach((j, i) => {
 });
 const jointStars = new THREE.Points(jGeo, pointsMaterial({ twinkle: reduceMotion ? 0.06 : 0.16, atten: 0.72, ref: 5, groups: true, occAny: 1, occ: true }));
 jointStars.frustumCulled = false; jointStars.renderOrder = 3;
-handInner.add(jointStars);
+handBody.add(jointStars);
 
 // --- tip flares (soft four-point spikes on the five fingertips) ---
 const fGeo = new THREE.BufferGeometry();
@@ -752,7 +754,7 @@ attr(fGeo, 'aPhase', new Float32Array(5).map(() => Math.random()), 1);
 attr(fGeo, 'aGroup', new Float32Array(TIPS.map(j => j.group)), 1);
 const tipFlares = new THREE.Points(fGeo, pointsMaterial({ map: FLARE, twinkle: reduceMotion ? 0.1 : 0.4, atten: 0.72, ref: 5, groups: true, occAny: 1, occ: true }));
 tipFlares.frustumCulled = false; tipFlares.renderOrder = 4;
-handInner.add(tipFlares);
+handBody.add(tipFlares);
 
 // --- constellation lines along the bones (wrist outward = draw order) ---
 const SEGS = [];
@@ -786,7 +788,7 @@ attr(lGeo, 'aGroup', Float32Array.from({ length: NS * 2 }, (_, i) => SEGS[i >> 1
 attr(lGeo, 'aColor', Float32Array.from({ length: NS * 6 }, (_, i) => [0.95, 0.72, 0.64][i % 3]), 3);
 const boneLines = new THREE.LineSegments(lGeo, lineMaterial({ groups: true, occAny: 1, occ: true }));
 boneLines.frustumCulled = false; boneLines.renderOrder = 1;
-handInner.add(boneLines);
+handBody.add(boneLines);
 
 // --- volumetric dust: capsules around the phalanges, a rounded palm slab, a fading forearm ---
 const BONES = [];
@@ -895,7 +897,7 @@ attr(dGeo, 'aPhase', Float32Array.from(dust, () => Math.random()), 1);
 attr(dGeo, 'aGroup', Float32Array.from(dust, d => d.group), 1);
 const dustPts = new THREE.Points(dGeo, pointsMaterial({ twinkle: reduceMotion ? 0.12 : 0.32, atten: 0.85, ref: 5, groups: true, occAny: 1, occ: true }));
 dustPts.frustumCulled = false; dustPts.renderOrder = 2;
-handInner.add(dustPts);
+handBody.add(dustPts);
 
 function dustTarget(d, out, nrm) {
   if (d.stat) { if (nrm) nrm.copy(d.n); return out.copy(d.stat); }
@@ -1030,7 +1032,7 @@ disTex.magFilter = disTex.minFilter = THREE.LinearFilter; disTex.wrapS = THREE.R
 // One stylised band, the same mixture all the way round: a soft gold body you read as a ring (its silhouette drawn in
 // light, its thickness, a highlight that slides round as it turns), a faint wireframe over it, starlight in the gold,
 // stars along its edges and a gold glow. Not a reflection of a room: no environment map, no tone mapping.
-const ringGroup = new THREE.Group(); handInner.add(ringGroup);
+const ringGroup = new THREE.Group(); handBody.add(ringGroup);
 const bandU = {
   uDis: { value: 1 }, uDisMap: { value: disTex }, uTime: U.uTime, uOpacity: { value: 1 },
   uLight: { value: new THREE.Vector3(0.9, 1.1, 1.6).normalize() },        // the key light, in view space (camera-mounted)
@@ -1214,7 +1216,7 @@ attr(plLGeo, 'aGroup', new Float32Array(plSegs.length * 2).fill(5), 1);
 attr(plLGeo, 'aColor', Float32Array.from({ length: plSegs.length * 6 }, (_, i) => [0.98, 0.74, 0.64][i % 3]), 3);
 const palmLineSegs = new THREE.LineSegments(plLGeo, lineMaterial({ occ: true, occAny: 1 }));
 palmLineSegs.frustumCulled = false; palmLineSegs.renderOrder = 4;
-handInner.add(palmLineSegs, palmLineStars);
+handBody.add(palmLineSegs, palmLineStars);
 // on the palm's beat the lines' stars pour into Mars with the rest of the palm: their resting positions, kept
 const PL_REST = [plGeo, plLGeo].map(g => Float32Array.from(g.attributes.position.array));
 let plCollapsed = 0;
@@ -1818,6 +1820,21 @@ function resize() {
     const ppuF = Math.min(ppuP * 0.82, Math.max(ppuHome * 1.3, ppuLines));
     S.dF = dAtPpu(ppuF); S.sxF = S.sxP; S.syF = S.syP;
   }
+  // ---- behind the deck: how far the open hand draws back around each finger's planet to be seen whole (BODY_K) ----
+  for (let b = 1; b <= 4; b++) {
+    const S = SHOT[b], mx = (1 + S.sxP) / 2 * W, my = (1 - S.syP) / 2 * H, P = HOME.P && HOME.P[b];
+    let k = 1;
+    if (BODY_ON && P && HOME.pts) {
+      const top = LAY.top + S.headH + 6, bot = H - LAY.bottom - 4;
+      for (const [x, y, , hx, hy] of HOME.pts) {
+        if (hx) continue;                                 // the small cards' boxes are not part of the hand
+        const dx = (x - P.x) * S.ppuP, dy = (y - P.y) * S.ppuP;
+        if (dx > 0) k = Math.min(k, (W - 14 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - 14) / -dx);
+        if (dy > 0) k = Math.min(k, (my - top) / dy); else if (dy < 0) k = Math.min(k, (bot - my) / -dy);
+      }
+    }
+    BODY_K[b] = Math.max(0.2, Math.min(1, k));
+  }
   buildConstellations();
 }
 
@@ -1899,7 +1916,7 @@ const st = {
   head: 0, cap: '', math: 0,
   hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0,
   bandIn: 0, slide: 0, disT: -1e4, tiltW: 0,
-  placedA: 1, floatW: 0, backW: 0,
+  placedA: 1, floatW: 0, backW: 0, bodyK: 1,
 };
 function blendPose(out, a, b, w, stag) {
   for (let k = 0; k < NP; k++) {
@@ -1922,7 +1939,7 @@ function evalHome() {                               // the whole open hand, palm
   st.head = 0; st.cap = ''; st.math = 0;
   st.hi = 0; st.fingerA = 1; st.collapse = 0; st.restA = 1; st.planetA = 0; st.reveal = 0; st.palmHi = 0;
   st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
-  st.placedA = 1; st.floatW = 0; st.backW = 0;
+  st.placedA = 1; st.floatW = 0; st.backW = 0; st.bodyK = 1;
 }
 function evalA(t) {                                 // the intro and the thumb, up to the sheet
   st.starsIn = segE(t, TA.stars, E.sine);
@@ -1968,6 +1985,7 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   st.collapse = b === 5 && t >= T.back[0] ? 0 : fadeE;   // the palm's stars are back in place (unseen) as the deck comes
   const eBack = segE(t, T.back, E.sine);
   st.backW = eBack;
+  st.bodyK = lerp(1, BODY_K[b], eBack);               // behind the deck the whole hand draws back around the planet
   st.restA = lerp(lerp(lerp(1, 0.55, st.hi), REST_LOW, segE(t, T.rest, E.sine)), REST_BACK, eBack);
   st.planetA = segE(t, T.plA, E.sine);
   st.reveal = segE(t, T.reveal, E.sine);
@@ -2010,6 +2028,7 @@ function evalOut(b, t) {                            // the card is read: back ou
   st.collapse *= 1 - segE(t, O.unfade, E.inOut);
   st.restA = lerp(st.restA, 1, un);
   st.backW *= 1 - cam;
+  st.bodyK = lerp(st.bodyK, 1, cam);
   st.hi *= 1 - segE(t, O.hiOff); st.palmHi *= 1 - segE(t, O.hiOff);
   st.head *= 1 - segE(t, O.head, E.sine);
   st.cap = t < O.cap ? `card${b}` : '';
@@ -2457,8 +2476,22 @@ const VIEW_T = new THREE.Vector3(0.08, 0.06, 1).normalize();
 const idlePose = new Float32Array(NP);
 const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new THREE.Vector3(), PCL = new THREE.Vector3();
 const RIM_FLOOR = 0.33, RIM_GAIN = 1.0;
-const BACK_LINES = qs.has('lb') && Number.isFinite(+qs.get('lb')) ? +qs.get('lb') : 1.9;   // the hand's lines, brighter behind the deck
-const BACK_GB = qs.has('gb') && Number.isFinite(+qs.get('gb')) ? +qs.get('gb') : 0.12;
+// Behind the deck the camera stays in close on the planet, where the full-size hand is only a scatter of stars at the
+// screen's edges; so the hand (not the planet) draws back around the planet, small enough to be seen whole, the planet
+// standing where its finger was. Per beat; 1 = off (the thumb, whose Sun shares the screen with the sheet, and the palm,
+// whose lines frame Mars). ?handk=0 turns it off.
+const BODY_K = [1, 1, 1, 1, 1, 1];
+const BODY_ON = qs.get('handk') !== '0';
+const BODY_PTS_K = qs.has('bpk') && Number.isFinite(+qs.get('bpk')) ? +qs.get('bpk') : 0.55;
+function updateBody() {
+  const k = st.bodyK, sm = Math.pow(k, BODY_PTS_K);          // its stars shrink with it, a little less than it does
+  handBody.scale.setScalar(k);
+  for (const o of [jointStars, tipFlares, dustPts, palmLineStars]) o.material.uniforms.uSizeMul.value = sm;
+  if (k < 0.9999) { planetLocal(beat, handBody.position).multiplyScalar(1 - k); } else handBody.position.set(0, 0, 0);
+  handBody.updateMatrixWorld(true);
+}
+const BACK_LINES = qs.has('lb') && Number.isFinite(+qs.get('lb')) ? +qs.get('lb') : 1.35;   // the hand's lines, brighter behind the deck
+const BACK_GB = qs.has('gb') && Number.isFinite(+qs.get('gb')) ? +qs.get('gb') : 0;
 let SX = 0, SY = 0, spinA = 0, collapseK = 0;
 function planetShotLocal(b, out) { return planetLocal(b, out); }
 const beatGroup = () => (phase === 'end' ? -1 : beat);
@@ -2544,7 +2577,7 @@ function updateHandPoints() {
 
   // rim light: dust on the silhouette (surface turned edge-on to the camera) glows, dust facing the camera recedes,
   // so every phalanx reads as a tube and the palm as a rounded slab from any angle
-  camLocal.copy(camera.position); handInner.worldToLocal(camLocal);
+  camLocal.copy(camera.position); handBody.worldToLocal(camLocal);
   const dp = dPos.array, da = dAlpha.array;
   for (let i = 0; i < ND; i++) {
     const d = dust[i], tg = dustTarget(d, vC, nrmV), fi = NJ + i;
@@ -2725,7 +2758,7 @@ function floatTarget(k, outP, outQ) {
   // camera's space at the size the hand's camera would show it
   cardAnchorLocal(k, tmpW);
   if (!reduceMotion) tmpW.y += Math.sin(clock * 1.1 + k * 1.3) * 0.011;
-  handInner.localToWorld(tmpW);
+  handBody.localToWorld(tmpW);
   tmpN.copy(tmpW).applyMatrix4(camera.matrixWorldInverse);
   const depth = Math.max(0.1, -tmpN.z);
   tmpN.copy(tmpW).project(camera);
@@ -2919,6 +2952,7 @@ function frame(now) {
   handRoot.rotation.set(st.pitch - pointer.y * 0.08 * par, st.yaw + pointer.x * 0.13 * par, st.roll);
   handRoot.position.set(0, Math.sin(clock * 0.6) * 0.014 * life, 0);
   handRoot.updateMatrixWorld(true);
+  updateBody();
   eBase.set(st.pitch, st.yaw, st.roll, 'YXZ'); qBase.setFromEuler(eBase); qBaseInv.copy(qBase).invert();
 
   updateCamera(par);
@@ -2998,6 +3032,7 @@ resize();
   joints.forEach(j => grab(j.pos));
   dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) grab(dustTarget(dd, q)); });
   for (let k = 0; k < 6; k++) grab(cardAnchorLocal(k, new THREE.Vector3()), FLOAT_H * CW / CH / 2 + 0.012, FLOAT_H / 2 + 0.02);
+  HOME.P = Array.from({ length: 6 }, (_, b) => handInner.localToWorld(planetLocal(b, new THREE.Vector3())));
   // each beat's subject length, for the dolly in
   FLEN[0] = T.j[1].pos.distanceTo(T.j[3].pos);
   FINGERS.forEach((f, k) => { FLEN[k + 1] = f.j[1].pos.distanceTo(f.j[4].pos) + (k === 2 ? 0.08 : 0); });
@@ -3098,7 +3133,7 @@ window.__seq = {
   setDebugPose(p, s) { debugPose = { pose: Float32Array.from(p, x => x * DEG), st: Object.assign({}, debugPose ? debugPose.st : {}, s) }; },
   anchors() {            // each finger's small-card anchor: world position and screen px (layout tests)
     return Array.from({ length: 6 }, (_, k) => {
-      const v = cardAnchorLocal(k, new THREE.Vector3()); handInner.localToWorld(v);
+      const v = cardAnchorLocal(k, new THREE.Vector3()); handBody.localToWorld(v);
       const w = v.clone(); v.project(camera);
       return { k, world: w.toArray().map(x => +x.toFixed(3)), px: [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)] };
     });
@@ -3113,8 +3148,8 @@ window.__seq = {
       if (u.z > -1 && u.z < 1 && a > 0.001) out.push([Math.round((u.x * 0.5 + 0.5) * W), Math.round((-u.y * 0.5 + 0.5) * H), +a.toFixed(3), kind, g]);
     };
     const jp = jPos.array, ja = jAlpha.array, dp = dPos.array, da = dAlpha.array;
-    for (let i = 0; i < NJ; i++) add(jp[i * 3], jp[i * 3 + 1], jp[i * 3 + 2], handInner, ja[i] * GA[joints[i].group], 'j', joints[i].group);
-    for (let i = 0; i < ND; i++) add(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2], handInner, da[i] * GA[dust[i].group], dust[i].arm ? 'arm' : 'd', dust[i].group);
+    for (let i = 0; i < NJ; i++) add(jp[i * 3], jp[i * 3 + 1], jp[i * 3 + 2], handBody, ja[i] * GA[joints[i].group], 'j', joints[i].group);
+    for (let i = 0; i < ND; i++) add(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2], handBody, da[i] * GA[dust[i].group], dust[i].arm ? 'arm' : 'd', dust[i].group);
     if (PL && PL.obj.group.visible) add(0, 0, 0, PL.obj.group, st.planetA, PL.kind);
     return out;
   },
