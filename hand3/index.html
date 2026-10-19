@@ -677,7 +677,8 @@ const [FI, FM, FR, FP] = FINGERS;
 const ULNAR = joint(skel, V(-3.28 * PALM_W, 5.2), 5, 'base');   // the outer edge of the palm, so the outline closes without x-ray metacarpals
 // A curled finger tucks its last two bones into the palm. Drawn at full strength they stack into a ladder of
 // zigzags with bright fingertips in the middle of the fist, so they recede with each finger's own curl (0 open, 1 fist).
-const CURL = new Float32Array(4);
+const CURL = new Float32Array(4), TUCKF = new Float32Array(4);   // TUCKF: CURL, eased off when the palm side faces us
+const TUCK_OPEN = 0.35;
 const JFADE = new Float32Array(joints.length), JFIN = new Int8Array(joints.length).fill(-1);
 FINGERS.forEach((f, k) => { JFIN[f.j[3].idx] = JFIN[f.j[4].idx] = k; JFADE[f.j[3].idx] = 0.5; JFADE[f.j[4].idx] = 0.88; });
 function updateCurl(p) {
@@ -1558,7 +1559,7 @@ function setHead(b) { if (b !== headBeat) { headBeat = b; fillHead(headEl, b); }
    Framing and layout (depend on the screen)
    ===================================================================== */
 let W = 1, H = 1, aspect = 1;
-// extents of the THUMB figure around the camera's focus point, in scene units at that depth (measured at boot)
+// extents of the thumb in the THUMB figure around the camera's focus point, in scene units at that depth (measured at boot)
 const FIG = { up: 0.48, down: 0.92, left: 0.25, right: 0.37 };
 // the open hand with its six cards above it, in world units around the pivot (measured at boot)
 const HOME = { x0: -0.8, x1: 0.8, y0: -0.9, y1: 1.25 };
@@ -1754,9 +1755,11 @@ const TA = (() => {
   o.cap[1] = c - 0.5 * HA;                 // the line leaves before the hand turns
   o.turn = [c, 2.9 * MA]; c += 2.9 * MA;   // a slow clockwise turn to the back of the hand, into ONE
   c += 0.45 * HA;
-  o.zoom = [c, 2.7 * MA]; c += 2.7 * MA;   // counter-clockwise into THUMB as the camera pushes in to a three-quarter view
-  o.hi = [o.zoom[0] + o.zoom[1] * 0.55, 1.0 * MA];
-  o.head = [o.zoom[0] + o.zoom[1] * 0.72, 0.9 * MA];
+  o.zoom = [c, 3.0 * MA]; c += 3.0 * MA;   // turn 2: counter-clockwise, back the way it came, into the thumbs-up, palm side to us (photo 2)
+  o.push = [c - 0.15 * MA, 2.6 * MA];      // then the camera pushes in on the thumb, three-quarter, and stops there (photo 3)
+  c = o.push[0] + o.push[1];
+  o.hi = [o.push[0] + o.push[1] * 0.45, 1.0 * MA];
+  o.head = [o.push[0] + o.push[1] * 0.62, 0.9 * MA];
   c += 3.2 * HA;                           // the header and the three lines, read on the thumb
   o.pzoom = [c, 2.9 * MA];                 // the camera dollies in on the Sun as it forms
   o.fade = [c + 0.4 * MA, 1.6 * MA];       // the thumb's stars stream into the Sun
@@ -1819,8 +1822,13 @@ function blendPose(out, a, b, w, stag) {
     out[k] = a[k] + (b[k] - a[k]) * e;
   }
 }
-const END_YAW = -0.75 * Math.PI;                    // the thumbs-up, seen three-quarter (45 degrees off side-on)
-let ROT_T = { yaw: END_YAW, pitch: -0.06, roll: 1.0 };   // roll refined from the THUMB pose at load
+// The thumbs-up, from the founder's photos of his own right hand: the palm side of the fist turned about 35 degrees
+// from facing us, curled fingers stacked down the left, the thumb up on the right, the wrist at the lower right.
+// Turn 2 reaches it from the back of the hand (yaw -pi) by turning counter-clockwise, the way turn 1 came.
+const END_YAW = -0.19 * Math.PI;
+const ROLL_LEAN = 13 * DEG;                          // photo 2: at the end of the turn the thumb still leans right a little
+// roll: solved at load so the thumb's first bone stands straight up (photo 3); roll2 = roll - ROLL_LEAN (photo 2)
+let ROT_T = { yaw: END_YAW, pitch: -0.06, roll: 0.86, roll2: 0.64 };
 function evalHome() {                               // the whole open hand, palm to us: between beats, and the end
   st.starsIn = 1; st.formT = 1e4; st.lines = 1;
   st.pose.set(POSES.open); st.yaw = 0; st.pitch = -0.04; st.roll = 0; st.dolly = 1; st.arcX = 0;
@@ -1834,17 +1842,19 @@ function evalA(t) {                                 // the intro and the thumb, 
   st.starsIn = segE(t, TA.stars, E.sine);
   st.formT = t - TA.form[0];
   st.lines = clamp01((t - TA.lines[0]) / TA.lines[1]);
-  const wTurn = (t - TA.turn[0]) / TA.turn[1], wZoom = (t - TA.zoom[0]) / TA.zoom[1];
+  const wTurn = (t - TA.turn[0]) / TA.turn[1], wZoom = (t - TA.zoom[0]) / TA.zoom[1], wPush = (t - TA.push[0]) / TA.push[1];
   if (wZoom > 0) blendPose(st.pose, POSES.one, POSES.thumb, wZoom, STAG_THUMB);
   else blendPose(st.pose, POSES.open, POSES.one, wTurn, STAG_ONE);
-  const eT = E.inOut(clamp01(wTurn)), eZ = E.inOut(clamp01(wZoom));
-  // a right hand: first clockwise (seen from above) to its back, yaw 0 -> -pi; then counter-clockwise into the thumbs-up
+  // both turns on a sine ease: at most ~1.6x their average speed (a cubic peaks at 3x and whips through the middle)
+  const eT = E.sine(clamp01(wTurn)), eZ = E.sine(clamp01(wZoom)), eP = E.inOut(clamp01(wPush));
+  // a right hand: first clockwise (seen from above) to its back, yaw 0 -> -pi; then counter-clockwise, yaw rising
+  // from -pi to END_YAW, into the thumbs-up with its palm side to us; the last of the roll lands as the camera pushes in
   st.yaw = lerp(lerp(0, -Math.PI, eT), ROT_T.yaw, eZ);
-  st.roll = lerp(0, ROT_T.roll, eZ);
-  st.pitch = lerp(-0.04, ROT_T.pitch, eZ) - Math.sin(Math.PI * eT) * (reduceMotion ? 0.03 : 0.1);
+  st.roll = lerp(0, ROT_T.roll2, eZ) + (ROT_T.roll - ROT_T.roll2) * eP;
+  st.pitch = lerp(-0.04, ROT_T.pitch, eZ) - Math.sin(Math.PI * eT) * (reduceMotion ? 0.03 : 0.1) - Math.sin(Math.PI * eZ) * (reduceMotion ? 0.02 : 0.06);
   st.dolly = lerp(1.2, 1.0, segE(t, [0, TA.turn[0] + TA.turn[1]], E.sine));
   st.arcX = -Math.sin(Math.PI * eT) * (reduceMotion ? 0.05 : 0.28);
-  st.wThumb = E.quart(clamp01(wZoom)); st.fist = st.wThumb;
+  st.wThumb = E.quart(clamp01(wPush)); st.fist = st.wThumb;
   st.wHome = 0; st.wFinger = 0;
   st.wPlanet = segE(t, TA.pzoom);
   st.head = segE(t, TA.head, E.sine);
@@ -2399,6 +2409,12 @@ function updateCamera(par) {
 }
 
 function updateHandPoints() {
+  // seen from the palm side (the thumbs-up, photo 2) the curled fingers' middle bones and tucked tips are the front of
+  // the fist, so their fade eases off; seen from the back they recede as before
+  palmN.set(0, 0, 1).transformDirection(handInner.matrixWorld);
+  vD.copy(camera.position).sub(handRoot.position).normalize();
+  const tuckK = 1 - TUCK_OPEN * clamp01((palmN.dot(vD) - 0.15) / 0.5);
+  for (let k = 0; k < 4; k++) TUCKF[k] = CURL[k] * tuckK;
   const FD = TA.form[1];
   const ft = st.formT / FD;
   const forming = ft < 1.6;
@@ -2410,7 +2426,7 @@ function updateHandPoints() {
   const jp = jPos.array, ja = jAlpha.array, js = jSize.array;
   for (let i = 0; i < NJ; i++) {
     const tg = joints[i].pos;
-    let x = tg.x, y = tg.y, z = tg.z, a = jBaseAlpha[i] * (JFIN[i] < 0 ? 1 : 1 - JFADE[i] * CURL[JFIN[i]]), s = jBaseSize[i];
+    let x = tg.x, y = tg.y, z = tg.z, a = jBaseAlpha[i] * (JFIN[i] < 0 ? 1 : 1 - JFADE[i] * TUCKF[JFIN[i]]), s = jBaseSize[i];
     if (forming) {
       const p = clamp01((ft - fDelay[i]) / fDur[i]), e = E.inOut(p), sw = Math.sin(Math.PI * e);
       x = lerp(fStart[i * 3], tg.x, e) + fSwirl[i * 3] * sw;
@@ -2444,7 +2460,7 @@ function updateHandPoints() {
     const vx = camLocal.x - tg.x, vy = camLocal.y - tg.y, vz = camLocal.z - tg.z;
     const rim = 1 - Math.abs(nrmV.x * vx + nrmV.y * vy + nrmV.z * vz) / (Math.hypot(vx, vy, vz) || 1);
     const b = d.stat ? null : BONES[d.bone];
-    const lit = (RIM_FLOOR + RIM_GAIN * rim * Math.sqrt(rim)) * (b && b.fin >= 0 ? 1 - b.fade * CURL[b.fin] : 1);
+    const lit = (RIM_FLOOR + RIM_GAIN * rim * Math.sqrt(rim)) * (b && b.fin >= 0 ? 1 - b.fade * TUCKF[b.fin] : 1);
     if (forming) {
       const p = clamp01((ft - fDelay[fi]) / fDur[fi]), e = E.inOut(p), sw = Math.sin(Math.PI * e);
       dp[i * 3] = lerp(fStart[fi * 3], tg.x, e) + fSwirl[fi * 3] * sw;
@@ -2475,7 +2491,7 @@ function updateLines() {
     let A = s.a.pos, B = s.b.pos;
     if (cl > 0 && s.group === cg) { A = lA.copy(A).lerp(PCL, cl); B = lB.copy(B).lerp(PCL, cl); }
     const local = clamp01((p - s.level * 0.16) / 0.36), e = E.out(local);
-    const a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * CURL[s.fin] : 1) * Math.min(1, local * 3);
+    const a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * TUCKF[s.fin] : 1) * Math.min(1, local * 3);
     lp[k * 6] = A.x; lp[k * 6 + 1] = A.y; lp[k * 6 + 2] = A.z;
     lp[k * 6 + 3] = A.x + (B.x - A.x) * e; lp[k * 6 + 4] = A.y + (B.y - A.y) * e; lp[k * 6 + 5] = A.z + (B.z - A.z) * e;
     la[k * 2] = a; la[k * 2 + 1] = a * (0.5 + 0.5 * e);
@@ -2849,11 +2865,18 @@ function frame(now) {
 addEventListener('resize', resize);
 resize();
 {
-  // aim THUMB so the thumb stands straight up once the hand is rolled
+  // aim THUMB so the thumb's first bone stands straight up on screen at the end yaw (the roll turns the hand in its
+  // own plane before the yaw, so the roll that does it depends on the yaw): scan for it
   applyPose(POSES.thumb);
-  const d = vA.copy(T.j[3].pos).sub(T.j[1].pos);
+  const d = vA.copy(T.j[2].pos).sub(T.j[1].pos).normalize();
   const ey = qs.has('endyaw') ? Number(qs.get('endyaw')) * DEG : END_YAW;
-  ROT_T = { yaw: Number.isFinite(ey) ? ey : END_YAW, pitch: -0.06, roll: Math.atan2(d.x, d.y) };
+  const yawT = Number.isFinite(ey) ? ey : END_YAW, eu = new THREE.Euler(0, 0, 0, 'YXZ'), w = new THREE.Vector3();
+  let rollT = 0, best = 1e9;
+  for (let r = -Math.PI; r < Math.PI; r += 0.25 * DEG) {
+    w.copy(d).applyEuler(eu.set(-0.06, yawT, r));
+    if (w.y > 0 && Math.abs(w.x) < best) { best = Math.abs(w.x); rollT = r; }
+  }
+  ROT_T = { yaw: yawT, pitch: -0.06, roll: rollT, roll2: rollT - ROLL_LEAN };
   // measure the thumbs-up as the close-up camera sees it, so resize() can fit it to any screen
   handRoot.rotation.set(ROT_T.pitch, ROT_T.yaw, ROT_T.roll); handRoot.position.set(0, 0, 0);
   handRoot.updateMatrixWorld(true);
@@ -2865,9 +2888,11 @@ resize();
     const u = p.x / -p.z * d0, w = p.y / -p.z * d0;
     ext.up = Math.max(ext.up, w); ext.down = Math.max(ext.down, -w); ext.left = Math.max(ext.left, -u); ext.right = Math.max(ext.right, u);
   };
-  joints.forEach(j => take(j.pos));
-  dust.forEach(dd => { if (!dd.arm) take(dustTarget(dd, q)); });
-  for (const k in ext) FIG[k] = ext[k] * 1.04;
+  // photo 3: the close-up frames the thumb (its two bones and where it leaves the palm), not the whole fist; the
+  // curled index finger is left to show at the lower left
+  [T.j[1], T.j[2], T.j[3]].forEach(j => take(j.pos));
+  dust.forEach(dd => { if (!dd.stat && dd.group === 0 && (BONES[dd.bone].a !== T.j[0] || dd.t > 0.45)) take(dustTarget(dd, q)); });
+  for (const k in ext) FIG[k] = ext[k] * 1.06;
   // the open hand, palm to us, with its six small cards, as the home shot sees it (world units around the pivot)
   applyPose(POSES.open);
   handRoot.rotation.set(-0.04, 0, 0); handRoot.updateMatrixWorld(true);
@@ -2984,16 +3009,16 @@ window.__seq = {
   },
   thumbCheck, get ROT_T() { return { ...ROT_T }; },
   FIG, HOME, FLEN, framing, LAY, SHOT,
-  // screen-space [x, y, alpha, kind] for every visible hand star, plus the planet's centre (layout tests)
+  // screen-space [x, y, alpha, kind, group] for every visible hand star, plus the planet's centre (layout tests)
   project() {
     const out = [], u = new THREE.Vector3();
-    const add = (x, y, z, obj, a, kind) => {
+    const add = (x, y, z, obj, a, kind, g = -1) => {
       u.set(x, y, z); obj.localToWorld(u); u.project(camera);
-      if (u.z > -1 && u.z < 1 && a > 0.001) out.push([Math.round((u.x * 0.5 + 0.5) * W), Math.round((-u.y * 0.5 + 0.5) * H), +a.toFixed(3), kind]);
+      if (u.z > -1 && u.z < 1 && a > 0.001) out.push([Math.round((u.x * 0.5 + 0.5) * W), Math.round((-u.y * 0.5 + 0.5) * H), +a.toFixed(3), kind, g]);
     };
     const jp = jPos.array, ja = jAlpha.array, dp = dPos.array, da = dAlpha.array;
-    for (let i = 0; i < NJ; i++) add(jp[i * 3], jp[i * 3 + 1], jp[i * 3 + 2], handInner, ja[i] * GA[joints[i].group], 'j');
-    for (let i = 0; i < ND; i++) add(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2], handInner, da[i] * GA[dust[i].group], dust[i].arm ? 'arm' : 'd');
+    for (let i = 0; i < NJ; i++) add(jp[i * 3], jp[i * 3 + 1], jp[i * 3 + 2], handInner, ja[i] * GA[joints[i].group], 'j', joints[i].group);
+    for (let i = 0; i < ND; i++) add(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2], handInner, da[i] * GA[dust[i].group], dust[i].arm ? 'arm' : 'd', dust[i].group);
     if (PL && PL.obj.group.visible) add(0, 0, 0, PL.obj.group, st.planetA, PL.kind);
     return out;
   },
