@@ -266,8 +266,8 @@ function birthCard(y, m, d) {
   return { S, card: v, steps };
 }
 function nameNumber(raw) {
-  const first = String(raw || '').trim().split(/\s+/)[0] || '';
-  const letters = first.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z]/g, '');
+  const first = String(raw || '').trim();       // the whole field counts; nothing is split at spaces
+  const letters = first.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z]/g, '');
   let sum = 0;
   for (const ch of letters) sum += ch.charCodeAt(0) - 96;
   return { first, letters, sum };
@@ -311,6 +311,9 @@ function selfCheck() {
   eq('1999-01-10 (129 → 12 + 9) birth card', birthCard(1999, 1, 10).card, 21);
   eq('2001-01-08 (30 → 3, partner) birth card', birthCard(2001, 1, 8).card, 12);
   eq('accents stripped (Zoë)', nameNumber('Zoë').sum, 46);
+  eq('whole field (Mary Jane = MaryJane)', nameNumber('Mary Jane').sum, nameNumber('MaryJane').sum);
+  eq('whole field (Mary-Jane = MaryJane)', nameNumber('Mary-Jane').sum, nameNumber('MaryJane').sum);
+  eq('NFD drops ø (Ørjan = rjan)', nameNumber('Ørjan').sum, nameNumber('rjan').sum);
   eq('no birthday starts at The Fool', thumbCard('Brecht', null).thumb, 12);
   if (fails.length) console.error('[thumb rule] self-check failed:\n' + fails.join('\n'));
   return fails;
