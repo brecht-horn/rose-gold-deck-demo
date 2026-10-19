@@ -1148,6 +1148,18 @@ attr(plLGeo, 'aColor', Float32Array.from({ length: plSegs.length * 6 }, (_, i) =
 const palmLineSegs = new THREE.LineSegments(plLGeo, lineMaterial({ occ: true, occAny: 1 }));
 palmLineSegs.frustumCulled = false; palmLineSegs.renderOrder = 4;
 handInner.add(palmLineSegs, palmLineStars);
+// on the palm's beat the lines' stars pour into Mars with the rest of the palm: their resting positions, kept
+const PL_REST = [plGeo, plLGeo].map(g => Float32Array.from(g.attributes.position.array));
+let plCollapsed = 0;
+function collapsePalmLines(k, to) {             // k: 0 at rest, 1 at Mars (hand-local 'to')
+  if (k === plCollapsed) return;
+  plCollapsed = k;
+  [plGeo, plLGeo].forEach((g, gi) => {
+    const a = g.attributes.position.array, r = PL_REST[gi];
+    for (let i = 0; i < a.length; i += 3) { a[i] = r[i] + (to.x - r[i]) * k; a[i + 1] = r[i + 1] + (to.y - r[i + 1]) * k; a[i + 2] = r[i + 2] + (to.z - r[i + 2]) * k; }
+    g.attributes.position.needsUpdate = true;
+  });
+}
 // the palm's lines span (hand-local, for framing the palm's beat): heart and head lines, and Mars in the hollow
 const PALM_FRAME = (() => {
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
@@ -1168,9 +1180,9 @@ const R_SAT = PLANET_SIZE.saturn * PLANET_R, RING_OUT = 2.27 * R_SAT;
 // band turns into, is the same 25 / -13 degrees as v2's
 const Q_PLANET = {};
 for (const k of PLANET_KIND) Q_PLANET[k] = planetQuaternion(THREE, k);
-// The palm's beat frames both of its lines, so its camera stays further out than the other planets'; Mars is drawn
-// 1.6x larger there so that on screen it still reads bigger than Mercury and smaller than Venus, as the planets are.
-const PLANET_GROUP_SCALE = { mars: 1.6 };
+// Every planet, Mars included, is framed the same way (the palm's beat dollies straight in on Mars), so none is scaled:
+// on screen Mars reads bigger than Mercury and smaller than Venus, as the planets are.
+const PLANET_GROUP_SCALE = {};
 const groupScale = kind => PLANET_GROUP_SCALE[kind] || 1;
 // Mars sits in the hollow of the palm, between the head line and the heart line, just in front of the palm
 const MARS_AT = (() => { const x = -0.2 * PALM_W, y = 6.85; return V(x, y, palmHalf(x, y).front).add(new THREE.Vector3(0, 0, PLANET_SIZE.mars * PLANET_R * groupScale('mars') * 1.25)); })();
@@ -1188,7 +1200,7 @@ function planetLocal(b, out) {                          // where each beat's pla
 function fingerFocusLocal(b, out) {                     // what the camera dollies in on before the planet forms
   if (b === 0) return thumbFocusLocal(out);
   if (b === 3) return ringMidLocal(out);
-  if (b === 5) return out.copy(PALM_C);
+  if (b === 5) return out.copy(MARS_AT);              // the palm: straight in on the point where Mars will form
   const f = FINGERS[b - 1];
   return out.copy(f.j[1].pos).lerp(f.j[4].pos, 0.5);
 }
@@ -1699,14 +1711,8 @@ function resize() {
   P0 *= reduceMotion ? 0.85 : 1;
   for (let b = 0; b < 6; b++) {
     const S = SHOT[b], B = bandOf(b), kind = PLANET_KIND[b], bh = Math.max(60, B.bot - B.top);
-    let ppu;
-    if (b === 5) {
-      // the palm: its heart and head lines (and Mars between them) fill the frame
-      ppu = Math.min(0.92 * B.w / (PALM_FRAME.x1 - PALM_FRAME.x0 + 0.06), 0.9 * bh / (PALM_FRAME.y1 - PALM_FRAME.y0 + 0.06));
-    } else {
-      const ex = PLANET_EXT[kind] * PLANET_R, ey = (PLANET_EXT_Y[kind] || PLANET_EXT[kind]) * PLANET_R;
-      ppu = Math.min(P0 * SIZE_K(kind), 0.94 * B.w / (2 * ex), 0.92 * bh / (2 * ey));
-    }
+    const ex = PLANET_EXT[kind] * PLANET_R, ey = (PLANET_EXT_Y[kind] || PLANET_EXT[kind]) * PLANET_R;
+    const ppu = Math.min(P0 * SIZE_K(kind), 0.94 * B.w / (2 * ex), 0.92 * bh / (2 * ey));
     S.ppuP = ppu; S.dP = dAtPpu(ppu); S.sxP = ndcX(B.cx); S.syP = ndcY((B.top + B.bot) / 2);
     // the dolly in on the finger: about half the planet's magnification, the whole finger in the band
     const fTop = LAY.top + S.headH + 18, fBot = H - LAY.bottom - 10;
@@ -1734,6 +1740,17 @@ function resize() {
   }
   framing.dHome = dH; framing.homeCx = cx; framing.homeCy = cy;
   framing.syHome = ndcY((hTop + hBot) / 2);
+  // ---- the palm: from home, one dolly straight in on the point where Mars forms (never a pull-back). Part way in,
+  // the heart and head lines are framed around that point (Mars lands where the planet shot will hold it); then the
+  // camera carries on in to the planet shot as the palm's stars collapse into Mars
+  {
+    const S = SHOT[5], ppuHome = H / (2 * TAN * dH), ppuP = S.ppuP;
+    const left = MARS_AT.x - PALM_FRAME.x0, right = PALM_FRAME.x1 - MARS_AT.x, up = PALM_FRAME.y1 - MARS_AT.y;
+    const myPx = (1 - S.syP) / 2 * H, mxPx = (1 + S.sxP) / 2 * W, top = LAY.top + S.headH + 12;
+    const ppuLines = Math.min((Math.min(mxPx, W - mxPx) - 14) / (Math.max(left, right) + 0.02), (myPx - top) / (up + 0.03));
+    const ppuF = Math.min(ppuP * 0.82, Math.max(ppuHome * 1.3, ppuLines));
+    S.dF = dAtPpu(ppuF); S.sxF = S.sxP; S.syF = S.syP;
+  }
   buildConstellations();
 }
 
@@ -1878,14 +1895,19 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   st.head = segE(t, T.head, E.sine);
   st.wPlanet = segE(t, T.zoom);
   st.fingerA = 1 - segE(t, T.fade, E.sine);
-  st.collapse = b === 5 ? 0 : segE(t, T.fade, E.sine);
+  const fadeE = segE(t, T.fade, E.sine);
+  st.collapse = b === 5 && t >= T.back[0] ? 0 : fadeE;   // the palm's stars are back in place (unseen) as the deck comes
   const eBack = segE(t, T.back, E.sine);
   st.restA = lerp(lerp(lerp(1, 0.55, st.hi), REST_LOW, segE(t, T.rest, E.sine)), REST_BACK, eBack);
   st.planetA = segE(t, T.plA, E.sine);
   st.reveal = segE(t, T.reveal, E.sine);
   st.placedA = 1 - segE(t, T.push, E.sine);   // the cards already placed step aside as we dolly in, until we pull back
   st.cap = t >= T.prompt ? `choose${b}` : '';
-  if (b === 5) { st.palmHi = st.hi; st.fingerA = lerp(st.fingerA, 0.45, eBack); }   // the palm returns only faintly around Mars
+  if (b === 5) {
+    // the palm's lines are bright as the camera starts in, pour into Mars with the palm, and are back behind the deck
+    st.palmHi = lerp(st.hi * (1 - fadeE), 0.7, eBack);
+    st.fingerA = lerp(st.fingerA, 0.6, eBack);          // the palm returns softly around Mars
+  }
   if (b === 3) {
     st.bandIn = segE(t, T.bandIn, E.out);
     st.slide = segE(t, T.slide, E.inOut);
@@ -2365,12 +2387,7 @@ const idlePose = new Float32Array(NP);
 const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new THREE.Vector3(), PCL = new THREE.Vector3();
 const RIM_FLOOR = 0.33, RIM_GAIN = 1.0;
 let SX = 0, SY = 0, spinA = 0, collapseK = 0;
-// the palm's beat frames its heart and head lines (with Mars between them), not just Mars
-const PALM_SHOT = (() => {
-  const x = (PALM_FRAME.x0 + PALM_FRAME.x1) / 2, y = (PALM_FRAME.y1 + PALM_FRAME.y0) / 2;
-  return new THREE.Vector3(x, y, palmHalf(x / CM, y / CM).front * CM);
-})();
-function planetShotLocal(b, out) { return b === 5 ? out.copy(PALM_SHOT) : planetLocal(b, out); }
+function planetShotLocal(b, out) { return planetLocal(b, out); }
 const beatGroup = () => (phase === 'end' ? -1 : beat);
 
 function blendShot(w, d, nx, ny) {     // the camera straight in front of shotL at distance d, lens shifted so shotL lands at (nx, ny)
@@ -2421,7 +2438,7 @@ function updateHandPoints() {
   const forming = ft < 1.6;
   // the beat's finger streams into its planet: its stars draw in toward the planet's centre as they fade
   const cg = beatGroup();
-  const cl = cg >= 0 && cg !== 5 && st.collapse > 0.001 ? clamp01(st.collapse) * 0.94 : 0;
+  const cl = cg >= 0 && st.collapse > 0.001 ? clamp01(st.collapse) * 0.94 : 0;
   collapseK = cl;
   if (cl > 0) planetLocal(beat, PCL);
   const jp = jPos.array, ja = jAlpha.array, js = jSize.array;
@@ -2470,7 +2487,7 @@ function updateHandPoints() {
       da[i] = d.alpha * lerp(0.5, lit, p) * st.starsIn;
     } else {
       let x = tg.x, y = tg.y, z = tg.z;
-      if (cl > 0 && d.group === cg) { const c2 = cl * (0.85 + 0.15 * d.alpha); x += (PCL.x - x) * c2; y += (PCL.y - y) * c2; z += (PCL.z - z) * c2; }
+      if (cl > 0 && d.group === cg && !d.arm) { const c2 = cl * (0.85 + 0.15 * d.alpha); x += (PCL.x - x) * c2; y += (PCL.y - y) * c2; z += (PCL.z - z) * c2; }
       dp[i * 3] = x; dp[i * 3 + 1] = y; dp[i * 3 + 2] = z;
       da[i] = d.alpha * lit;
     }
@@ -2490,7 +2507,7 @@ function updateLines() {
   for (let k = 0; k < NS; k++) {
     const s = SEGS[k];
     let A = s.a.pos, B = s.b.pos;
-    if (cl > 0 && s.group === cg) { A = lA.copy(A).lerp(PCL, cl); B = lB.copy(B).lerp(PCL, cl); }
+    if (cl > 0 && s.group === cg) { if (s.a.group === cg) A = lA.copy(A).lerp(PCL, cl); if (s.b.group === cg) B = lB.copy(B).lerp(PCL, cl); }
     const local = clamp01((p - s.level * 0.16) / 0.36), e = E.out(local);
     const a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * TUCKF[s.fin] : 1) * Math.min(1, local * 3);
     lp[k * 6] = A.x; lp[k * 6 + 1] = A.y; lp[k * 6 + 2] = A.z;
@@ -2504,6 +2521,7 @@ function updateLines() {
   palmLineStars.material.uniforms.uOpacity.value = pa;
   palmLineSegs.material.uniforms.uOpacity.value = pa * 0.85;
   palmLineStars.visible = palmLineSegs.visible = pa > 0.002;
+  collapsePalmLines(cg === 5 ? cl : 0, PCL);
 }
 
 // the band's path: from just above the fingertip, down the finger's own joints, to where a ring sits
