@@ -28,12 +28,7 @@
   }
   #stage { position: fixed; inset: 0; touch-action: none; }
   #stage canvas { display: block; width: 100%; height: 100%; }
-  .vignette {
-    position: fixed; inset: 0; pointer-events: none;
-    background:
-      radial-gradient(118% 82% at 50% 44%, rgba(0, 0, 0, 0) 34%, rgba(2, 1, 4, 0.5) 64%, rgba(0, 0, 0, 0.9) 100%),
-      linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 18%, rgba(0, 0, 0, 0) 76%, rgba(0, 0, 0, 0.6));
-  }
+  /* the vignette is drawn inside WebGL (same gradients as v1's CSS layer), under the cards, so the fan is never darkened */
   .grain {
     position: fixed; inset: 0; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -76,6 +71,9 @@
     transition: opacity 1.1s ease, transform 1.1s cubic-bezier(.2, .7, .2, 1), filter 1.1s ease;
   }
   #caption p.on { opacity: 1; transform: none; filter: none; }
+  #caption p.long { max-width: 27ch; font-size: clamp(19px, 0.9vw + 15px, 25px); line-height: 1.28; }
+  #caption p.card { font-size: clamp(24px, 1.4vw + 18px, 32px); }
+  #caption p.card .num { color: var(--rose); }
 
   /* name + birthday sheet */
   #askWrap {
@@ -114,21 +112,41 @@
   .ask-note[data-error] { color: #f0a5a0; }
   button.primary { border-color: var(--rose); background: rgba(226, 164, 143, 0.14); padding: 12px 20px; flex: 0 0 auto; }
 
-  /* card label that rides beside the thumb */
-  #cardLabel {
-    position: fixed; left: 0; top: 0; pointer-events: none; display: flex; align-items: center; gap: 10px;
-    opacity: 0; will-change: transform, opacity;
+  /* finger headers: eyebrow (the finger), title (its purpose and planet, in rose gold), then the card once chosen.
+     Each rides above its finger in screen space, tied to it by a rose leader. */
+  .ftag {
+    position: fixed; left: 0; top: 0; pointer-events: none; opacity: 0; will-change: transform, opacity;
+    display: grid; justify-items: center; text-align: center; gap: 3px; width: max-content; max-width: calc(100vw - 32px);
   }
+  .ftag[data-align="start"] { justify-items: start; text-align: left; }
+  .ftag[data-align="end"] { justify-items: end; text-align: right; }
+  .tg-eyebrow { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); text-shadow: 0 0 10px rgba(4, 3, 6, 0.95); }
+  .tg-title {
+    font-family: var(--display); font-weight: 500; font-size: 21px; line-height: 1.15; color: var(--rose); white-space: nowrap;
+    text-shadow: 0 0 16px rgba(4, 3, 6, 0.95), 0 0 2px rgba(4, 3, 6, 0.9);
+  }
+  .tg-title .dot { color: var(--muted); }
+  .tg-swap { display: grid; justify-items: inherit; margin-top: 5px; }
+  .tg-swap > * { grid-area: 1 / 1; transition: opacity 0.8s ease; }
+  .tg-swap > [data-off] { opacity: 0; }
+  .tg-swap > [hidden] { display: none; }
+  .tg-line {
+    display: grid; gap: 1px; font-size: 11px; line-height: 1.6; letter-spacing: 0.02em; color: rgba(243, 230, 223, 0.84);
+    text-shadow: 0 0 12px rgba(4, 3, 6, 0.95);
+  }
+  .tg-line span { white-space: nowrap; }
+  .tg-card { display: flex; align-items: center; gap: 9px; }
+  .tg-name {
+    font-family: var(--display); font-weight: 500; font-size: 18px; color: var(--ink); white-space: nowrap;
+    text-shadow: 0 0 14px rgba(4, 3, 6, 0.95);
+  }
+  .ftag.compact .tg-title { font-size: 17px; }
+  .ftag.compact .tg-name { font-size: 15.5px; }
+  .ftag.compact .mini { min-width: 22px; height: 35px; font-size: 10px; }
   .mini {
     min-width: 26px; height: 42px; padding: 0 4px; flex: 0 0 auto; box-sizing: border-box; border: 1px solid var(--rose); border-radius: 4px;
     display: grid; place-items: center; font-family: var(--display); font-size: 11px; letter-spacing: -0.02em; color: var(--rose);
     background: rgba(18, 11, 17, 0.7); box-shadow: 0 0 16px rgba(226, 164, 143, 0.22);
-  }
-  .lab-text { display: grid; gap: 2px; }
-  .lab-eyebrow { font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
-  .lab-name {
-    font-family: var(--display); font-weight: 500; font-size: 19px; color: var(--ink); white-space: nowrap;
-    text-shadow: 0 0 14px rgba(4, 3, 6, 0.95);
   }
   #leader { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
   #leader line { stroke: var(--rose); stroke-width: 1; stroke-opacity: 0.55; }
@@ -165,7 +183,7 @@
   .short #caption p { max-width: none; text-align: left; font-size: clamp(20px, 1.1vw + 12px, 26px); line-height: 1.28; }
   @media (max-width: 420px) {
     #hint { max-width: 22ch; }
-    .lab-name { white-space: normal; max-width: 7.4em; font-size: 18px; line-height: 1.15; }
+    .tg-title { font-size: 19px; }
     .rail.bottom .controls button { padding: 9px 12px; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -173,23 +191,30 @@
   }
 </style>
 
-<div id="stage" aria-label="A hand drawn in stars forms out of the night sky, turns, and settles on the thumb."></div>
-<div class="vignette" aria-hidden="true"></div>
+<div id="stage" aria-label="A hand drawn in stars forms out of the night sky and settles on the thumb. Later a wedding band slides down the ring finger and becomes Saturn, and you choose a card for that finger."></div>
 <div class="grain" aria-hidden="true"></div>
 
 <div class="rail top">
   <div class="brand">Constellation Hand</div>
-  <div class="tag">Prototype<br>three.js · The thumb</div>
+  <div class="tag">Prototype<br>three.js · v2</div>
 </div>
 
 <div id="caption" aria-live="polite"><p></p></div>
 
-<svg id="leader" aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0" /></svg>
-<div id="cardLabel" aria-live="polite">
-  <div class="mini" id="labNum">VI</div>
-  <div class="lab-text">
-    <span class="lab-eyebrow">Your thumb</span>
-    <span class="lab-name" id="labName">The Lovers</span>
+<svg id="leader" aria-hidden="true"><line id="leadT" x1="0" y1="0" x2="0" y2="0" /><line id="leadR" x1="0" y1="0" x2="0" y2="0" /></svg>
+<div class="ftag" id="thumbTag">
+  <span class="tg-eyebrow">Thumb</span>
+  <span class="tg-title">Your Self <span class="dot">·</span> The Sun</span>
+  <div class="tg-swap">
+    <span class="tg-line" id="thumbLine"><span>Without the thumb, what would the hand be?</span><span>Without the Sun, there would be no solar system.</span><span>Just as without the self, there would be no You.</span></span>
+    <span class="tg-card" id="thumbCard" data-off aria-live="polite"><span class="mini" id="labNum">VI</span><span class="tg-name" id="labName">The Lovers</span></span>
+  </div>
+</div>
+<div class="ftag" id="ringTag">
+  <span class="tg-eyebrow">Ring finger</span>
+  <span class="tg-title">Relationships <span class="dot">·</span> Saturn</span>
+  <div class="tg-swap">
+    <span class="tg-card" id="ringCard" data-off hidden aria-live="polite"><span class="mini" id="ringNum">0</span><span class="tg-name" id="ringName"></span></span>
   </div>
 </div>
 <div id="math" aria-live="polite"></div>
@@ -231,6 +256,7 @@
 
 <script type="module">
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const MAJORS = [
   ['0', 'The Fool'], ['I', 'The Magician'], ['II', 'The High Priestess'], ['III', 'The Empress'],
@@ -334,10 +360,17 @@ const askForm = document.getElementById('ask');
 const nameIn = document.getElementById('name');
 const dobIn = document.getElementById('dob');
 const askNote = document.getElementById('askNote');
-const labelEl = document.getElementById('cardLabel');
+const thumbTagEl = document.getElementById('thumbTag');
+const ringTagEl = document.getElementById('ringTag');
+const thumbLineEl = document.getElementById('thumbLine');
+const thumbCardEl = document.getElementById('thumbCard');
+const ringCardEl = document.getElementById('ringCard');
 const labNum = document.getElementById('labNum');
 const labName = document.getElementById('labName');
-const leader = document.querySelector('#leader line');
+const ringNum = document.getElementById('ringNum');
+const ringName = document.getElementById('ringName');
+const leadT = document.getElementById('leadT');
+const leadR = document.getElementById('leadR');
 const mathEl = document.getElementById('math');
 
 /* =====================================================================
@@ -482,8 +515,9 @@ const LINE_FS = /* glsl */`
   varying vec3 vC;
   void main() { gl_FragColor = vec4(vC * vA, 1.0); }
 `;
+// v2: stars depth-test (they never write depth) so the solid wedding band hides the dust behind it
 const additive = {
-  transparent: true, depthWrite: false, depthTest: false,
+  transparent: true, depthWrite: false, depthTest: true,
   blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
   blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
 };
@@ -528,6 +562,9 @@ const bgMat = new THREE.ShaderMaterial({
       vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) - uPar * 0.03;
       float r = length(p - vec2(0.0, 0.06));
       vec3 c = mix(vec3(0.060, 0.042, 0.078), vec3(0.011, 0.008, 0.015), smoothstep(0.0, 0.92, r));
+      // v2: lift the centre of the purple-black gradient (~+30% luminance) with a term that is gone before the
+      // corners, so the edges stay as dark as v1 and the vignette reads more, not less
+      c += vec3(0.0182, 0.0127, 0.0236) * (1.0 - smoothstep(0.0, 0.62, r));
       vec2 a = p - vec2(-0.55, -0.42); c += vec3(0.070, 0.032, 0.030) * exp(-dot(a, a) * 3.0);
       vec2 b = p - vec2(0.62, 0.46);   c += vec3(0.030, 0.026, 0.070) * exp(-dot(b, b) * 2.4);
       c += (hash(gl_FragCoord.xy) - 0.5) * (1.6 / 255.0);
@@ -622,6 +659,9 @@ function buildConstellations() {
    ===================================================================== */
 const CM = 0.1;
 const V = (x, y, z = 0) => new THREE.Vector3(x * CM, y * CM, z * CM);
+// v2 proportions ("a little more manly"): palm ~9% wider, knuckles spread with it, every phalanx ~17% thicker
+// with a little less taper toward the tips. Finger and thumb LENGTHS are unchanged.
+const PALM_W = 1.09, KNUCKLE_W = 1.1, FINGER_T = 1.17;
 const ZERO = new THREE.Vector3();
 const skel = new THREE.Group();      // not in the scene: matrices are hand-local
 const joints = [];
@@ -630,12 +670,12 @@ function joint(obj, off, group, kind) {
   joints.push(j);
   return j;
 }
-const wR = joint(skel, V(2.15, 0.1), 5, 'wrist');
-const wU = joint(skel, V(-2.35, 0.1), 5, 'wrist');
+const wR = joint(skel, V(2.15 * PALM_W, 0.1), 5, 'wrist');
+const wU = joint(skel, V(-2.35 * PALM_W, 0.1), 5, 'wrist');
 
 // thumb: metacarpal + 2 phalanges, set low on the palm's radial side
 const T_LEN = [4.3, 3.15, 2.65].map(x => x * CM);
-const tBase = new THREE.Group(); tBase.position.copy(V(1.65, 1.5, 0.5)); tBase.rotation.order = 'ZXY'; skel.add(tBase);
+const tBase = new THREE.Group(); tBase.position.copy(V(1.65 * PALM_W, 1.5, 0.52)); tBase.rotation.order = 'ZXY'; skel.add(tBase);
 const tProx = new THREE.Group(); tProx.position.y = T_LEN[0]; tBase.add(tProx);
 const tDist = new THREE.Group(); tDist.position.y = T_LEN[1]; tProx.add(tDist);
 const T = {
@@ -649,6 +689,7 @@ const FINGERS = [
   { g: 3, base: [-0.6, 2.3], mcp: [-0.84, 9.34], len: [3.58, 2.38, 2.04], rs: 0.93 },
   { g: 4, base: [-1.6, 2.1], mcp: [-2.38, 8.4], len: [2.76, 1.86, 1.66], rs: 0.8 },
 ];
+for (const f of FINGERS) { f.base[0] *= PALM_W; f.mcp[0] *= KNUCKLE_W; }
 for (const f of FINGERS) {
   const dx = f.mcp[0] - f.base[0], dy = f.mcp[1] - f.base[1];
   f.metaLen = Math.hypot(dx, dy) * CM;
@@ -666,7 +707,7 @@ for (const f of FINGERS) {
   ];
 }
 const [FI, FM, FR, FP] = FINGERS;
-const ULNAR = joint(skel, V(-3.28, 5.2), 5, 'base');   // the outer edge of the palm, so the outline closes without x-ray metacarpals
+const ULNAR = joint(skel, V(-3.28 * PALM_W, 5.2), 5, 'base');   // the outer edge of the palm, so the outline closes without x-ray metacarpals
 // A curled finger tucks its last two bones into the palm. Drawn at full strength they stack into a ladder of
 // zigzags with bright fingertips in the middle of the fist, so they recede with each finger's own curl (0 open, 1 fist).
 const CURL = new Float32Array(4);
@@ -676,7 +717,7 @@ function updateCurl(p) {
   for (let k = 0; k < 4; k++) CURL[k] = E.sine(clamp01((p[7 + k * 4] - 30 * DEG) / (60 * DEG)));
 }
 const TIPS = [T.j[3], FI.j[4], FM.j[4], FR.j[4], FP.j[4]];
-const PIVOT = V(0.6, 8.6);            // the hand turns about its own centre, not the wrist
+const PIVOT = V(0.6 * PALM_W, 8.6);            // the hand turns about its own centre, not the wrist
 
 /* ---------- poses (degrees) ----------
    [thumb spread, thumb palmar abduction, thumb twist, thumb MCP, thumb IP,
@@ -712,7 +753,8 @@ const handRoot = new THREE.Group(); handRoot.rotation.order = 'YXZ'; scene.add(h
 const handInner = new THREE.Group(); handInner.position.copy(PIVOT).negate(); handRoot.add(handInner);
 
 // --- joint stars ---
-const KIND = { tip: [0.104, 1.0], knuckle: [0.08, 0.86], pip: [0.07, 0.8], dip: [0.062, 0.74], base: [0.044, 0.5], wrist: [0.058, 0.62] };
+// v2: joint stars ~12% larger and ~10% brighter so the silhouette reads at normal screen brightness
+const KIND = { tip: [0.116, 1.08], knuckle: [0.09, 0.95], pip: [0.079, 0.88], dip: [0.07, 0.82], base: [0.05, 0.56], wrist: [0.064, 0.68] };
 const NJ = joints.length;
 const jGeo = new THREE.BufferGeometry();
 const jPos = attr(jGeo, 'position', new Float32Array(NJ * 3), 3);
@@ -774,15 +816,17 @@ handInner.add(boneLines);
 // --- volumetric dust: capsules around the phalanges, a rounded palm slab, a fading forearm ---
 const BONES = [];
 const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06) => BONES.push({ a, b, frame, r0: r0 * CM, r1: r1 * CM, group, count, tip, t0 });
-bone(T.j[0], T.j[1], tBase, 1.18, 0.9, 0, 44, false, 0.1);
-bone(T.j[1], T.j[2], tProx, 0.88, 0.8, 0, 40, false);
-bone(T.j[2], T.j[3], tDist, 0.78, 0.6, 0, 40, true);
-const FCOUNTS = { 1: [30, 22, 21], 2: [34, 24, 23], 3: [30, 22, 21], 4: [24, 17, 17] };
+// v2: ~30% more dust than v1 (counts), radii x FINGER_T, tip ends a touch fuller (less taper)
+const FT = FINGER_T;
+bone(T.j[0], T.j[1], tBase, 1.18 * FT, 0.9 * FT, 0, 57, false, 0.1);
+bone(T.j[1], T.j[2], tProx, 0.88 * FT, 0.81 * FT, 0, 52, false);
+bone(T.j[2], T.j[3], tDist, 0.78 * FT, 0.63 * FT, 0, 52, true);
+const FCOUNTS = { 1: [39, 29, 27], 2: [44, 31, 30], 3: [39, 29, 27], 4: [31, 22, 22] };
 for (const f of FINGERS) {
-  const c = FCOUNTS[f.g], s = f.rs;
-  bone(f.j[1], f.j[2], f.prox, 0.82 * s, 0.74 * s, f.g, c[0], false, -0.12);
-  bone(f.j[2], f.j[3], f.mid, 0.72 * s, 0.64 * s, f.g, c[1], false);
-  bone(f.j[3], f.j[4], f.dist, 0.62 * s, 0.48 * s, f.g, c[2], true);
+  const c = FCOUNTS[f.g], s = f.rs * FT;
+  bone(f.j[1], f.j[2], f.prox, 0.82 * s, 0.75 * s, f.g, c[0], false, -0.12);
+  bone(f.j[2], f.j[3], f.mid, 0.72 * s, 0.66 * s, f.g, c[1], false);
+  bone(f.j[3], f.j[4], f.dist, 0.63 * s, 0.51 * s, f.g, c[2], true);
 }
 // lengths: each bone ends at the next joint group's offset along local +Y of its frame
 BONES.forEach(b => { b.len = (b.b.obj === b.frame) ? b.b.off.y : b.b.obj.position.y; });
@@ -793,7 +837,7 @@ const PALM = [
   [2.15, 0.25], [2.65, 1.5], [2.95, 3.2], [3.05, 5.2], [3.0, 7.2], [2.95, 8.9],
   [2.1, 9.55], [0.8, 9.95], [-0.8, 9.6], [-2.05, 8.85], [-2.95, 8.4],
   [-3.15, 6.8], [-3.2, 4.6], [-2.95, 2.4], [-2.45, 0.25],
-];
+].map(([x, y]) => [x * PALM_W, y]);
 function inPoly(x, y) {
   let inside = false;
   for (let i = 0, j = PALM.length - 1; i < PALM.length; j = i++) {
@@ -813,9 +857,9 @@ function edgeDist(x, y) {
 }
 const palmHalf = (x, y) => {
   const e = Math.min(1, edgeDist(x, y) / 1.6);
-  let h = 0.5 + 0.62 * Math.sin(e * Math.PI / 2);
-  const th = Math.exp(-((x - 2.0) ** 2 / 1.6 + (y - 3.2) ** 2 / 4.0));        // thenar pad
-  const hy = Math.exp(-((x + 2.2) ** 2 / 1.4 + (y - 3.6) ** 2 / 5.0));        // hypothenar pad
+  let h = (0.5 + 0.62 * Math.sin(e * Math.PI / 2)) * 1.05;
+  const th = Math.exp(-((x - 2.0 * PALM_W) ** 2 / 1.6 + (y - 3.2) ** 2 / 4.0));        // thenar pad
+  const hy = Math.exp(-((x + 2.2 * PALM_W) ** 2 / 1.4 + (y - 3.6) ** 2 / 5.0));        // hypothenar pad
   return { front: h + 0.5 * th + 0.25 * hy, back: h * 0.85 };
 };
 
@@ -824,8 +868,8 @@ const DUST_TINTS = [[0.96, 0.84, 0.8], [0.96, 0.84, 0.8], [0.8, 0.74, 0.98], [1,
 function addDust(rec, group, alphaMul = 1) {
   rec.group = group;
   const spark = Math.random() < 0.14;
-  rec.size = rand(0.018, 0.03) * (spark ? 1.35 : 1);
-  rec.alpha = rand(0.4, 0.75) * alphaMul * (spark ? 1.5 : 1);
+  rec.size = rand(0.019, 0.031) * (spark ? 1.35 : 1);
+  rec.alpha = rand(0.46, 0.84) * alphaMul * (spark ? 1.5 : 1);
   rec.color = pick(DUST_TINTS);
   dust.push(rec);
 }
@@ -842,8 +886,8 @@ BONES.forEach((b, bi) => {
   // each static star keeps its surface normal (hand-local) so the dust can be rim-lit like the capsules
   const add = (x, y, z, a = 1, nx = 0, ny = 0, nz = 1) => { addDust({ stat: V(x, y, z), n: new THREE.Vector3(nx, ny, nz).normalize() }, 5, a); return dust[dust.length - 1]; };
   let n = 0;
-  while (n < 140) {                                       // front and back faces of the palm
-    const x = rand(-3.3, 3.2), y = rand(0.1, 10.0);
+  while (n < 182) {                                       // front and back faces of the palm
+    const x = rand(-3.3 * PALM_W, 3.2 * PALM_W), y = rand(0.1, 10.0);
     if (!inPoly(x, y)) continue;
     const h = palmHalf(x, y), front = Math.random() < 0.55;
     add(x, y, front ? h.front * rand(0.9, 1.03) : -h.back * rand(0.9, 1.03), front ? 1 : 0.85, 0, 0, front ? 1 : -1);
@@ -851,19 +895,19 @@ BONES.forEach((b, bi) => {
   }
   let per = 0;                                            // rounded rim carries the silhouette
   const edges = PALM.map((p, i) => { const q = PALM[(i + 1) % PALM.length]; const L = Math.hypot(q[0] - p[0], q[1] - p[1]); per += L; return { p, q, L }; });
-  for (let k = 0; k < 120; k++) {
+  for (let k = 0; k < 156; k++) {
     let d = Math.random() * per, e = edges[0];
     for (const ed of edges) { if (d <= ed.L) { e = ed; break; } d -= ed.L; }
     const t = d / e.L, x = e.p[0] + (e.q[0] - e.p[0]) * t, y = e.p[1] + (e.q[1] - e.p[1]) * t;
-    if (y > 8.6 && x > -2.6 && x < 2.7) { k--; continue; }   // the knuckle edge is covered by the fingers
+    if (y > 8.6 && x > -2.6 * PALM_W && x < 2.7 * PALM_W) { k--; continue; }   // the knuckle edge is covered by the fingers
     const nx = (e.q[1] - e.p[1]) / e.L, ny = -(e.q[0] - e.p[0]) / e.L;   // outward normal (polygon is clockwise in x-right/y-up)
-    const psi = rand(-Math.PI / 2, Math.PI / 2), h = 0.62;
+    const psi = rand(-Math.PI / 2, Math.PI / 2), h = 0.66;
     add(x + nx * Math.cos(psi) * h * 0.55, y + ny * Math.cos(psi) * h * 0.55, Math.sin(psi) * h * (psi > 0 ? 1.15 : 0.9), 1,
       nx * Math.cos(psi), ny * Math.cos(psi), Math.sin(psi));
   }
-  for (let k = 0; k < 56; k++) {                          // forearm, fading into the dark
+  for (let k = 0; k < 66; k++) {                          // forearm, fading into the dark
     const t = Math.pow(Math.random(), 0.8), ph = Math.random() * Math.PI * 2;
-    add(Math.cos(ph) * (2.3 + 0.3 * t), -0.2 - t * 6.5, Math.sin(ph) * (1.55 + 0.25 * t), Math.pow(1 - t, 2.9), Math.cos(ph), 0, Math.sin(ph)).arm = true;
+    add(Math.cos(ph) * (2.3 * PALM_W + 0.3 * t), -0.2 - t * 6.5, Math.sin(ph) * (1.62 + 0.25 * t), Math.pow(1 - t, 2.9), Math.cos(ph), 0, Math.sin(ph)).arm = true;
   }
 }
 const ND = dust.length;
@@ -934,180 +978,7 @@ function prepareFormation() {
 }
 
 /* =====================================================================
-   The ring, Saturn's rings and the planet
-   ===================================================================== */
-const ringGroup = new THREE.Group(); handInner.add(ringGroup);
-const RING_N = 72;
-{
-  const g = new THREE.BufferGeometry(), pos = new Float32Array(RING_N * 3), size = new Float32Array(RING_N), al = new Float32Array(RING_N);
-  for (let i = 0; i < RING_N; i++) {
-    const a = (i / RING_N) * Math.PI * 2 + rand(-0.03, 0.03), jewel = i % 12 === 0;
-    pos.set([Math.cos(a) * rand(0.985, 1.015), rand(-0.02, 0.02), Math.sin(a) * rand(0.985, 1.015)], i * 3);
-    size[i] = jewel ? 0.05 : rand(0.016, 0.026);
-    al[i] = jewel ? 1 : rand(0.45, 0.85);
-  }
-  attr(g, 'position', pos, 3); attr(g, 'aSize', size, 1); attr(g, 'aAlpha', al, 1);
-  attr(g, 'aColor', Float32Array.from({ length: RING_N * 3 }, (_, i) => [1, 0.84, 0.66][i % 3]), 3);
-  attr(g, 'aPhase', Float32Array.from({ length: RING_N }, () => Math.random()), 1);
-  attr(g, 'aGroup', new Float32Array(RING_N).fill(5), 1);
-  var ringStars = new THREE.Points(g, pointsMaterial({ twinkle: 0.3, atten: 0.72, ref: 5, occ: true }));
-  ringStars.frustumCulled = false; ringStars.renderOrder = 6;
-  ringGroup.add(ringStars);
-}
-function circleLine(n, r, alpha, color) {
-  const g = new THREE.BufferGeometry(), pos = new Float32Array(n * 6);
-  for (let i = 0; i < n; i++) {
-    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
-    pos.set([Math.cos(a0) * r, 0, Math.sin(a0) * r, Math.cos(a1) * r, 0, Math.sin(a1) * r], i * 6);
-  }
-  attr(g, 'position', pos, 3);
-  attr(g, 'aAlpha', new Float32Array(n * 2).fill(alpha), 1);
-  attr(g, 'aGroup', new Float32Array(n * 2).fill(5), 1);
-  attr(g, 'aColor', Float32Array.from({ length: n * 6 }, (_, i) => color[i % 3]), 3);
-  const l = new THREE.LineSegments(g, lineMaterial({ occ: true }));
-  l.frustumCulled = false; l.renderOrder = 5;
-  return l;
-}
-const ringLineA = circleLine(128, 1.0, 0.55, [1, 0.82, 0.64]);
-const ringLineB = circleLine(128, 0.93, 0.3, [1, 0.78, 0.66]);
-ringGroup.add(ringLineA, ringLineB);
-// Saturn's ring system: particle bands with a Cassini-like gap (ring-local units; outer ring = 1)
-{
-  const n = reduceMotion ? 220 : 300, g = new THREE.BufferGeometry();
-  const pos = new Float32Array(n * 3), size = new Float32Array(n), al = new Float32Array(n), col = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    let r;
-    do { r = rand(0.56, 0.97); } while (r > 0.8 && r < 0.84 && Math.random() < 0.9);
-    const a = Math.random() * Math.PI * 2;
-    pos.set([Math.cos(a) * r, rand(-0.006, 0.006), Math.sin(a) * r], i * 3);
-    size[i] = rand(0.011, 0.02);
-    al[i] = rand(0.3, 0.75) * (r < 0.8 ? 1 : 0.75);
-    col.set(r < 0.7 ? [0.95, 0.86, 0.72] : [1, 0.88, 0.76], i * 3);
-  }
-  attr(g, 'position', pos, 3); attr(g, 'aSize', size, 1); attr(g, 'aAlpha', al, 1); attr(g, 'aColor', col, 3);
-  attr(g, 'aPhase', Float32Array.from({ length: n }, () => Math.random()), 1);
-  attr(g, 'aGroup', new Float32Array(n).fill(5), 1);
-  var bands = new THREE.Points(g, pointsMaterial({ twinkle: 0.35, atten: 0.72, ref: 5, occ: true }));
-  bands.frustumCulled = false; bands.renderOrder = 6;
-  ringGroup.add(bands);
-}
-const ringMats = [ringStars.material, ringLineA.material, ringLineB.material];
-
-const R_PLANET = 0.2;
-const planetGroup = new THREE.Group(); handInner.add(planetGroup);
-{
-  const n = reduceMotion ? 300 : 440, g = new THREE.BufferGeometry();
-  const pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), band = new Float32Array(n), ph = new Float32Array(n);
-  const ga = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < n; i++) {
-    const y = 1 - 2 * (i + 0.5) / n, r = Math.sqrt(1 - y * y), th = i * ga;
-    const x = Math.cos(th) * r, z = Math.sin(th) * r;
-    nrm.set([x, y, z], i * 3);
-    pos.set([x * R_PLANET, y * R_PLANET, z * R_PLANET], i * 3);
-    band[i] = 0.5 + 0.5 * Math.sin(y * 13.0 + Math.sin(th * 2.0) * 0.25);
-    ph[i] = Math.random();
-  }
-  attr(g, 'position', pos, 3); attr(g, 'normal', nrm, 3); attr(g, 'aBand', band, 1); attr(g, 'aPhase', ph, 1);
-  var planetMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: U.uTime, uScale: U.uScale, uMinSize: U.uMinSize, uOpacity: { value: 0 }, uMap: { value: GLOW } },
-    vertexShader: /* glsl */`
-      attribute float aBand;
-      attribute float aPhase;
-      uniform float uTime, uScale, uMinSize, uOpacity;
-      varying float vA;
-      varying vec3 vC;
-      void main() {
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vec3 n = normalize(normalMatrix * normal);
-        float front = smoothstep(-0.25, 0.45, n.z);
-        float limb = pow(1.0 - abs(n.z), 2.2);
-        float tw = 0.8 + 0.2 * sin(uTime * (0.8 + aPhase) + aPhase * 6.2831);
-        vA = uOpacity * (0.04 + 0.96 * front) * (0.42 + 0.58 * aBand) * tw + uOpacity * limb * front * 0.35;
-        vC = mix(vec3(0.92, 0.76, 0.58), vec3(1.0, 0.93, 0.82), aBand);
-        float px = 0.022 * uScale / pow(max(0.05, -mv.z), 0.72) / pow(5.0, 0.28);
-        if (px < uMinSize) { vA *= px / uMinSize; px = uMinSize; }
-        gl_PointSize = px;
-        gl_Position = projectionMatrix * mv;
-      }
-    `,
-    fragmentShader: /* glsl */`
-      uniform sampler2D uMap;
-      varying float vA;
-      varying vec3 vC;
-      void main() {
-        float m = texture2D(uMap, gl_PointCoord).a * vA;
-        if (m < 0.002) discard;
-        gl_FragColor = vec4(vC * m, 1.0);
-      }
-    `,
-    ...additive,
-  });
-  const planetPts = new THREE.Points(g, planetMat);
-  planetPts.frustumCulled = false; planetPts.renderOrder = 7;
-  planetGroup.add(planetPts);
-  // soft body and halo
-  const hg = new THREE.BufferGeometry();
-  attr(hg, 'position', new Float32Array(6), 3);
-  attr(hg, 'aSize', new Float32Array([R_PLANET * 7.5, R_PLANET * 2.9]), 1);
-  attr(hg, 'aAlpha', new Float32Array([0.32, 0.5]), 1);
-  attr(hg, 'aColor', new Float32Array([1, 0.8, 0.6, 0.95, 0.78, 0.6]), 3);
-  attr(hg, 'aPhase', new Float32Array([0.2, 0.7]), 1);
-  attr(hg, 'aGroup', new Float32Array([5, 5]), 1);
-  var halo = new THREE.Points(hg, pointsMaterial({ twinkle: 0.05, atten: 1, ref: 5 }));
-  halo.frustumCulled = false; halo.renderOrder = 6;
-  planetGroup.add(halo);
-}
-planetGroup.visible = false; ringGroup.visible = false;
-const Q_SAT = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.42, 0, -0.34));
-
-/* =====================================================================
-   Framing (depends on aspect)
-   ===================================================================== */
-let W = 1, H = 1, aspect = 1;
-// extents of the THUMB figure around the camera's focus point, in scene units at that depth (measured at boot)
-const FIG = { up: 0.48, down: 0.92, left: 0.25, right: 0.37 };
-const framing = { dAll: 6, dThumb: 2, shiftAll: 0.06, shiftThumbY: 0.26, shiftThumbX: 0, ringPush: 0.88, ringCenter: 0.45, ringLift: 0.1, arcK: 1 };
-function resize() {
-  W = stage.clientWidth || innerWidth; H = stage.clientHeight || innerHeight;
-  renderer.setSize(W, H, false);
-  aspect = W / H; camera.aspect = aspect;
-  U.uScale.value = (H * DPR) / (2 * TAN);
-  bgMat.uniforms.uAspect.value = aspect;
-  const portrait = aspect < 0.8;
-  const handH = 2.25, handW = 1.42;
-  framing.dAll = Math.max(handH / (2 * TAN) * (portrait ? 1.22 : 1.55), handW / (2 * TAN * aspect) * 1.14);
-  const side = aspect > 1.15;                       // landscape: the sheet sits on the right, the thumb on the left
-  framing.shiftAll = portrait ? 0.1 : 0.12;
-  // Thumb close-up: fit the whole thumbs-up (thumb tip to the heel of the fist, measured at boot as FIG) into the
-  // free band: below the top rail with room for the label beside the tip, and above the sheet (or left of it).
-  framing.shiftThumbX = portrait ? -0.12 : side ? -0.36 : 0;
-  const sheetH = askForm.offsetHeight || 252, sheetW = Math.min(360, W - 32);
-  const bandTop = 88, bandBot = side ? H - 64 : H - 68 - sheetH - 14;
-  const lookX = W / 2 * (1 + framing.shiftThumbX);
-  const rightEdge = side ? W - Math.max(0.07 * W, 16) - sheetW - 16 : W - 16;
-  const fitPx = Math.max(40, Math.min(
-    (bandBot - bandTop) / (FIG.up + FIG.down),
-    (rightEdge - lookX) / FIG.right, (lookX - 16) / FIG.left));             // px per world unit at the thumb
-  framing.dThumb = Math.max(Math.max(1.75 / (2 * TAN), 0.95 / (2 * TAN * aspect)), H / (2 * TAN * fitPx));
-  const px = H / (2 * TAN * framing.dThumb);
-  const lookY = (bandTop + bandBot) / 2 - (FIG.down - FIG.up) / 2 * px;     // centre the figure in the band
-  framing.shiftThumbY = 1 - 2 * lookY / H;
-  // ring beat: a gentle push toward the ring finger, lifted so the wrist clears the two-line caption
-  framing.ringPush = portrait ? 0.96 : 0.88;
-  framing.ringCenter = portrait ? 0.62 : 0.45;
-  // a phone on its side, or a short laptop window: no room for the caption under the pushed-in hand, so it moves
-  // to the pinky-side column (900x640 and taller keep it centred below)
-  const short = side && H < 620;
-  framing.ringLift = short ? 0 : portrait ? 0.06 : 0.12;
-  framing.arcK = portrait ? 0.3 : 1;              // the camera's sideways arc on the pull-back; a narrow screen has no room for it
-  document.documentElement.classList.toggle('wide', side);
-  document.documentElement.classList.toggle('short', short);
-  buildConstellations();
-  measureLabel();
-}
-
-/* =====================================================================
-   The sequence
+   Easing helpers
    ===================================================================== */
 const E = {
   lin: t => t,
@@ -1120,6 +991,728 @@ const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
 const lerp = (a, b, t) => a + (b - a) * t;
 const segE = (t, w, e = E.inOut) => e(clamp01((t - w[0]) / w[1]));
 
+/* =====================================================================
+   PBR: one environment map (shared by the wedding band and the cards) and a small light rig.
+   Only the built-in PBR materials tone-map; the star shaders write their colour as is, exactly as in v1.
+   ===================================================================== */
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.autoClear = false;
+const pmrem = new THREE.PMREMGenerator(renderer);
+const ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = ENV;
+scene.environmentIntensity = 0.95;
+scene.add(camera);
+const camAim = new THREE.Object3D(); camAim.position.set(0, 0, -1); camera.add(camAim);
+// key from the upper right: the thumb's side, where the Sun is
+const bandKey = new THREE.DirectionalLight(0xffeee4, 2.3); bandKey.position.set(0.9, 1.1, 0.6); bandKey.target = camAim; camera.add(bandKey);
+const bandRim = new THREE.DirectionalLight(0x9a7bff, 0.8); bandRim.position.set(-1, 0.5, -0.9); bandRim.target = camAim; camera.add(bandRim);
+scene.add(new THREE.AmbientLight(0xffffff, 0.12));
+const SUN_V = new THREE.Vector3(0.62, 0.5, 0.6).normalize();     // Saturn's light, view space (also from the thumb's side)
+
+/* =====================================================================
+   The ring finger: a wedding band slides down it, comes apart into Saturn's rings, and Saturn fades in where the
+   finger was. Every size comes from the ring finger's own dust capsule, so it follows the hand's proportions:
+   the band fits the finger, Saturn is as wide as the finger at its base, and the rings span 1.24 to 2.27 planet
+   radii (C ring to the A ring's outer edge, with the Cassini division between B and A), as on Saturn.
+   ===================================================================== */
+const BONE_RP = BONES.find(b => b.frame === FR.prox);
+const RING_T = 0.3;                                             // a ring sits 30% along the proximal phalanx
+const R_FINGER = lerp(BONE_RP.r0, BONE_RP.r1, RING_T);
+const R_SAT = BONE_RP.r0 * 0.95;                                // the finger's width at its base, as the dust reads on screen
+const RING_IN = 1.24 * R_SAT, RING_OUT = 2.27 * R_SAT;
+const BAND = { ri: R_FINGER * 0.9, t: R_FINGER * 0.15, w: R_FINGER * 0.5 };   // a band that fits the finger, not a bangle
+const BAND_PTS = 48, BAND_SEG = 128, DIS_W = 128, DIS_H = 24;
+function bandProfile(v, out) {            // v in [0, 1] around the cross-section, starting and ending on the inner face
+  const a = Math.PI + v * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+  const pc = Math.sign(c) * Math.pow(Math.abs(c), c > 0 ? 0.82 : 0.6);   // domed outside, a flatter comfort-fit inside
+  const ps = Math.sign(s) * Math.pow(Math.abs(s), 0.36);                 // flat sides with softly rounded edges
+  return out.set(BAND.ri + BAND.t / 2 + (BAND.t / 2) * pc, (BAND.w / 2) * ps);
+}
+const bandGeo = new THREE.LatheGeometry(Array.from({ length: BAND_PTS + 1 }, (_, j) => bandProfile(j / BAND_PTS, new THREE.Vector2())), BAND_SEG);
+
+// Dissolve thresholds, one per cell of the band's surface (u around the band, v around its profile). The band's
+// shader discards a cell once the dissolve passes its value; the particle born in that cell starts flying then.
+const disData = new Uint8Array(DIS_W * DIS_H);
+{
+  const seed = 0.62;                                             // where the band starts to come apart
+  for (let j = 0; j < DIS_H; j++) for (let i = 0; i < DIS_W; i++) {
+    const u = (i + 0.5) / DIS_W;
+    let du = Math.abs(u - seed); du = Math.min(du, 1 - du) * 2; // 0 at the seed, 1 opposite it
+    disData[j * DIS_W + i] = Math.round(255 * clamp01(0.04 + 0.7 * du + 0.24 * Math.random() - 0.03 * Math.cos(j / DIS_H * Math.PI * 2)));
+  }
+}
+const disTex = new THREE.DataTexture(disData, DIS_W, DIS_H, THREE.RedFormat, THREE.UnsignedByteType);
+disTex.magFilter = disTex.minFilter = THREE.NearestFilter; disTex.needsUpdate = true;
+
+const ringGroup = new THREE.Group(); handInner.add(ringGroup);
+const bandMat = new THREE.MeshPhysicalMaterial({
+  color: 0xf0b49c, metalness: 1, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.3,
+});
+const bandU = { uDis: { value: 1 }, uDisMap: { value: disTex }, uEdge: { value: new THREE.Color(1.0, 0.6, 0.38) } };
+bandMat.onBeforeCompile = sh => {
+  Object.assign(sh.uniforms, bandU);
+  sh.vertexShader = sh.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vDisUv;')
+    .replace('#include <uv_vertex>', '#include <uv_vertex>\nvDisUv = uv;');
+  sh.fragmentShader = sh.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vDisUv;\nuniform float uDis;\nuniform sampler2D uDisMap;\nuniform vec3 uEdge;')
+    .replace('#include <alphatest_fragment>', '#include <alphatest_fragment>\nfloat disTh = texture2D(uDisMap, vDisUv).r;\nif (uDis > 0.0 && disTh <= uDis) discard;')
+    .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nif (uDis > 0.0) totalEmissiveRadiance += uEdge * (1.0 - smoothstep(0.0, 0.075, disTh - uDis)) * 2.4;');
+};
+const bandMesh = new THREE.Mesh(bandGeo, bandMat);
+bandMesh.renderOrder = 5; bandMesh.frustumCulled = false;
+ringGroup.add(bandMesh);
+
+// the glint: one four-point star that sits where the key light's highlight falls on the band
+const glintGeo = new THREE.BufferGeometry();
+const glintPos = attr(glintGeo, 'position', new Float32Array(3), 3);
+const glintAlpha = attr(glintGeo, 'aAlpha', new Float32Array(1), 1);
+attr(glintGeo, 'aSize', new Float32Array([0.085]), 1);
+attr(glintGeo, 'aColor', new Float32Array([1, 0.95, 0.88]), 3);
+attr(glintGeo, 'aPhase', new Float32Array([0.3]), 1);
+attr(glintGeo, 'aGroup', new Float32Array([5]), 1);
+const glint = new THREE.Points(glintGeo, pointsMaterial({ map: FLARE, atten: 0.72, ref: 5 }));
+glint.material.depthTest = false; glint.frustumCulled = false; glint.renderOrder = 9;
+ringGroup.add(glint);
+
+// Saturn's rings as particles: "fliers" are born on the band, one per dissolving cell, and fly out into the rings;
+// the rest of the ring dust fades in where it lies. One draw call; the motion is computed in the vertex shader from
+// the beat's clock, so any moment can be scrubbed to.
+const RING_SHADER_VS = /* glsl */`
+  attribute vec3 aStart;     // band surface: radius, angle, height (ring-local)
+  attribute vec3 aEnd;       // ring orbit: radius, angle, height
+  attribute vec4 aInfo;      // birth (s into the dissolve), flight (s), flies (1) or fades in (0), ring brightness
+  attribute float aSize;
+  attribute vec3 aColor;
+  attribute float aPhase;
+  uniform float uTime, uScale, uMaxSize, uMinSize, uDotTo, uOpacity, uDisT, uFlight, uR, uShadow;
+  uniform vec3 uLightL;
+  varying vec3 vColor;
+  varying float vAlpha;
+  varying float vSmall;
+  ${OCC_GLSL}
+  void main() {
+    float age = uDisT - aInfo.x;
+    float fly = aInfo.z;
+    float p = fly > 0.5 ? clamp(age / aInfo.y, 0.0, 1.0) : 1.0;
+    p = mix(1.0, p, uFlight);
+    float e = 1.0 - pow(1.0 - p, 3.0);
+    float omega = 0.16 * pow(1.4 * uR / aEnd.x, 1.5);                   // slow differential orbit, inner dust faster
+    float ph = mix(aStart.y, aEnd.y, e) + omega * max(uDisT, 0.0) * e;
+    float r = mix(aStart.x, aEnd.x, e);
+    float y = mix(aStart.z, aEnd.z, e) + sin(3.14159 * e) * 0.22 * uR * uFlight * fly;
+    vec3 pos = vec3(r * sin(ph), y, r * cos(ph));
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+    float flash = fly > 0.5 ? exp(-max(age, 0.0) * 2.4) : 0.0;
+    float a = step(0.0, age) * (fly > 0.5 ? smoothstep(0.0, 0.07, age) : smoothstep(0.0, 1.1, age));
+    a *= mix(1.0, aInfo.w, e) * (1.0 + 1.5 * flash);
+    float tl = dot(pos, uLightL);                                         // the planet's shadow across the rings
+    float sh = tl < 0.0 ? smoothstep(uR * 0.9, uR * 1.08, length(pos - tl * uLightL)) : 1.0;
+    a *= mix(1.0, sh, uShadow * e);
+    a *= (0.82 + 0.18 * sin(uTime * (1.0 + aPhase) + aPhase * 6.2831)) * uOpacity * occl(mv.xyz);
+    float d = max(0.05, -mv.z);
+    float px = aSize * (1.0 + 0.9 * flash) * uScale / (pow(d, 0.72) * pow(5.0, 0.28));
+    if (px < uMinSize) { a *= px / uMinSize; px = uMinSize; }
+    vSmall = 1.0 - smoothstep(uMinSize, uDotTo, px);
+    gl_PointSize = min(px, uMaxSize);
+    vAlpha = a;
+    vColor = mix(vec3(1.0, 0.74, 0.6), aColor, e);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const ringU = {
+  uOpacity: { value: 0 }, uDisT: { value: -1e4 }, uFlight: { value: reduceMotion ? 0 : 1 }, uR: { value: R_SAT },
+  uShadow: { value: 0 }, uLightL: { value: new THREE.Vector3(0, 1, 0) },
+};
+function ringRadius() {
+  for (;;) {
+    const x = Math.random();
+    const k = x < 0.15 ? rand(1.24, 1.52) : x < 0.68 ? rand(1.52, 1.95) : rand(2.03, 2.27);   // C, B, A
+    if (k > 2.19 && k < 2.215 && Math.random() < 0.85) continue;                             // a hairline gap in A
+    return k * R_SAT;
+  }
+}
+const ringBright = r => { const k = r / R_SAT; return k < 1.52 ? 0.36 : k < 1.95 ? 0.95 : 0.68; };
+const ringTint = r => { const k = r / R_SAT; return k < 1.52 ? [0.82, 0.74, 0.66] : k < 1.95 ? [1.0, 0.9, 0.74] : [0.93, 0.86, 0.77]; };
+let ringPts, D_DIS = 1.9;
+function buildRingParticles(dDis) {
+  if (ringPts) { ringGroup.remove(ringPts); ringPts.geometry.dispose(); }
+  D_DIS = dDis;
+  const rows = [], tmp2 = new THREE.Vector2();
+  for (let j = 0; j < DIS_H; j++) for (let i = 0; i < DIS_W; i++) {
+    if (Math.random() > 0.3) continue;
+    const u = (i + rand(0.15, 0.85)) / DIS_W, v = (j + rand(0.15, 0.85)) / DIS_H;
+    bandProfile(v, tmp2);
+    const phS = u * Math.PI * 2, rT = ringRadius();
+    rows.push([tmp2.x, phS, tmp2.y, rT, phS + rand(0.5, 1.4), rand(-1, 1) * 0.0012,
+      (disData[j * DIS_W + i] / 255) * dDis, rand(1.2, 1.9) * MB, 1, ringBright(rT), rand(0.006, 0.0105), ringTint(rT)]);
+  }
+  const settled = reduceMotion ? 900 : 1100;
+  for (let k = 0; k < settled; k++) {
+    const rT = ringRadius(), ph = rand(0, Math.PI * 2);
+    rows.push([rT, ph, 0, rT, ph, rand(-1, 1) * 0.0012, rand(0.4, 1.05) * dDis + rand(0, 0.7), 1, 0, ringBright(rT) * 0.8, rand(0.0032, 0.0068), ringTint(rT)]);
+  }
+  const n = rows.length, g = new THREE.BufferGeometry();
+  const st3 = new Float32Array(n * 3), en3 = new Float32Array(n * 3), inf = new Float32Array(n * 4), sz = new Float32Array(n), col = new Float32Array(n * 3);
+  rows.forEach((r, k) => {
+    st3.set(r.slice(0, 3), k * 3); en3.set(r.slice(3, 6), k * 3); inf.set(r.slice(6, 10), k * 4); sz[k] = r[10]; col.set(r[11], k * 3);
+  });
+  attr(g, 'position', new Float32Array(n * 3), 3);       // unused (the shader builds the position), but three needs it
+  attr(g, 'aStart', st3, 3); attr(g, 'aEnd', en3, 3); attr(g, 'aInfo', inf, 4); attr(g, 'aSize', sz, 1); attr(g, 'aColor', col, 3);
+  attr(g, 'aPhase', Float32Array.from({ length: n }, () => Math.random()), 1);
+  const m = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: U.uTime, uScale: U.uScale, uMaxSize: U.uMaxSize, uMinSize: U.uMinSize, uDotTo: U.uDotTo, uMap: { value: GLOW },
+      ...ringU, uOcc: OCC.uOcc, uOccA: OCC.uOccA, uOccAny: { value: 0 },
+    },
+    vertexShader: RING_SHADER_VS, fragmentShader: PTS_FS, ...additive,
+  });
+  ringPts = new THREE.Points(g, m);
+  ringPts.frustumCulled = false; ringPts.renderOrder = 8;
+  ringGroup.add(ringPts);
+}
+
+// the continuous rings under the dust: a flat annulus with the C, B and A rings, the Cassini division and fine ringlets
+const annMat = new THREE.ShaderMaterial({
+  uniforms: { uOpacity: { value: 0 }, uR: ringU.uR, uShadow: ringU.uShadow, uLightL: ringU.uLightL, uOcc: OCC.uOcc, uOccA: OCC.uOccA, uOccAny: { value: 0 } },
+  vertexShader: /* glsl */`
+    varying vec3 vP; varying vec3 vMV;
+    void main() { vP = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vMV = mv.xyz; gl_Position = projectionMatrix * mv; }
+  `,
+  fragmentShader: /* glsl */`
+    ${OCC_GLSL}
+    uniform float uOpacity, uR, uShadow;
+    uniform vec3 uLightL;
+    varying vec3 vP; varying vec3 vMV;
+    void main() {
+      float k = length(vP.xz) / uR;
+      float C = smoothstep(1.22, 1.3, k) * (1.0 - smoothstep(1.5, 1.54, k));
+      float B = smoothstep(1.5, 1.55, k) * (1.0 - smoothstep(1.92, 1.96, k));
+      float A = smoothstep(2.02, 2.05, k) * (1.0 - smoothstep(2.23, 2.27, k)) * (1.0 - 0.8 * smoothstep(2.19, 2.198, k) * (1.0 - smoothstep(2.207, 2.215, k)));
+      float dens = 0.26 * C + 0.92 * B * (0.86 + 0.14 * smoothstep(1.6, 1.8, k)) + 0.6 * A;
+      dens *= 0.8 + 0.2 * sin(k * 143.0) * sin(k * 59.0 + 1.3);
+      vec3 col = C * vec3(0.78, 0.7, 0.62) + B * vec3(1.0, 0.9, 0.74) + A * vec3(0.92, 0.85, 0.76);
+      float tl = dot(vP, uLightL);
+      float sh = tl < 0.0 ? smoothstep(uR * 0.92, uR * 1.06, length(vP - tl * uLightL)) : 1.0;
+      float a = dens * uOpacity * mix(1.0, sh, uShadow) * occl(vMV) * 0.3;
+      gl_FragColor = vec4(col * a, 1.0);
+    }
+  `,
+  ...additive, side: THREE.DoubleSide,
+});
+const annGeo = new THREE.RingGeometry(RING_IN * 0.98, RING_OUT * 1.01, 192, 6);
+annGeo.rotateX(-Math.PI / 2);                                   // into the ring group's XZ plane
+const annulus = new THREE.Mesh(annGeo, annMat);
+annulus.renderOrder = 7; annulus.frustumCulled = false;
+ringGroup.add(annulus);
+
+// Saturn: a small, soft, banded pale-gold sphere, lit from the thumb's side
+const planetGroup = new THREE.Group(); handInner.add(planetGroup);
+const satMat = new THREE.ShaderMaterial({
+  uniforms: { uOpacity: { value: 0 }, uLightV: { value: SUN_V } },
+  vertexShader: /* glsl */`
+    varying vec3 vN; varying vec3 vV; varying vec3 vL;
+    void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = -mv.xyz; vL = normal; gl_Position = projectionMatrix * mv; }
+  `,
+  fragmentShader: /* glsl */`
+    uniform float uOpacity; uniform vec3 uLightV;
+    varying vec3 vN; varying vec3 vV; varying vec3 vL;
+    void main() {
+      vec3 n = normalize(vN), v = normalize(vV);
+      float lat = vL.y;                                              // the bands run parallel to the rings
+      float b = 0.5 + 0.5 * sin(lat * 23.0 + sin(lat * 8.0 + 1.1) * 1.2);
+      float b2 = 0.5 + 0.5 * sin(lat * 57.0 + 0.6);
+      vec3 col = mix(vec3(0.72, 0.58, 0.41), vec3(0.98, 0.89, 0.71), 0.25 + 0.5 * b + 0.2 * b2);
+      col = mix(col, vec3(0.8, 0.7, 0.56), smoothstep(0.72, 0.98, abs(lat)));
+      float ndl = dot(n, uLightV);
+      float diff = smoothstep(-0.3, 0.9, ndl);
+      float mu = max(dot(n, v), 0.0);
+      vec3 c = col * (0.035 + 0.95 * diff) * (0.55 + 0.45 * pow(mu, 0.5));
+      c += vec3(1.0, 0.82, 0.6) * pow(1.0 - mu, 3.0) * 0.26 * diff;   // a thin lit limb
+      gl_FragColor = vec4(c, uOpacity);
+    }
+  `,
+  transparent: true, depthWrite: false, depthTest: true, blending: THREE.NormalBlending,
+});
+const planet = new THREE.Mesh(new THREE.SphereGeometry(R_SAT, 64, 40), satMat);
+planet.renderOrder = 6; planet.frustumCulled = false;
+planetGroup.add(planet);
+const haloGeo = new THREE.BufferGeometry();
+attr(haloGeo, 'position', new Float32Array(6), 3);
+attr(haloGeo, 'aSize', new Float32Array([R_SAT * 6.5, R_SAT * 2.7]), 1);
+attr(haloGeo, 'aAlpha', new Float32Array([0.2, 0.3]), 1);
+attr(haloGeo, 'aColor', new Float32Array([1, 0.8, 0.6, 0.95, 0.8, 0.62]), 3);
+attr(haloGeo, 'aPhase', new Float32Array([0.2, 0.7]), 1);
+attr(haloGeo, 'aGroup', new Float32Array([5, 5]), 1);
+const halo = new THREE.Points(haloGeo, pointsMaterial({ twinkle: 0.05, atten: 1, ref: 5 }));
+halo.frustumCulled = false; halo.renderOrder = 5;
+planetGroup.add(halo);
+planetGroup.visible = false; ringGroup.visible = false;
+// rings tilted ~25 degrees open toward the viewer, with a slight roll
+const Q_SAT = new THREE.Quaternion().setFromEuler(new THREE.Euler(25 * DEG, 0, -13 * DEG, 'ZXY'));
+
+/* =====================================================================
+   The Sun behind the thumb: a soft warm glow with faint rays, only while the thumb has the stage
+   ===================================================================== */
+const sunMat = new THREE.ShaderMaterial({
+  uniforms: { uOpacity: { value: 0 }, uRot: { value: 0 } },
+  vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    varying vec2 vUv; uniform float uOpacity, uRot;
+    void main() {
+      vec2 p = vUv * 2.0 - 1.0; float r = length(p);
+      float glow = exp(-r * r * 7.0) * 0.42 + exp(-r * 3.4) * 0.1;
+      float a = atan(p.y, p.x) + uRot;
+      float rays = pow(0.5 + 0.5 * cos(a * 12.0), 16.0) * smoothstep(0.1, 0.28, r) * (1.0 - smoothstep(0.3, 0.98, r));
+      rays += 0.55 * pow(0.5 + 0.5 * cos(a * 12.0 + 3.14159), 34.0) * smoothstep(0.1, 0.22, r) * (1.0 - smoothstep(0.22, 0.62, r));
+      vec3 c = vec3(1.0, 0.7, 0.42) * glow + vec3(1.0, 0.8, 0.56) * rays * 0.2;
+      gl_FragColor = vec4(c * uOpacity * (1.0 - smoothstep(0.86, 1.0, r)), 1.0);
+    }
+  `,
+  ...additive, depthTest: false,
+});
+const sunDisc = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), sunMat);
+sunDisc.renderOrder = 0; sunDisc.frustumCulled = false; sunDisc.visible = false;
+scene.add(sunDisc);
+
+/* =====================================================================
+   The vignette, drawn in WebGL with the same two gradients v1 painted as a CSS layer, so the cards (drawn after it)
+   are never darkened by it
+   ===================================================================== */
+const vigMat = new THREE.ShaderMaterial({
+  uniforms: { uRes: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: /* glsl */`void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform vec2 uRes;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec2 q = gl_FragCoord.xy / uRes; q.y = 1.0 - q.y;               // CSS orientation, y down
+      float d = length(vec2((q.x - 0.5) / 1.18, (q.y - 0.44) / 0.82));
+      vec4 p1 = vec4(vec3(2.0, 1.0, 4.0) / 255.0 * 0.5, 0.5), p2 = vec4(0.0, 0.0, 0.0, 0.9);   // premultiplied stops
+      vec4 rad = d < 0.34 ? vec4(0.0) : d < 0.64 ? mix(vec4(0.0), p1, (d - 0.34) / 0.3) : mix(p1, p2, clamp((d - 0.64) / 0.36, 0.0, 1.0));
+      float lin = q.y < 0.18 ? 0.55 * (1.0 - q.y / 0.18) : q.y < 0.76 ? 0.0 : 0.6 * (q.y - 0.76) / 0.24;
+      vec4 o = vec4(0.0, 0.0, 0.0, lin) + rad * (1.0 - lin);              // the linear layer sits on top, as in CSS
+      o.a = clamp(o.a + (hash(gl_FragCoord.xy) - 0.5) * (1.2 / 255.0), 0.0, 1.0);
+      gl_FragColor = o;
+    }
+  `,
+  transparent: true, depthTest: false, depthWrite: false,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+});
+const vignette = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), vigMat);
+vignette.frustumCulled = false; vignette.renderOrder = 1000;
+scene.add(vignette);
+
+/* =====================================================================
+   The cards (from the Rose Gold Deck prototype: same geometry, engraved metal back, edge, placeholder faces,
+   the collision-free cylinder fan and the flip spring). They live in their own scene, in the deck's own units and
+   light rig, drawn after the sky and the hand with the depth cleared, so the hand stays behind them.
+   ===================================================================== */
+const CW = 1, CH = 1.72, CR = 0.075;
+function roundedRect(w, h, r) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+const cardShape = roundedRect(CW, CH, CR);
+const faceGeo = new THREE.ShapeGeometry(cardShape, 10);
+{
+  const p = faceGeo.attributes.position, uv = faceGeo.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + CW / 2) / CW, (p.getY(i) + CH / 2) / CH);
+  uv.needsUpdate = true;
+}
+const edgeGeo = new THREE.ExtrudeGeometry(cardShape, { depth: 0.008, bevelEnabled: false, curveSegments: 10 });
+edgeGeo.translate(0, 0, -0.004);
+const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+function canvas2d(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
+
+function drawBackPattern(g, w, h, line, base) {
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  g.strokeStyle = line; g.fillStyle = line; g.lineCap = 'round';
+  // fine guilloche lattice
+  g.globalAlpha = 0.35; g.lineWidth = 1;
+  for (let k = -h; k < w + h; k += 14) {
+    g.beginPath(); g.moveTo(k, 0); g.lineTo(k - h * 0.58, h); g.stroke();
+    g.beginPath(); g.moveTo(k, 0); g.lineTo(k + h * 0.58, h); g.stroke();
+  }
+  g.globalAlpha = 1;
+  // borders
+  const inset = (m, lw) => { g.lineWidth = lw; g.strokeRect(m, m, w - 2 * m, h - 2 * m); };
+  inset(18, 3); inset(30, 1.5);
+  // central sigil
+  const cx = w / 2, cy = h / 2;
+  g.fillStyle = base; g.beginPath(); g.arc(cx, cy, 168, 0, Math.PI * 2); g.fill();
+  g.fillStyle = line;
+  const ring = (r, lw) => { g.lineWidth = lw; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke(); };
+  ring(166, 3); ring(150, 1.5); ring(112, 2); ring(40, 2);
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2, r = 158;
+    g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, i % 4 === 0 ? 3.2 : 1.6, 0, Math.PI * 2); g.fill();
+  }
+  const star = (pts, ro, ri, rot, lw) => {
+    g.lineWidth = lw; g.beginPath();
+    for (let i = 0; i <= pts * 2; i++) {
+      const a = rot + (i / (pts * 2)) * Math.PI * 2, r = i % 2 ? ri : ro;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+  };
+  star(12, 108, 62, -Math.PI / 2, 2);
+  star(6, 92, 46, -Math.PI / 2, 1.5);
+  // crescent
+  g.beginPath(); g.arc(cx, cy, 26, 0, Math.PI * 2); g.fill();
+  g.fillStyle = base; g.beginPath(); g.arc(cx + 11, cy - 6, 23, 0, Math.PI * 2); g.fill();
+  // corner pips
+  g.fillStyle = line;
+  [[60, 60], [w - 60, 60], [60, h - 60], [w - 60, h - 60]].forEach(([x, y]) => {
+    g.beginPath(); g.moveTo(x, y - 12); g.lineTo(x + 8, y); g.lineTo(x, y + 12); g.lineTo(x - 8, y); g.closePath(); g.fill();
+  });
+}
+const BW = 512, BH = Math.round(512 * CH / CW);
+function backTextures() {
+  const [bc, bg] = canvas2d(BW, BH); drawBackPattern(bg, BW, BH, '#e6e6e6', '#7a7a7a');
+  const [rc, rg] = canvas2d(BW, BH); drawBackPattern(rg, BW, BH, '#5a5a5a', '#2c2c2c');
+  const [cc, cg] = canvas2d(BW, BH);
+  const bump = new THREE.CanvasTexture(bc), rough = new THREE.CanvasTexture(rc), color = new THREE.CanvasTexture(cc);
+  color.colorSpace = THREE.SRGBColorSpace;
+  [bump, rough, color].forEach(t => { t.anisotropy = maxAniso; });
+  return { bump, rough, color, colorCtx: cg };
+}
+function drawGlyph(g, i, cx, cy, s, gold) {
+  g.strokeStyle = gold; g.fillStyle = gold; g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round';
+  const circle = (r, fill) => { g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); fill ? g.fill() : g.stroke(); };
+  const poly = (n, r, rot = -Math.PI / 2, inner = 0) => {
+    g.beginPath();
+    const steps = inner ? n * 2 : n;
+    for (let k = 0; k <= steps; k++) {
+      const a = rot + (k / steps) * Math.PI * 2, rr = inner && k % 2 ? inner : r;
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      k ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+  };
+  switch (i) {
+    case 0: circle(s); circle(s * 0.08, true); break;
+    case 10: circle(s); circle(s * 0.55); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.55, cy + Math.sin(a) * s * 0.55); g.lineTo(cx + Math.cos(a) * s, cy + Math.sin(a) * s); g.stroke(); } break;
+    case 16: g.strokeRect(cx - s * 0.28, cy - s * 0.9, s * 0.56, s * 1.8); g.beginPath(); g.moveTo(cx + s * 0.75, cy - s); g.lineTo(cx + s * 0.1, cy - s * 0.15); g.lineTo(cx + s * 0.45, cy - s * 0.1); g.lineTo(cx - s * 0.3, cy + s * 0.8); g.stroke(); break;
+    case 17: poly(8, s, -Math.PI / 2, s * 0.38); circle(s * 0.12, true); break;
+    case 18: g.beginPath(); g.arc(cx, cy, s * 0.8, 0, Math.PI * 2); g.fill(); g.fillStyle = '#160f1a'; g.beginPath(); g.arc(cx + s * 0.35, cy - s * 0.18, s * 0.72, 0, Math.PI * 2); g.fill(); break;
+    case 19: circle(s * 0.45); for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8, r2 = k % 2 ? s * 0.8 : s; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.58, cy + Math.sin(a) * s * 0.58); g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke(); } break;
+    case 21: g.beginPath(); g.ellipse(cx, cy, s * 0.62, s, 0, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.ellipse(cx, cy, s * 0.48, s * 0.86, 0, 0, Math.PI * 2); g.stroke(); break;
+    case 13: g.beginPath(); g.moveTo(cx, cy - s); g.lineTo(cx, cy + s); g.stroke(); g.beginPath(); g.arc(cx, cy - s * 0.35, s * 0.38, Math.PI, 0); g.stroke(); break;
+    default: {
+      const pts = 3 + (i % 6);
+      poly(pts, s, -Math.PI / 2, s * 0.45);
+      circle(s * 0.28);
+    }
+  }
+}
+function faceTexture(i) {
+  const FW = 512, FH = Math.round(512 * CH / CW);
+  const [c, g] = canvas2d(FW, FH);
+  const grd = g.createLinearGradient(0, 0, 0, FH);
+  grd.addColorStop(0, '#1d1421'); grd.addColorStop(1, '#0e0b12');
+  g.fillStyle = grd; g.fillRect(0, 0, FW, FH);
+  for (let k = 0; k < 1400; k++) { g.fillStyle = `rgba(255,230,220,${Math.random() * 0.05})`; g.fillRect(Math.random() * FW, Math.random() * FH, 1, 1); }
+  const gold = '#dcb48f';
+  g.strokeStyle = gold; g.lineWidth = 3; g.strokeRect(20, 20, FW - 40, FH - 40);
+  g.lineWidth = 1; g.strokeRect(32, 32, FW - 64, FH - 64);
+  g.fillStyle = gold; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '500 64px "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif';
+  g.fillText(MAJORS[i][0], FW / 2, 118);
+  g.lineWidth = 1; g.beginPath(); g.moveTo(FW / 2 - 40, 168); g.lineTo(FW / 2 + 40, 168); g.stroke();
+  drawGlyph(g, i, FW / 2, FH / 2 + 10, 120, gold);
+  g.font = '500 22px "IBM Plex Mono", ui-monospace, Menlo, monospace';
+  const name = MAJORS[i][1].toUpperCase();
+  if ('letterSpacing' in g) g.letterSpacing = '6px';
+  g.fillText(name, FW / 2, FH - 112);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
+  return t;
+}
+
+// card back colours: the deck prototype's saved choice when there is one (same origin), else this default
+const PRESETS = {
+  blackred:   { name: 'Black + red',        metal: { h: 0, s: 0, l: 9 },     etch: { h: 356, s: 82, l: 44 } },
+  midnight:   { name: 'Midnight navy',      metal: { h: 220, s: 16, l: 36 }, etch: { h: 236, s: 19, l: 58 } },
+  blackti:    { name: 'Black titanium',     metal: { h: 240, s: 4, l: 16 },  etch: { h: 220, s: 6, l: 64 } },
+  desert:     { name: 'Desert titanium',    metal: { h: 30, s: 24, l: 60 },  etch: { h: 24, s: 30, l: 36 } },
+  ember:      { name: 'Obsidian ember',     metal: { h: 20, s: 10, l: 8 },   etch: { h: 20, s: 92, l: 54 } },
+  deepblue:   { name: 'Deep blue',          metal: { h: 222, s: 45, l: 22 }, etch: { h: 210, s: 28, l: 72 } },
+  skynight:   { name: 'Night sky',          metal: { h: 225, s: 28, l: 12 }, etch: { h: 203, s: 60, l: 72 } },
+  starlight:  { name: 'Starlight',          metal: { h: 40, s: 26, l: 80 },  etch: { h: 35, s: 30, l: 50 } },
+  amethyst:   { name: 'Amethyst',           metal: { h: 275, s: 34, l: 15 }, etch: { h: 285, s: 42, l: 72 } },
+  bloodmoon:  { name: 'Blood moon',         metal: { h: 350, s: 55, l: 16 }, etch: { h: 12, s: 62, l: 58 } },
+  emerald:    { name: 'Emerald occult',     metal: { h: 162, s: 45, l: 12 }, etch: { h: 44, s: 62, l: 58 } },
+  oxblood:    { name: 'Oxblood + gold',     metal: { h: 355, s: 45, l: 21 }, etch: { h: 42, s: 66, l: 56 } },
+  plum:       { name: 'Plum noir',          metal: { h: 320, s: 26, l: 14 }, etch: { h: 345, s: 55, l: 74 } },
+  blackgold:  { name: 'Black + gold',       metal: { h: 0, s: 0, l: 9 },     etch: { h: 40, s: 72, l: 55 } },
+  rose:       { name: 'Rose gold',          metal: { h: 14, s: 66, l: 72 },  etch: { h: 16, s: 72, l: 82 } },
+  gunmetal:   { name: 'Gunmetal + silver',  metal: { h: 220, s: 8, l: 26 },  etch: { h: 220, s: 6, l: 80 } },
+};
+const DEFAULT_BACK = 'rose';            // the one constant that picks the card backs (any key of PRESETS)
+function loadBackColors() {
+  const p = PRESETS[DEFAULT_BACK] || PRESETS.rose;
+  return { metal: { ...p.metal }, etch: { ...p.etch }, from: DEFAULT_BACK };
+}
+const backColors = loadBackColors();
+const hsl = c => `hsl(${c.h}, ${c.s}%, ${c.l}%)`;
+const { bump: backBump, rough: backRough, color: backColorTex, colorCtx: backCtx } = backTextures();
+drawBackPattern(backCtx, BW, BH, hsl(backColors.etch), hsl(backColors.metal));
+backColorTex.needsUpdate = true;
+// one back material, one edge material and one blank face shared by every card (a face is drawn only for the chosen one)
+const backMat = new THREE.MeshPhysicalMaterial({
+  color: 0xffffff, map: backColorTex, metalness: 1, roughness: 1, roughnessMap: backRough,
+  bumpMap: backBump, bumpScale: 1.6, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.15,
+});
+const edgeMat = new THREE.MeshPhysicalMaterial({ metalness: 1, roughness: 0.25 });
+edgeMat.color.setStyle(hsl({ h: backColors.metal.h, s: backColors.metal.s, l: Math.min(100, backColors.metal.l + 6) }));
+const blankFaceMat = new THREE.MeshStandardMaterial({ color: 0x150e19, roughness: 0.7, metalness: 0 });
+
+const cardScene = new THREE.Scene();
+cardScene.environment = ENV;
+cardScene.environmentIntensity = 0.85;
+const cardCam = new THREE.PerspectiveCamera(FOV, 1, 0.1, 400);     // fixed at the origin, looking down -z
+cardScene.add(cardCam);
+cardScene.add(new THREE.AmbientLight(0xffffff, 0.15));
+const fanRoot = new THREE.Group(); cardScene.add(fanRoot);          // the deck's world: the fan is laid out in here
+const cardKey = new THREE.PointLight(0xffe6d8, 46, 0, 2); fanRoot.add(cardKey);
+const cardRimT = new THREE.Object3D(); fanRoot.add(cardRimT);
+const cardRim = new THREE.DirectionalLight(0x9a7bff, 0.9); cardRim.position.set(-4, 3, -3); cardRim.target = cardRimT; fanRoot.add(cardRim);
+const sweep = new THREE.PointLight(0xfff3ea, 0, 2.2, 2); cardCam.add(sweep);
+
+const FAN_N = 21;                                    // the 22 Majors minus the thumb card
+const cards = [], pickables = [];
+for (let s = 0; s < FAN_N; s++) {
+  const grp = new THREE.Group();
+  const front = new THREE.Mesh(faceGeo, blankFaceMat); front.position.z = 0.0045;
+  const back = new THREE.Mesh(faceGeo, backMat); back.rotation.y = Math.PI; back.position.z = -0.0045;
+  const edge = new THREE.Mesh(edgeGeo, edgeMat);
+  grp.add(front, back, edge);
+  [front, back, edge].forEach(m => { m.userData.slot = s; pickables.push(m); });
+  grp.visible = false;
+  cardScene.add(grp);
+  cards.push({ slot: s, grp, front, lift: 0, flip: Math.PI, flipVel: 0, flipTarget: Math.PI, state: 'off', leaveAt: 0 });
+}
+
+/* ---------- the sealed deal ----------
+   A stand-in for the server's sealed deal: in the app the order is shuffled and sealed on the server, and the
+   client only ever learns the card at the position the user picked. Here it is made once per run, in the browser,
+   with crypto.getRandomValues (Fisher-Yates with rejection sampling, so every order is equally likely). Never
+   Math.random. The user picks a POSITION in the fan; the card at that position in the sealed order is theirs. */
+function uniformInt(n) {
+  const lim = Math.floor(0x100000000 / n) * n, buf = new Uint32Array(1);
+  for (;;) { crypto.getRandomValues(buf); if (buf[0] < lim) return buf[0] % n; }
+}
+function sealDeal(thumbCardIndex) {
+  const order = MAJORS.map((_, i) => i).filter(i => i !== thumbCardIndex);
+  for (let k = order.length - 1; k > 0; k--) { const j = uniformInt(k + 1); [order[k], order[j]] = [order[j], order[k]]; }
+  return Object.freeze(order);
+}
+let sealed = null;
+
+/* ---------- the fan (deck geometry) ----------
+   Cards sit tangent to an upright cylinder whose radius steps out by STEP per card, so each card lies on top of
+   the one to its left and no two cards cross where they overlap (re-checked numerically for 21 cards, lifted
+   cards included). The pointer tilts the whole fan as one rigid body, which keeps that spacing. */
+const TWIST = 0.24, STEP = 0.03, LIFT_OUT = 0.25;
+const FAN = { fanR: 3.0, maxA: 0.52, Df: 16, L: new THREE.Vector3(0, -0.05, 0) };
+const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), q3 = new THREE.Quaternion(), q4 = new THREE.Quaternion();
+const fanTilt = new THREE.Quaternion();
+const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1);
+function fanTransform(slot, outPos, outQuat, ptr, lift = 0, bob = 0) {
+  const { fanR, maxA, L } = FAN, N = FAN_N;
+  const t = N > 1 ? (slot / (N - 1)) * 2 - 1 : 0;
+  const a = t * maxA;
+  const pivotY = 0.15 - fanR;
+  const Rc = Math.sin(maxA) * fanR / TWIST;
+  const reach = fanR + 0.22 * lift;
+  const phi = Math.sin(a) * reach / Rc;
+  const r = Rc + (slot - (N - 1) / 2) * STEP + LIFT_OUT * lift;
+  outPos.set(r * Math.sin(phi), pivotY + Math.cos(a) * reach + bob, r * Math.cos(phi) - Rc);
+  q1.setFromAxisAngle(AY, phi); q2.setFromAxisAngle(AZ, -a); q3.setFromAxisAngle(AY, Math.PI);
+  outQuat.copy(q1).multiply(q2).multiply(q3);
+  fanTilt.setFromAxisAngle(AY, ptr.x * 0.12).multiply(q4.setFromAxisAngle(AX, 0.1 - ptr.y * 0.1));
+  outPos.sub(L).applyQuaternion(fanTilt).add(L);
+  outQuat.premultiply(fanTilt);
+  return a;
+}
+// the fan, then mapped out of the deck's world into the card camera's
+function fanPose(slot, outPos, outQuat, ptr, lift, bob) {
+  fanTransform(slot, outPos, outQuat, ptr, lift, bob);
+  outPos.applyMatrix4(fanRoot.matrix);
+  outQuat.premultiply(fanRoot.quaternion);
+}
+
+/* =====================================================================
+   Framing and layout (depend on the screen)
+   ===================================================================== */
+let W = 1, H = 1, aspect = 1;
+// extents of the THUMB figure around the camera's focus point, in scene units at that depth (measured at boot)
+const FIG = { up: 0.48, down: 0.92, left: 0.25, right: 0.37 };
+// the open hand as the end shot sees it, in scene units around the pivot (measured at boot)
+const OPEN = { up: 0.96, down: 0.86, width: 1.6, handCxRel: 0.1, tipAboveSat: 0.85, ringTipY: 0.8, ringLen: 0.85 };
+const framing = {
+  dAll: 6, dThumb: 2, shiftAll: 0.06, shiftThumbY: 0.26, shiftThumbX: 0, arcK: 1,
+  dSlide: 4, sySlide: 0, dZoom: 2, syZoom: 0, dChoose: 5, sxChoose: 0, syChoose: 0, dPick: 5, syPick: 0, dEnd: 6, syEnd: 0,
+};
+// screen layout in CSS px (rails, fan, the lifted card) and card-camera depths
+const LAY = { top: 64, bottom: 80, capBottom: 78, fanTop: 500, fanBottom: 700, fanL: 16, fanR: 374, liftX: 0, liftY: -0.2, liftZ: 6, floatZ: 7.8, satChooseY: 400, satPickY: 160 };
+const FLOAT_H = 0.27, FLOAT_GAP = 0.075;          // the chosen card, floating above the ring fingertip (scene units)
+const dAtPpu = p => H / (2 * TAN * p);
+const ndcY = py => 1 - 2 * py / H;
+const _fp = new THREE.Vector3(), _fq = new THREE.Quaternion(), _fc = new THREE.Vector3();
+const FAN_C = new THREE.Vector3(), FAN_U = new THREE.Vector3(), FAN_DIR = new THREE.Vector3();
+function placeFanRoot(Df, nx, ny) {
+  // The deck's camera sat at (0, 0.25, D) looking at the fan; put the card camera exactly there in the fan's
+  // frame (so the fan is seen exactly as in the deck), with the fan's centre on the ray through (nx, ny).
+  const L = FAN.L;
+  FAN_C.set(0, 0.25, Df);
+  FAN_U.copy(FAN_C).sub(L);
+  const dist = FAN_U.length(); FAN_U.normalize();
+  FAN_DIR.set(nx * TAN * aspect, ny * TAN, -1).normalize();
+  fanRoot.quaternion.setFromUnitVectors(FAN_U, _fc.copy(FAN_DIR).negate());
+  fanRoot.position.copy(FAN_DIR).multiplyScalar(dist).sub(_fc.copy(L).applyQuaternion(fanRoot.quaternion));
+  fanRoot.updateMatrix(); fanRoot.updateMatrixWorld(true);
+}
+function fanBBox() {
+  // every card, resting and lifted, at the pointer's extremes: the fan must never leave this box
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  cardCam.updateMatrixWorld();
+  for (const p of [[0, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]) for (let s = 0; s < FAN_N; s++) for (const lift of [0, 1]) {
+    fanPose(s, _fp, _fq, { x: p[0], y: p[1] }, lift, 0);
+    for (const [cx, cy] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
+      _fc.set(cx * CW, cy * CH, 0).applyQuaternion(_fq).add(_fp).project(cardCam);
+      const x = (_fc.x * 0.5 + 0.5) * W, y = (-_fc.y * 0.5 + 0.5) * H;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+  }
+  return { x0, x1, y0, y1 };
+}
+function layoutFan(portrait, short) {
+  FAN.fanR = portrait ? 3.0 : 3.6; FAN.maxA = portrait ? 0.52 : 0.62;     // the deck's own two layouts
+  const capH = W < 480 ? 62 : 40;                                         // the prompt under the fan (two lines on a phone)
+  // a short landscape screen has no height to stack hand and fan: the prompt keeps v1's left column, the hand and
+  // Saturn take the middle, the fan the right
+  const bottom = short ? H - LAY.bottom - 8 : H - LAY.capBottom - capH - 10;
+  const reg = short ? [0.58 * W, W - 16] : [16, W - 16];
+  const hBudget = (short ? 0.62 : portrait ? 0.29 : 0.34) * H;
+  let Df = 16, nx = (reg[0] + reg[1]) / W - 1, ny = -0.5;
+  for (let it = 0; it < 4; it++) {
+    placeFanRoot(Df, nx, ny);
+    let b = fanBBox();
+    Df *= Math.max((b.x1 - b.x0) / (reg[1] - reg[0]), (b.y1 - b.y0) / hBudget);
+    placeFanRoot(Df, nx, ny);
+    b = fanBBox();
+    ny += ndcY(bottom) - ndcY(b.y1);
+    nx += ((reg[0] + reg[1]) / 2 - (b.x0 + b.x1) / 2) * 2 / W;
+  }
+  placeFanRoot(Df, nx, ny);
+  const b = fanBBox();
+  FAN.Df = Df; FAN.nx = nx; FAN.ny = ny;
+  LAY.fanTop = b.y0; LAY.fanBottom = b.y1; LAY.fanL = b.x0; LAY.fanR = b.x1;
+}
+function resize() {
+  W = stage.clientWidth || innerWidth; H = stage.clientHeight || innerHeight;
+  renderer.setSize(W, H, false);
+  aspect = W / H; camera.aspect = aspect;
+  cardCam.aspect = aspect; cardCam.updateProjectionMatrix();
+  U.uScale.value = (H * DPR) / (2 * TAN);
+  bgMat.uniforms.uAspect.value = aspect;
+  renderer.getDrawingBufferSize(vigMat.uniforms.uRes.value);
+  const portrait = aspect < 0.8;
+  const side = aspect > 1.15;                       // landscape: the sheet sits on the right, the thumb on the left
+  // a phone on its side, or a short laptop window: no room for the caption under the hand, so it moves to the
+  // pinky-side column (900x640 and taller keep it centred below)
+  const short = side && H < 620;
+  document.documentElement.classList.toggle('wide', side);
+  document.documentElement.classList.toggle('short', short);
+  measureTags();
+  LAY.top = document.querySelector('.rail.top').getBoundingClientRect().bottom + 8;
+  LAY.bottom = H - document.querySelector('.rail.bottom').getBoundingClientRect().top + 8;
+  LAY.capBottom = parseFloat(getComputedStyle(document.getElementById('caption')).bottom) || 78;
+  // overview (as v1)
+  const handH = 2.25, handW = 1.42;
+  framing.dAll = Math.max(handH / (2 * TAN) * (portrait ? 1.22 : 1.55), handW / (2 * TAN * aspect) * 1.14);
+  framing.shiftAll = portrait ? 0.1 : 0.12;
+  // Thumb close-up: fit the whole thumbs-up (thumb tip to the heel of the fist, measured at boot as FIG) into the
+  // free band: below the thumb's header (eyebrow, title and the Sun line, which sits above the tip) and above the
+  // sheet (or left of it).
+  framing.shiftThumbX = portrait ? -0.12 : side ? -0.36 : 0;
+  const sheetH = askForm.offsetHeight || 252, sheetW = Math.min(360, W - 32);
+  const bandTop = LAY.top + (tagT.hMax || 100) + 40, bandBot = side ? H - 64 : H - 68 - sheetH - 14;
+  const lookX = W / 2 * (1 + framing.shiftThumbX);
+  const rightEdge = side ? W - Math.max(0.07 * W, 16) - sheetW - 16 : W - 16;
+  const fitPx = Math.max(40, Math.min(
+    (bandBot - bandTop) / (FIG.up + FIG.down),
+    (rightEdge - lookX) / FIG.right, (lookX - 16) / FIG.left));             // px per world unit at the thumb
+  framing.dThumb = Math.max(Math.max(1.75 / (2 * TAN), 0.95 / (2 * TAN * aspect)), H / (2 * TAN * fitPx));
+  const px = H / (2 * TAN * framing.dThumb);
+  const lookY = (bandTop + bandBot) / 2 - (FIG.down - FIG.up) / 2 * px;     // centre the figure in the band
+  framing.shiftThumbY = 1 - 2 * lookY / H;
+  framing.arcK = portrait ? 0.3 : 1;              // the camera's sideways arc on the pull-back; a narrow screen has no room for it
+  // ---- the ring beat ----
+  const capLong = W < 480 ? 116 : short ? 0 : 92;           // the ring line runs to four lines on a phone
+  const headR = (tagR.hHead || 46) + 34;                    // the ring header and its leader
+  const zTop = LAY.top + headR, zBot = H - LAY.capBottom - capLong - 14;
+  // zoom: Saturn's rings fill about three quarters of a phone's width (or 60% of the free height)
+  const ppuZoom = Math.min(0.74 * W, 0.6 * (zBot - zTop)) / (2 * RING_OUT) * (reduceMotion ? 0.8 : 1);
+  framing.dZoom = dAtPpu(ppuZoom);
+  framing.syZoom = ndcY((zTop + zBot) / 2 + 10);
+  // slide: about half that magnification, so the dolly in at the base is a real push in
+  const ppuSlide = Math.min(ppuZoom / (reduceMotion ? 1.45 : 1.95), (zBot - zTop) / (OPEN.ringLen + 0.18));
+  framing.dSlide = dAtPpu(ppuSlide);
+  framing.sySlide = ndcY((zTop + zBot) / 2);
+  // ---- the fan ----
+  layoutFan(portrait, short);
+  // choose: the hand and Saturn above the fan, Saturn just clear of it (short landscape: side by side)
+  const ringsHalf = Math.max(RING_OUT * 0.47, R_SAT);
+  let ppuChoose, liftBot, liftTop;
+  if (short) {
+    const colL = 0.33 * W, colR = 0.57 * W;
+    ppuChoose = Math.max(40, Math.min(ppuSlide, (colR - colL) / (OPEN.width * 0.95), (H - LAY.bottom - zTop - 6) / (OPEN.tipAboveSat + 0.42)));
+    LAY.satChooseY = zTop + 6 + OPEN.tipAboveSat * ppuChoose;
+    framing.sxChoose = ((colL + colR) / W - 1) - 2 * OPEN.handCxRel * ppuChoose / W;
+  } else {
+    ppuChoose = Math.max(60, Math.min(ppuSlide, (LAY.fanTop - 20 - zTop) / (OPEN.tipAboveSat + ringsHalf), (W - 24) / (OPEN.width * 0.95)));
+    LAY.satChooseY = LAY.fanTop - 20 - ringsHalf * ppuChoose;
+    framing.sxChoose = -2 * OPEN.handCxRel * ppuChoose / W;
+  }
+  framing.dChoose = dAtPpu(ppuChoose);
+  framing.syChoose = ndcY(LAY.satChooseY);
+  // pick: Saturn rises to just under its header so the lifted card has the room below (beside it on a short screen)
+  const ppuPick = short ? ppuChoose : ppuChoose * 1.08;
+  framing.dPick = dAtPpu(ppuPick);
+  LAY.satPickY = short ? LAY.satChooseY : zTop + ringsHalf * ppuPick + 4;
+  framing.syPick = ndcY(LAY.satPickY);
+  // the lifted card: as large as fits between Saturn and the card's name line
+  if (short) { liftBot = H - LAY.bottom - 6; liftTop = LAY.top + 4; }
+  else { liftBot = H - LAY.capBottom - 50; liftTop = LAY.satPickY + ringsHalf * ppuPick + 18; }
+  const cardPx = Math.max(150, Math.min(0.62 * H, liftBot - liftTop, (W - 56) * CH / CW));
+  LAY.liftZ = CH / (2 * TAN * cardPx / H);
+  LAY.liftY = ndcY(liftBot - cardPx / 2);
+  LAY.liftX = short ? FAN.nx : 0;
+  LAY.liftPx = cardPx;
+  LAY.floatZ = LAY.liftZ * 1.3;
+  // end: the whole hand, lowered so both headers and the chosen card fit above it
+  const ppuAll = H / (2 * TAN * framing.dAll);
+  const A = LAY.top + (tagR.hEnd || 84) + 22;
+  const need = FLOAT_H + FLOAT_GAP + 0.03 + OPEN.ringTipY + OPEN.down;
+  const ppuEnd = Math.max(60, Math.min(ppuAll, (H - LAY.bottom - A) / need));
+  const free = Math.max(0, H - LAY.bottom - A - need * ppuEnd);
+  framing.dEnd = dAtPpu(ppuEnd);
+  framing.syEnd = ndcY(A + free * 0.36 + (FLOAT_H + FLOAT_GAP + 0.03 + OPEN.ringTipY) * ppuEnd);
+  buildConstellations();
+}
+
+/* =====================================================================
+   The sequence
+   ===================================================================== */
 const MA = reduceMotion ? 0.6 : 1;        // motion durations, phase A
 const HA = reduceMotion ? 0.8 : 1;        // holds, phase A
 const TA = (() => {
@@ -1132,6 +1725,7 @@ const TA = (() => {
   o.turn = [c, 1.8 * MA]; c += 1.8 * MA;   // turn to the back, into ONE
   c += 0.35 * HA;
   o.zoom = [c, 2.2 * MA]; c += 2.2 * MA;   // push to the thumb, into THUMB
+  o.tag = [o.zoom[0] + o.zoom[1] * 0.72, 0.9 * MA];   // the thumb's header arrives as the camera settles on it
   o.end = c + 0.6 * HA;                    // settle, then the sheet
   return o;
 })();
@@ -1140,15 +1734,26 @@ const TB = (() => {
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return {
     label: w(0.15, 0.9), math: w(0.5, 0.9), pulse: s(0.1),
-    out: w(3.8, 3.6), open: w(4.0, 3.0), labelDip: w(3.85, 0.4), labelRet: w(6.7, 0.6),
-    mathOff: w(5.7, 0.8), cap1: [s(6.4), s(9.7)],
-    labelOff: w(9.7, 0.8),
-    hi: w(10.0, 1.0), push: w(10.0, 2.4), cap2: [s(10.4), s(19.9)],
-    ringIn: w(11.0, 0.5), slide: w(11.0, 2.5),
-    fade: w(14.0, 1.2), grow: w(14.1, 2.7), planet: w(14.6, 2.2),
-    planetOut: w(19.3, 1.5), ringOut: w(19.3, 1.5), unfade: w(19.7, 1.3), hiOff: w(19.7, 1.2), pull: w(19.5, 2.4),
-    labelBack: w(21.2, 0.9),
-    end: s(22.2),
+    out: w(3.8, 3.6), open: w(4.0, 3.0),
+    mathOff: w(5.7, 0.8), cap1: [s(6.4), s(9.8)],
+    thumbOff: w(9.6, 0.8),
+    ring0: s(10.0),                                   // the ring beat starts here (?r= counts from it)
+    hi: w(10.0, 1.0), push: w(10.0, 2.6), ringTag: w(10.7, 0.9), cap2: [s(10.9), s(20.2)],
+    bandIn: w(11.6, 0.7), slide: w(11.6, 4.4),        // the band slides slowly from the fingertip down to the base
+    zoom: w(15.7, 2.9),                               // the camera dollies in on the ring
+    dis: [s(16.1), s(1.9)],                           // the band comes apart cell by cell; each cell's particle flies as it goes
+    tilt: w(16.2, 2.4),                               // ...and the whole system tilts into Saturn's ring plane
+    fade: w(16.3, 1.6),                               // the ring finger fades away
+    planet: w(16.9, 2.0), rings: w(17.6, 1.8),        // Saturn fades in where the finger was; the rings fill in
+    choose: w(20.2, 2.4), cap3: s(20.6), deal: s(20.9),
+    end: s(22.6),
+  };
+})();
+const TC = (() => {
+  const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  return {
+    capOff: s(1.7), satOut: w(0.2, 1.5), hiOff: w(0.5, 1.2), unfade: w(0.5, 1.6), cam: w(0.0, 2.9), float: w(0.05, 2.5),
+    ringCard: w(2.0, 0.8), thumbBack: w(2.3, 0.9), end: s(3.6),
   };
 })();
 const STAG_ONE = [0.28, 0, 0.02, 0.08, 0.14];      // thumb folds last
@@ -1158,9 +1763,9 @@ const STAG_OPEN = [0.1, 0, 0.06, 0.12, 0.18];      // the hand unfurls index to 
 const st = {
   pose: new Float32Array(NP), yaw: 0, pitch: 0, roll: 0,
   starsIn: 0, formT: -1, lines: 0,
-  dolly: 1, arcX: 0, wThumb: 0, wRing: 0,
-  label: 0, math: 0, caption: 0, pulse: 0,
-  hi: 0, ringA: 0, slide: 0, grow: 0, fingerA: 1, planetA: 0, bandsA: 0,
+  dolly: 1, arcX: 0, wThumb: 0, wRing: 0, wZoom: 0, wChoose: 0, wPick: 0, wEnd: 0,
+  math: 0, caption: '', pulse: 0, tagT: 0, tagCard: 0, tagR: 0, tagRCard: 0, sun: 0,
+  hi: 0, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, fingerA: 1, planetA: 0, ringsA: 0, annA: 0, floatW: 0,
 };
 function blendPose(out, a, b, w, stag) {
   for (let k = 0; k < NP; k++) {
@@ -1169,7 +1774,11 @@ function blendPose(out, a, b, w, stag) {
   }
 }
 let ROT_T = { yaw: 2.3, pitch: -0.06, roll: 1.0 };   // refined from the THUMB pose at load
-
+function ringOff() {
+  st.wRing = st.wZoom = st.wChoose = st.wPick = st.wEnd = 0;
+  st.tagR = 0; st.tagRCard = 0;
+  st.hi = 0; st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0; st.fingerA = 1; st.planetA = 0; st.ringsA = 0; st.annA = 0; st.floatW = 0;
+}
 function evalA(t) {
   st.starsIn = segE(t, TA.stars, E.sine);
   st.formT = t - TA.form[0];
@@ -1184,9 +1793,10 @@ function evalA(t) {
   st.dolly = lerp(1.2, 1.0, segE(t, [0, TA.turn[0] + TA.turn[1]], E.sine));
   st.arcX = Math.sin(Math.PI * eT) * (reduceMotion ? 0.05 : 0.28);
   st.wThumb = E.quart(clamp01(wZoom));
-  st.wRing = 0;
-  st.label = 0; st.math = 0; st.caption = 0; st.pulse = 0;
-  st.hi = 0; st.ringA = 0; st.slide = 0; st.grow = 0; st.fingerA = 1; st.planetA = 0; st.bandsA = 0;
+  ringOff();
+  st.math = 0; st.caption = ''; st.pulse = 0;
+  st.tagT = segE(t, TA.tag, E.sine); st.tagCard = 0;
+  st.sun = st.tagT;
 }
 function evalB(t) {
   st.starsIn = 1; st.formT = 1e4; st.lines = 1;
@@ -1198,31 +1808,65 @@ function evalB(t) {
   st.dolly = 1;
   st.arcX = -Math.sin(Math.PI * eO) * (reduceMotion ? 0.04 : 0.22) * framing.arcK;
   st.wThumb = 1 - segE(t, TB.out, E.sine);
-  st.wRing = segE(t, TB.push, E.inOut) * (1 - segE(t, TB.pull, E.inOut));
-  // the label steps aside while the hand turns over, then returns beside the open thumb
-  const dip = segE(t, TB.labelDip, E.sine) * (1 - segE(t, TB.labelRet, E.sine));
-  st.label = Math.max(segE(t, TB.label) * (1 - segE(t, TB.labelOff)) * (1 - dip), segE(t, TB.labelBack));
+  st.sun = 1 - segE(t, TB.out, E.sine);
+  st.wRing = segE(t, TB.push, E.inOut);
+  st.wZoom = segE(t, TB.zoom, E.inOut);
+  st.wChoose = segE(t, TB.choose, E.inOut);
+  st.wPick = 0; st.wEnd = 0;
+  // the thumb's header stays with the thumb from the close-up through the pull-out
+  st.tagT = 1 - segE(t, TB.thumbOff, E.sine);
+  st.tagCard = segE(t, TB.label);
+  st.tagR = segE(t, TB.ringTag, E.sine); st.tagRCard = 0;
   st.math = segE(t, TB.math) * (1 - segE(t, TB.mathOff));
   st.pulse = t > TB.pulse ? Math.exp(-(t - TB.pulse) * 2.2) * Math.min(1, (t - TB.pulse) * 8) : 0;
-  st.caption = (t >= TB.cap1[0] && t < TB.cap1[1]) ? 1 : (t >= TB.cap2[0] && t < TB.cap2[1]) ? 2 : 0;
-  st.hi = segE(t, TB.hi) * (1 - segE(t, TB.hiOff));
+  st.caption = (t >= TB.cap1[0] && t < TB.cap1[1]) ? 'pull' : (t >= TB.cap2[0] && t < TB.cap2[1]) ? 'ring' : t >= TB.cap3 ? 'choose' : '';
+  st.hi = segE(t, TB.hi);
+  st.bandIn = segE(t, TB.bandIn, E.out);
   st.slide = segE(t, TB.slide, E.inOut);
-  st.ringA = segE(t, TB.ringIn, E.sine) * (1 - segE(t, TB.ringOut, E.sine));
-  st.grow = segE(t, TB.grow, E.inOut);
-  st.fingerA = clamp01(1 - segE(t, TB.fade, E.sine) + segE(t, TB.unfade, E.sine));
-  st.planetA = segE(t, TB.planet, E.sine) * (1 - segE(t, TB.planetOut, E.sine));
-  st.bandsA = Math.pow(st.grow, 1.6) * (1 - segE(t, TB.ringOut, E.sine));
+  st.disT = t - TB.dis[0];
+  st.tiltW = segE(t, TB.tilt, E.inOut);
+  st.fingerA = 1 - segE(t, TB.fade, E.sine);
+  st.planetA = segE(t, TB.planet, E.sine);
+  st.ringsA = 1;
+  st.annA = segE(t, TB.rings, E.sine);
+  st.floatW = 0;
+}
+function evalPick(force) {
+  st.wPick = force ?? E.inOut(clamp01(PK.t / (1.2 * MB)));
+  st.caption = PK.revealed ? 'card' : '';
+  st.tagRCard = 0;
+}
+function evalC(t) {
+  const out = segE(t, TC.satOut, E.sine);
+  st.planetA *= 1 - out; st.ringsA = 1 - out; st.annA *= 1 - out;
+  st.hi *= 1 - segE(t, TC.hiOff, E.sine);
+  st.fingerA = segE(t, TC.unfade, E.sine);
+  st.wEnd = segE(t, TC.cam, E.inOut);
+  st.floatW = segE(t, TC.float, E.inOut);
+  st.tagRCard = segE(t, TC.ringCard);
+  st.tagT = segE(t, TC.thumbBack, E.sine); st.tagCard = 1;
+  st.caption = t < TC.capOff ? 'card' : '';
+  st.sun = 0;
 }
 
-/* ---------- state machine ---------- */
-let phase = 'A', tA = 0, tB = 0, freeze = qs.has('freeze');
+/* ---------- state machine ----------
+   A (intro) -> await (name + birthday) -> B (reveal, pull-out, the ring beat) -> choose (the fan is up)
+   -> pick (the chosen card is up; swipe to turn it) -> C (Saturn goes, the card floats to the finger) -> end */
+const PHASES = ['A', 'await', 'B', 'choose', 'pick', 'C', 'end'];
+let phase = 'A', tA = 0, tB = 0, tC = 0, freeze = qs.has('freeze');
 let debugPose = null;
 let result = null;
+const PK = {
+  slot: -1, card: -1, t: 0, revealed: false, revealAt: 0, hovered: -1, faceReady: false,
+  autoPickAt: -1, autoFlipAt: -1, leaveAt: 0, fromP: new THREE.Vector3(), fromQ: new THREE.Quaternion(), floatRect: null,
+};
 function setPhase(p) {
   phase = p;
-  skipBtn.hidden = !(p === 'A' || p === 'B');
+  if (p !== 'choose') el.style.cursor = '';
+  skipBtn.hidden = !(p === 'A' || p === 'B' || p === 'choose' || p === 'pick' || p === 'C');
   replayBtn.hidden = !skipBtn.hidden;
   replayBtn.classList.toggle('cta', p === 'end');
+  setHint();
 }
 function showAsk(on) {
   if (on) {
@@ -1252,8 +1896,11 @@ function reveal() {
   askNote.textContent = 'Leave either blank to use the example: Brecht, 14 March 1997.';
   result = thumbCard(inp.name, inp.date);
   const [num, title] = MAJORS[result.thumb];
-  labNum.textContent = num;
-  labName.textContent = `${num} · ${title}`;
+  labNum.textContent = num;                    // the framed numeral, then the name: [VI] The Lovers
+  labName.textContent = title;
+  thumbTagEl.setAttribute('aria-label', `Thumb. Your Self, The Sun. Your thumb card: ${num}, ${title}`);
+  sealed = sealDeal(result.thumb);             // the ring finger's fan: the other 21 Majors, sealed once for this run
+  resetPick();
   mathEl.replaceChildren();
   // screen readers hear spoken joins ("then", a full stop per line); the eye gets the rose arrow and the line breaks
   const sr = t => { const e = document.createElement('span'); e.className = 'sr'; e.textContent = t; return e; };
@@ -1266,39 +1913,129 @@ function reveal() {
     line.append(sr('. '));
     mathEl.append(line);
   });
-  labelEl.setAttribute('aria-label', `Your thumb card: ${num}, ${title}`);
-  measureLabel();
+  measureTags();
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   showAsk(false);
   tB = 0; setPhase('B');
 }
 askForm.addEventListener('submit', ev => { ev.preventDefault(); reveal(); });
+function buzz(ms) {                // haptics only after the person has touched the page (Chrome logs an error otherwise)
+  try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch (e) {}
+}
+function enterChoose() {
+  setPhase('choose');
+  PK.hovered = -1;
+  if (qs.has('pick')) PK.autoPickAt = clock + 1.0;
+}
+function choose(slot) {
+  if (phase !== 'choose' || !sealed || !(slot >= 0 && slot < FAN_N)) return;
+  PK.slot = slot; PK.card = sealed[slot]; PK.t = 0; PK.revealed = false; PK.hovered = -1;
+  const c = cards[slot];
+  c.flipTarget = Math.round(c.flip / (2 * Math.PI)) * 2 * Math.PI + Math.PI; c.flipVel = 0;
+  PK.leaveAt = clock + 0.12;
+  prepareFace(c, PK.card);
+  setPhase('pick');
+  buzz(8);
+  if (qs.has('flip')) PK.autoFlipAt = clock + 1.0;
+}
+async function prepareFace(c, i) {
+  PK.faceReady = false;
+  try {
+    await Promise.race([
+      Promise.all([document.fonts.load('500 64px "Bodoni Moda"'), document.fonts.load('500 22px "IBM Plex Mono"')]),
+      new Promise(r => setTimeout(r, 1500)),
+    ]);
+  } catch (e) { /* system faces */ }
+  if (PK.card !== i || PK.slot !== c.slot) return;
+  if (c.front.material !== blankFaceMat) { c.front.material.map.dispose(); c.front.material.dispose(); }
+  c.front.material = new THREE.MeshStandardMaterial({ map: faceTexture(i), roughness: 0.6, metalness: 0 });
+  PK.faceReady = true;
+}
+function flipToFace() {
+  if (phase !== 'pick' || PK.revealed || PK.slot < 0) return;
+  const c = cards[PK.slot];
+  if (Math.cos(c.flipTarget) < 0.5) c.flipTarget = Math.round(c.flip / Math.PI) * Math.PI + Math.PI;
+}
+function revealCard() {
+  PK.revealed = true; PK.revealAt = clock;
+  const [num, title] = MAJORS[PK.card];
+  CAPS.card = [num, title];                     // the numeral and the name, nothing more
+  ringNum.textContent = num; ringName.textContent = title;
+  ringCardEl.hidden = false;                    // still faded out; it arrives under the header once the card is by the finger
+  ringTagEl.setAttribute('aria-label', `Ring finger. Relationships, Saturn. Your ring finger card: ${num}, ${title}`);
+  measureTags();
+  sweepT = 0;
+  setHint();
+  buzz(12);
+}
+function enterC() {
+  const c = cards[PK.slot];
+  PK.fromP.copy(c.grp.position); PK.fromQ.copy(c.grp.quaternion);
+  tC = 0; setPhase('C');
+}
+function checkPick() {
+  const c = cards[PK.slot];
+  if (!c) return;
+  if (PK.autoFlipAt > 0 && clock >= PK.autoFlipAt) { PK.autoFlipAt = -1; flipToFace(); }
+  if (!PK.revealed && PK.faceReady && Math.cos(c.flipTarget) > 0.5 && !(drag && drag.flipping)
+    && Math.abs(c.flip - c.flipTarget) < 0.09 && Math.abs(c.flipVel) < 1.6) revealCard();
+  if (PK.revealed && clock - PK.revealAt > 1.8 * MB) enterC();
+}
+function resetPick() {
+  for (const c of cards) {
+    c.grp.visible = false; c.state = 'off'; c.lift = 0; c.flip = c.flipTarget = Math.PI; c.flipVel = 0; c.grp.scale.setScalar(1);
+    if (c.front.material !== blankFaceMat) { c.front.material.map.dispose(); c.front.material.dispose(); c.front.material = blankFaceMat; }
+  }
+  Object.assign(PK, { slot: -1, card: -1, t: 0, revealed: false, hovered: -1, faceReady: false, autoPickAt: -1, autoFlipAt: -1, floatRect: null });
+  ringCardEl.hidden = true; ringCardEl.setAttribute('data-off', '');
+  ringTagEl.removeAttribute('aria-label');
+  tagR.x = null;
+  measureTags();
+}
+function resetThumbTag() {
+  thumbLineEl.hidden = false; thumbLineEl.removeAttribute('data-off'); thumbCardEl.setAttribute('data-off', '');
+  tagT.showCard = false; tagT.x = null;
+  thumbTagEl.removeAttribute('aria-label');
+  measureTags();
+}
 function restart() {
-  tA = 0; tB = 0; result = null;
+  tA = 0; tB = 0; tC = 0; result = null; sealed = null;
   showAsk(false);
-  setCaption(0);
+  setCaption('');
+  resetPick(); resetThumbTag();
   prepareFormation();
   setPhase('A');
-  setHint();
 }
 replayBtn.addEventListener('click', restart);
 skipBtn.addEventListener('click', () => {
   if (phase === 'A') tA = TA.end;
   else if (phase === 'B') tB = TB.end;
+  else if (phase === 'choose') choose(Math.floor(FAN_N / 2));
+  else if (phase === 'pick') { if (!PK.revealed) flipToFace(); else enterC(); }
+  else if (phase === 'C') tC = TC.end;
 });
 
 /* ---------- captions ---------- */
-const CAPTIONS = ['', 'Everyone is dealt a hand. Here is yours.', 'The ring finger. Love and commitment, held by Saturn, keeper of rings.'];
-let capShown = 0, capTimer = 0;
-function setCaption(id) {
-  if (id === capShown) return;
-  const wasOn = capShown !== 0;
-  capShown = id;
+const CAPS = {
+  pull: 'Everyone is dealt a hand. Here is yours. Now choose.',
+  ring: 'The ring finger symbolizes relationships and commitment, read through the position and movements of Saturn.',
+  choose: 'Choose a card for your ring finger.',
+  card: ['', ''],
+};
+let capShown = '', capTimer = 0;
+function setCaption(key) {
+  if (key === capShown) return;
+  const wasOn = !!capShown;
+  capShown = key;
   captionP.classList.remove('on');
   clearTimeout(capTimer);
   capTimer = setTimeout(() => {
-    captionP.textContent = CAPTIONS[id];
-    if (id) requestAnimationFrame(() => captionP.classList.add('on'));
+    captionP.className = key === 'ring' ? 'long' : key === 'card' ? 'card' : '';
+    if (key === 'card') {
+      const n = document.createElement('span'); n.className = 'num'; n.textContent = CAPS.card[0];
+      captionP.replaceChildren(n, ` · ${CAPS.card[1]}`);
+    } else captionP.textContent = CAPS[key] || '';
+    if (key) requestAnimationFrame(() => captionP.classList.add('on'));
   }, wasOn ? 800 : 0);
 }
 
@@ -1308,7 +2045,9 @@ function setCaption(id) {
 const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
 function setHint(msg) {
   if (msg) { hintEl.textContent = msg; return; }
-  hintEl.textContent = tilt.on ? 'Tilt your phone to drift through the stars.' : coarse ? 'Drag to drift through the stars.' : 'Move the mouse to drift through the stars.';
+  if (phase === 'choose') hintEl.textContent = coarse ? 'Slide along the fan, then let go on a card.' : 'Hover to lift a card. Click to choose it.';
+  else if (phase === 'pick' && !PK.revealed) hintEl.textContent = 'Swipe to turn it over.';
+  else hintEl.textContent = tilt.on ? 'Tilt your phone to drift through the stars.' : coarse ? 'Drag to drift through the stars.' : 'Move the mouse to drift through the stars.';
 }
 
 // ---------- device tilt ----------
@@ -1355,26 +2094,115 @@ tiltBtn.addEventListener('click', async () => {
   }
 });
 
+// ---------- choosing and turning a card ----------
 const el = renderer.domElement;
-el.addEventListener('pointermove', ev => {
-  if (tilt.on) return;
+const ray = new THREE.Raycaster(), ndcV = new THREE.Vector2();
+// Hit-testing uses the fan at rest (same tilt, nothing lifted), so sliding along it meets every card in turn: a lifted
+// card covers its neighbours on screen, and testing against it would make a scrub skip the cards it covers.
+const proxyMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });       // never drawn; ray tests only
+const restProxies = Array.from({ length: FAN_N }, (_, s) => { const m = new THREE.Mesh(faceGeo, proxyMat); m.userData.slot = s; return m; });
+function slotAt(clientX, clientY) {
   const r = el.getBoundingClientRect();
-  pointer.tx = ((ev.clientX - r.left) / r.width) * 2 - 1;
-  pointer.ty = -(((ev.clientY - r.top) / r.height) * 2 - 1);
+  ndcV.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndcV, cardCam);
+  const ptr = { x: pointer.x * (reduceMotion ? 0.3 : 1), y: pointer.y * (reduceMotion ? 0.3 : 1) };
+  const live = [];
+  for (const c of cards) {
+    if (c.state !== 'fan' || !c.grp.visible) continue;
+    const m = restProxies[c.slot];
+    fanPose(c.slot, m.position, m.quaternion, ptr, 0, 0);
+    m.updateMatrixWorld(true);
+    live.push(m);
+  }
+  const hits = ray.intersectObjects(live, false);
+  if (hits.length) return hits[0].object.userData.slot;
+  // the raised top of the lifted card stands above the resting fan: still that card
+  if (PK.hovered >= 0 && cards[PK.hovered].state === 'fan') {
+    const c = cards[PK.hovered];
+    if (ray.intersectObjects(c.grp.children, false).length) return PK.hovered;
+  }
+  return -1;
+}
+let drag = null;
+el.addEventListener('pointermove', ev => {
+  const r = el.getBoundingClientRect();
+  // a finger held on the fan, or turning the card, does not also steer the parallax (the fan would swim under it)
+  const holding = drag && ev.pointerType !== 'mouse' && (phase === 'choose' || phase === 'pick');
+  if (!tilt.on && !holding && !(drag && drag.flipping)) {
+    pointer.tx = ((ev.clientX - r.left) / r.width) * 2 - 1;
+    pointer.ty = -(((ev.clientY - r.top) / r.height) * 2 - 1);
+  }
+  if (phase === 'choose' && (drag || ev.pointerType === 'mouse')) {
+    PK.hovered = slotAt(ev.clientX, ev.clientY);         // touch: scrub along the fan; mouse: hover
+    el.style.cursor = PK.hovered >= 0 ? 'pointer' : '';
+  }
+  if (drag) {
+    const dx = ev.clientX - drag.x;
+    drag.moved = Math.max(drag.moved, Math.hypot(dx, ev.clientY - drag.y));
+    if (drag.flipping) {
+      const c = cards[PK.slot], now = performance.now();
+      c.flip = drag.startFlip + dx * 0.0085;
+      drag.vel = (c.flip - drag.lastFlip) / Math.max(1, now - drag.lastT) * 1000;
+      drag.lastFlip = c.flip; drag.lastT = now;
+    }
+  }
+});
+el.addEventListener('pointerdown', ev => {
+  try { el.setPointerCapture(ev.pointerId); } catch (e) {}
+  drag = { x: ev.clientX, y: ev.clientY, t: performance.now(), moved: 0, flipping: false, vel: 0 };
+  if (phase === 'choose') PK.hovered = slotAt(ev.clientX, ev.clientY);
+  else if (phase === 'pick' && !PK.revealed && PK.slot >= 0) {
+    const c = cards[PK.slot];
+    drag.flipping = true; drag.startFlip = c.flip; drag.lastFlip = c.flip; drag.lastT = performance.now();
+    c.flipVel = 0;
+  }
+});
+el.addEventListener('pointerup', ev => {
+  if (!drag) return;
+  const upDx = ev.clientX - drag.x;
+  drag.moved = Math.max(drag.moved, Math.hypot(upDx, ev.clientY - drag.y));
+  const tap = drag.moved < 8 && performance.now() - drag.t < 450;
+  if (phase === 'choose') {
+    // touch: letting go on a card chooses it (a plain tap too); mouse: a click
+    const s = slotAt(ev.clientX, ev.clientY);
+    if (s >= 0 && (ev.pointerType !== 'mouse' || tap)) choose(s);
+    else if (ev.pointerType !== 'mouse') PK.hovered = -1;
+  } else if (drag.flipping && phase === 'pick') {
+    const c = cards[PK.slot];
+    if (drag.moved >= 8 && Math.abs(c.flip - drag.startFlip) < 0.01) c.flip = drag.startFlip + upDx * 0.0085;
+    if (tap) c.flipTarget = Math.round(c.flip / Math.PI) * Math.PI + Math.PI;      // tap to turn
+    else {
+      const projected = c.flip + drag.vel * 0.18;                                   // the flick carries it over
+      c.flipTarget = Math.round(projected / Math.PI) * Math.PI;
+      c.flipVel = drag.vel;
+    }
+  }
+  drag = null;
+});
+el.addEventListener('pointercancel', () => { drag = null; if (phase === 'choose') PK.hovered = -1; });
+el.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse' && phase === 'choose' && !drag) PK.hovered = -1; });
+addEventListener('keydown', ev => {
+  const tag = ev.target && ev.target.tagName;
+  if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'TEXTAREA') return;
+  if (phase === 'choose') {
+    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+      PK.hovered = PK.hovered < 0 ? Math.floor(FAN_N / 2) : Math.max(0, Math.min(FAN_N - 1, PK.hovered + (ev.key === 'ArrowRight' ? 1 : -1)));
+      ev.preventDefault();
+    } else if ((ev.key === 'Enter' || ev.key === ' ') && PK.hovered >= 0) { choose(PK.hovered); ev.preventDefault(); }
+  } else if (phase === 'pick' && !PK.revealed && ['Enter', ' ', 'ArrowLeft', 'ArrowRight'].includes(ev.key)) {
+    flipToFace(); ev.preventDefault();
+  }
 });
 
 /* =====================================================================
-   Card label beside the thumb
+   Finger headers: projected above their finger every frame, clamped inside the rails, kept off the hand
    ===================================================================== */
-let labW = 160, labH = 44, labSide = 'right', labX = null, labY = null;
-function measureLabel() { labW = labelEl.offsetWidth || labW; labH = labelEl.offsetHeight || labH; }
-const scr = new THREE.Vector3();
-// screen positions of the visible hand stars, so the label can find a patch of empty sky
-const scrPts = new Float32Array((NJ + ND) * 2), scrThumb = new Uint8Array(NJ + ND);
+const scrPts = new Float32Array((NJ + ND) * 2), scrGrp = new Int8Array(NJ + ND);
 const mvp = new THREE.Matrix4();
-let nScr = 0;
+let nScr = 0, projAt = -1;
 function projectHand() {
-  nScr = 0;
+  if (projAt === frames) return;
+  projAt = frames; nScr = 0;
   mvp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(handInner.matrixWorld);
   const e = mvp.elements;
   const push = (p, i, a, g) => {
@@ -1383,142 +2211,204 @@ function projectHand() {
     if (w <= 0) return;
     scrPts[nScr * 2] = ((e[0] * x + e[4] * y + e[8] * z + e[12]) / w * 0.5 + 0.5) * W;
     scrPts[nScr * 2 + 1] = (-(e[1] * x + e[5] * y + e[9] * z + e[13]) / w * 0.5 + 0.5) * H;
-    scrThumb[nScr] = g === 0 ? 1 : 0;
+    scrGrp[nScr] = g;
     nScr++;
   };
   for (let i = 0; i < NJ; i++) push(jPos.array, i * 3, jAlpha.array[i] * GA[joints[i].group], joints[i].group);
   for (let i = 0; i < ND; i++) push(dPos.array, i * 3, dAlpha.array[i] * GA[dust[i].group], dust[i].group);
 }
-function handHits(l, t, r, b, ex, ey) {
-  // the label is tied to the thumb tip by its leader, so the tip's own glow and the end of the thumb never count
+function handHits(l, t, r, b, ex, ey, grp) {
+  // a header is tied to its fingertip by a leader, so the tip's own glow and the end of its own finger never count
   let n = 0;
   for (let k = 0; k < nScr; k++) {
     const x = scrPts[k * 2], y = scrPts[k * 2 + 1];
     if (x <= l || x >= r || y <= t || y >= b) continue;
     const d2 = (x - ex) ** 2 + (y - ey) ** 2;
-    if (d2 > 484 && !(scrThumb[k] && d2 < 2025)) n++;
+    if (d2 > 484 && !(scrGrp[k] === grp && d2 < 2025)) n++;
   }
   return n;
 }
 const boxRange = document.createRange();
-function textBox(el) {                // the box of the text itself (the math and caption blocks are full width)
-  boxRange.selectNodeContents(el);
+function textBox(node) {                // the box of the text itself (the math and caption blocks are full width)
+  boxRange.selectNodeContents(node);
   const r = boxRange.getBoundingClientRect();
   return r.width > 1 ? r : null;
 }
-let labSwap = 1, labNext = null;     // switching spots cross-fades instead of sliding the label across the hand
-const labDebug = { side: labSide };
-function placeLabel(alpha, dt) {
-  if (alpha <= 0.001) {
-    labelEl.style.opacity = '0'; leader.style.opacity = '0';
-    labX = null; labNext = null; labSwap = 1;
-    return;
-  }
-  scr.copy(T.j[3].pos);
-  handInner.localToWorld(scr);
-  scr.project(camera);
-  const x = (scr.x * 0.5 + 0.5) * W, y = (-scr.y * 0.5 + 0.5) * H;
-  const top = 64, bottom = H - 140, gap = 32, pad = 5;
-  const cx = lx => Math.max(16, Math.min(W - 16 - labW, lx));
-  const cy = ly => Math.max(top, Math.min(bottom - labH, ly));
-  const spots = {
-    right: [x + gap, y - labH / 2],
-    left: [x - gap - labW, y - labH / 2],
-    above: [cx(x - labW * 0.3), y - gap - labH],
-    below: [cx(x - labW * 0.3), y + gap],
-    aboveFar: [cx(x - labW * 0.5), cy(y - gap * 2.6 - labH)],
-    belowFar: [cx(x - labW * 0.5), cy(y + gap * 2.6)],
-    top: [cx(x - labW * 0.75), top],                 // open sky above the fingertips (a phone-width open hand)
-    bottom: [cx(x - labW * 0.75), bottom - labH],
+function makeTag(node, lead, grp) {
+  return { el: node, lead, grp, w: 160, h: 60, hMax: 0, hHead: 0, hEnd: 0, x: null, y: null, spot: 'above', next: null, swap: 1, rect: null, align: '', showCard: false, swapAt: 0, crowded: 0, movedAt: -9 };
+}
+const tagT = makeTag(thumbTagEl, leadT, 0), tagR = makeTag(ringTagEl, leadR, 3);
+let tagsCompact = false;
+function measureTags() {
+  for (const t of [tagT, tagR]) { t.w = t.el.offsetWidth || t.w; t.h = t.el.offsetHeight || t.h; }
+  if (!thumbLineEl.hidden) tagT.hMax = tagT.h;
+  if (ringCardEl.hidden) tagR.hHead = tagR.h;
+  tagR.hEnd = (tagR.hHead || tagR.h) + (tagsCompact ? 40 : 47);
+}
+// rows: just above the anchor, higher, the top rail; columns: centred, to its left or right, then clear of it entirely
+const SPOTS = ['above', 'aboveL', 'aboveR', 'high', 'highL', 'highR', 'top', 'topL', 'topR', 'aboveLL', 'aboveRR', 'topLL', 'topRR'];
+const PEER_SPOTS = ['abovePL', 'abovePR', 'topPL', 'topPR'];      // just clear of the other header, either side
+function hideTag(tag) {
+  tag.el.style.opacity = '0'; tag.lead.style.opacity = '0';
+  tag.x = null; tag.next = null; tag.swap = 1; tag.rect = null;
+}
+function placeTag(tag, alpha, ax, ay, dt, blocks, peer = null) {
+  if (alpha <= 0.001 || !Number.isFinite(ax) || !Number.isFinite(ay)) { hideTag(tag); return null; }
+  const { w, h } = tag, gap = 24;
+  const top = LAY.top, bottom = H - LAY.bottom;
+  const cx = lx => Math.max(16, Math.min(W - 16 - w, lx));
+  const cy = ly => Math.max(top, Math.min(bottom - h, ly));
+  const spotXY = k => {
+    if (k.includes('P')) {
+      const lx = k.endsWith('PL') ? peer.left - 16 - w : peer.right + 16;
+      return [cx(lx), cy(k.startsWith('above') ? ay - gap - h : top)];
+    }
+    const lx = k.endsWith('LL') ? ax - w - 40 : k.endsWith('RR') ? ax + 40 : k.endsWith('L') ? ax - w + 20 : k.endsWith('R') ? ax - 20 : ax - w / 2;
+    const ly = k.startsWith('above') ? ay - gap - h : k.startsWith('high') ? ay - gap * 2.6 - h : top;
+    return [cx(lx), cy(ly)];
   };
-  const fits = ([lx, ly]) => lx >= 16 && lx + labW <= W - 16 && ly >= top && ly + labH <= bottom;
-  // never park the label on the hand, or on the math note or caption while they show
   projectHand();
+  const cost = (k, p) => {
+    const [lx, ly] = spotXY(k);
+    let c = handHits(lx - p, ly - p, lx + w + p, ly + h + p, ax, ay, tag.grp);
+    for (const r of blocks) if (r && lx < r.right + 10 && lx + w > r.left - 10 && ly < r.bottom + 10 && ly + h > r.top - 10) c += 500;
+    if (peer && lx < peer.right + 8 && lx + w > peer.left - 8 && ly < peer.bottom + 8 && ly + h > peer.top - 8) c += 5000;   // never on the other header
+    return c;
+  };
+  const spots = peer ? SPOTS.concat(PEER_SPOTS) : SPOTS;
+  if (!spots.includes(tag.spot)) tag.spot = 'above';
+  const best = p => {                               // the first clear spot in order, else the least crowded
+    let bk = spots[0], bc = Infinity;
+    for (const k of spots) { const c = cost(k, p); if (c === 0) return { k, c }; if (c < bc) { bk = k; bc = c; } }
+    return { k: bk, c: bc };
+  };
+  let snap = false;
+  // hysteresis: a spot must stay crowded for a moment, and a header that just moved stays put a while, so a turning
+  // hand never makes it hop from spot to spot
+  const crowdedNow = tag.x !== null && !tag.next && cost(tag.spot, 18) > 0;
+  tag.crowded = crowdedNow ? tag.crowded + dt : 0;
+  if (tag.x === null) { tag.spot = best(5).k; snap = true; tag.movedAt = clock; }
+  else if (crowdedNow && tag.crowded > 0.22 && clock - tag.movedAt > 0.7) {
+    // the hand is closing in on the header: leave early for a spot with a wide margin, else for any clearer spot
+    const wide = best(18);
+    if (wide.c === 0 && wide.k !== tag.spot) tag.next = wide.k;
+    else { const cur = cost(tag.spot, 5), b = best(5); if (cur > 0 && b.k !== tag.spot && b.c < cur - 1) tag.next = b.k; }
+  }
+  if (tag.next) {                                   // switching spots cross-fades instead of sliding across the hand
+    tag.swap = Math.max(0, tag.swap - dt / 0.16);
+    if (tag.swap === 0) { tag.spot = tag.next; tag.next = null; snap = true; tag.movedAt = clock; tag.crowded = 0; }
+  } else tag.swap = Math.min(1, tag.swap + dt / 0.24);
+  const align = tag.spot.endsWith('L') ? 'end' : tag.spot.endsWith('R') ? 'start' : '';   // (PL ends in L, PR in R)
+  if (align !== tag.align) { tag.align = align; if (align) tag.el.dataset.align = align; else delete tag.el.dataset.align; }
+  const [tx, ty] = spotXY(tag.spot);
+  if (snap) { tag.x = tx; tag.y = ty; } else { const k = 1 - Math.exp(-14 * dt); tag.x += (tx - tag.x) * k; tag.y += (ty - tag.y) * k; }
+  const a = alpha * E.sine(tag.swap);
+  tag.el.style.opacity = a.toFixed(3);
+  tag.el.style.transform = `translate3d(${tag.x.toFixed(1)}px, ${tag.y.toFixed(1)}px, 0)`;
+  // leader: from just off the anchor to the nearest point of the header
+  const bx = Math.max(tag.x - 4, Math.min(tag.x + w + 4, ax)), by = Math.max(tag.y - 4, Math.min(tag.y + h + 4, ay));
+  const dx = bx - ax, dy = by - ay, dl = Math.hypot(dx, dy) || 1;
+  tag.lead.style.opacity = (a * (dl > 20 && ay > 0 && ay < H ? 1 : 0)).toFixed(3);
+  tag.lead.setAttribute('x1', (ax + dx / dl * 11).toFixed(1)); tag.lead.setAttribute('y1', (ay + dy / dl * 11).toFixed(1));
+  tag.lead.setAttribute('x2', bx.toFixed(1)); tag.lead.setAttribute('y2', by.toFixed(1));
+  tag.rect = { left: tag.x, top: tag.y, right: tag.x + w, bottom: tag.y + h };
+  return tag.rect;
+}
+const _sw = new THREE.Vector3(), _sv = new THREE.Vector3();
+function screenOf(local, out) {             // hand-local point -> (px x, px y, view depth)
+  _sw.copy(local); handInner.localToWorld(_sw);
+  _sv.copy(_sw).applyMatrix4(camera.matrixWorldInverse);
+  _sw.project(camera);
+  return out.set((_sw.x * 0.5 + 0.5) * W, (-_sw.y * 0.5 + 0.5) * H, -_sv.z);
+}
+const aT = new THREE.Vector3(), aR = new THREE.Vector3(), aS = new THREE.Vector3(), aC = new THREE.Vector3(), aL = new THREE.Vector3();
+// a header's anchor is the top of its fingertip's dust cap, not the tip joint, so the header clears the whole tip
+const BONE_TD = BONES.find(b => b.frame === tDist), BONE_RD = BONES.find(b => b.frame === FR.dist);
+function capLocal(tip, prev, r, out) { return out.copy(tip).sub(prev).normalize().multiplyScalar(r * 1.15).add(tip); }
+function liftRect() {
+  const h = LAY.liftPx, w = h * CW / CH, cy = (1 - LAY.liftY) / 2 * H, cxp = (1 + LAY.liftX) / 2 * W;
+  return { left: cxp - w / 2, right: cxp + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
+}
+function updateTags(dt) {
+  // the thumb's Sun line gives way to its card once it is revealed
+  const wantCard = st.tagCard > 0.5;
+  if (wantCard !== tagT.showCard) {
+    tagT.showCard = wantCard; tagT.swapAt = clock;
+    if (wantCard) { thumbLineEl.setAttribute('data-off', ''); thumbCardEl.removeAttribute('data-off'); }
+    else { thumbLineEl.hidden = false; thumbLineEl.removeAttribute('data-off'); thumbCardEl.setAttribute('data-off', ''); measureTags(); }
+  }
+  if (wantCard && !thumbLineEl.hidden && clock - tagT.swapAt > 0.85) { thumbLineEl.hidden = true; measureTags(); }
+  const ringCardOn = st.tagRCard > 0.5 && !ringCardEl.hidden;
+  if (ringCardOn === ringCardEl.hasAttribute('data-off')) { if (ringCardOn) ringCardEl.removeAttribute('data-off'); else ringCardEl.setAttribute('data-off', ''); }
+  const compact = (phase === 'C' || phase === 'end') && W < 560;
+  if (compact !== tagsCompact) { tagsCompact = compact; thumbTagEl.classList.toggle('compact', compact); ringTagEl.classList.toggle('compact', compact); measureTags(); }
   const blocks = [];
   if (st.math > 0.02) blocks.push(textBox(mathEl));
   if (capShown) blocks.push(textBox(captionP));
-  const cost = (k, p = pad) => {
-    const [lx, ly] = spots[k];
-    if (!fits(spots[k])) return 1e6;
-    let c = handHits(lx - p, ly - p, lx + labW + p, ly + labH + p, x, y);
-    for (const r of blocks) if (r && lx < r.right + 12 && lx + labW > r.left - 12 && ly < r.bottom + 12 && ly + labH > r.top - 12) c += 500;
-    return c;
-  };
-  const order = st.wThumb > 0.5
-    ? ['right', 'left', 'above', 'below', 'aboveFar', 'belowFar', 'top', 'bottom']
-    : ['right', 'above', 'aboveFar', 'below', 'left', 'belowFar', 'top', 'bottom'];
-  const pick = (p = pad) => {                        // the first clear spot in order, else the least crowded
-    let best = order[0], bc = Infinity;
-    for (const k of order) { const c = cost(k, p); if (c === 0) return { k, c }; if (c < bc) { best = k; bc = c; } }
-    return { k: best, c: bc };
-  };
-  let snap = false;
-  if (labX === null) { labSide = pick().k; snap = true; }
-  else if (!labNext && cost(labSide, 18) > 0) {
-    // the hand is closing in on the label: leave early for a spot with a wide margin, else for any clear spot
-    const wide = pick(18);
-    if (wide.c === 0 && wide.k !== labSide) labNext = wide.k;
-    else {
-      const cur = cost(labSide), b = pick();
-      if (cur > 0 && b.k !== labSide && b.c < cur - 1) labNext = b.k;
-    }
-  }
-  if (labNext) {
-    labSwap = Math.max(0, labSwap - dt / 0.16);
-    if (labSwap === 0) { labSide = labNext; labNext = null; snap = true; }
-  } else labSwap = Math.min(1, labSwap + dt / 0.24);
-  labDebug.side = labSide;
-  let [tx, ty] = spots[labSide];
-  tx = cx(tx); ty = cy(ty);
-  if (snap) { labX = tx; labY = ty; }
-  else { const k = 1 - Math.exp(-14 * dt); labX += (tx - labX) * k; labY += (ty - labY) * k; }
-  const a = alpha * E.sine(labSwap);
-  labelEl.style.opacity = a.toFixed(3);
-  labelEl.style.transform = `translate3d(${labX.toFixed(1)}px, ${labY.toFixed(1)}px, 0)`;
-  // leader: from just off the star to the nearest point of the label
-  const ax = Math.max(labX - 5, Math.min(labX + labW + 5, x)), ay = Math.max(labY - 5, Math.min(labY + labH + 5, y));
-  const dx = ax - x, dy = ay - y, dl = Math.hypot(dx, dy) || 1;
-  const show = dl > 18 ? 1 : 0;
-  leader.style.opacity = (a * show).toFixed(3);
-  leader.setAttribute('x1', (x + dx / dl * 11).toFixed(1)); leader.setAttribute('y1', (y + dy / dl * 11).toFixed(1));
-  leader.setAttribute('x2', ax.toFixed(1)); leader.setAttribute('y2', ay.toFixed(1));
+  if (phase === 'pick') blocks.push(liftRect());
+  if (st.floatW > 0.05 && PK.floatRect) blocks.push(PK.floatRect);
+  // the thumb first (when both show, the ring header makes way for it)
+  let tr = null;
+  if (st.tagT > 0.001) {
+    screenOf(capLocal(T.j[3].pos, T.j[2].pos, BONE_TD.r1, aL), aT);
+    tr = placeTag(tagT, st.tagT, aT.x, aT.y, dt, blocks);
+  } else hideTag(tagT);
+  // ring finger: above its tip; over Saturn from the moment it takes the finger's place; over the chosen card once it is there
+  if (result && st.tagR > 0.001) {
+    screenOf(capLocal(FR.j[4].pos, FR.j[3].pos, BONE_RD.r1, aL), aR);
+    const wS = Math.max(st.wZoom, st.wPick) * (1 - st.wEnd);
+    if (wS > 0) { screenOf(ringRestLocal(aL), aS); aS.y -= RING_OUT * 0.5 * H / (2 * TAN * aS.z); aR.lerp(aS, wS); }
+    if (st.floatW > 0) { aL.copy(FR.j[4].pos); aL.y += FLOAT_GAP + FLOAT_H; screenOf(aL, aC); aR.lerp(aC, st.floatW); }
+    placeTag(tagR, st.tagR, aR.x, aR.y, dt, blocks, tr);
+  } else hideTag(tagR);
 }
 
 /* =====================================================================
    Per-frame update
    ===================================================================== */
-const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), shotP = new THREE.Vector3(), shotL = new THREE.Vector3();
 const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), vD = new THREE.Vector3();
-const qA = new THREE.Quaternion(), qB = new THREE.Quaternion(), qSpin = new THREE.Quaternion();
+const qPath = new THREE.Quaternion(), qDist = new THREE.Quaternion(), qMid = new THREE.Quaternion(), qProx = new THREE.Quaternion();
+const qWob = new THREE.Quaternion(), qSpinQ = new THREE.Quaternion(), wobAxis = new THREE.Vector3();
 const AXY = new THREE.Vector3(0, 1, 0);
 const VIEW_T = new THREE.Vector3(0.08, 0.06, 1).normalize();
 const idlePose = new Float32Array(NP);
 const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new THREE.Vector3();
-const RIM_FLOOR = 0.3, RIM_GAIN = 0.95;
-let ringSpin = 0, planetSpin = 0;
+const RIM_FLOOR = 0.33, RIM_GAIN = 1.0;
+let SX = 0, SY = 0, spinA = 0, planetSpin = 0;
 
 function thumbFocusLocal(out) { return out.copy(T.j[1].pos).lerp(T.j[3].pos, 0.25); }
-function ringRestLocal(out) { return out.copy(FR.j[1].pos).lerp(FR.j[2].pos, 0.3); }
-function planetCenterLocal(out) { return out.copy(FR.j[1].pos).lerp(FR.j[4].pos, 0.45); }
+function ringRestLocal(out) { return out.copy(FR.j[1].pos).lerp(FR.j[2].pos, RING_T); }
+function ringMidLocal(out) { return ringRestLocal(out).lerp(FR.j[4].pos, 0.5); }
 
+function blendShot(w, d, nx, ny) {     // the camera straight in front of shotL at distance d, lens shifted so shotL lands at (nx, ny)
+  if (w <= 0) return;
+  shotP.copy(shotL); shotP.z += d; shotP.y += d * 0.02;
+  camPos.lerp(shotP, w); camLook.lerp(shotL, w);
+  SX = lerp(SX, nx, w); SY = lerp(SY, ny, w);
+}
 function updateCamera(par) {
   // overview
   camPos.set(st.arcX, 0.06, framing.dAll * st.dolly);
   camLook.set(0, 0, 0);
-  let sy = framing.shiftAll, sx = 0;
+  SY = framing.shiftAll; SX = 0;
   // thumb close-up, tracking the live thumb
   if (st.wThumb > 0) {
     handInner.localToWorld(thumbFocusLocal(vA));
     vB.copy(vA).addScaledVector(VIEW_T, framing.dThumb);
     camPos.lerp(vB, st.wThumb); camLook.lerp(vA, st.wThumb);
-    sy = lerp(sy, framing.shiftThumbY, st.wThumb); sx = lerp(0, framing.shiftThumbX, st.wThumb);
+    SY = lerp(SY, framing.shiftThumbY, st.wThumb); SX = lerp(0, framing.shiftThumbX, st.wThumb);
   }
-  // ring-finger push
-  if (st.wRing > 0) {
-    handInner.localToWorld(planetCenterLocal(vA)).multiplyScalar(framing.ringCenter);
-    vB.set(vA.x, vA.y + 0.05, vA.z + framing.dAll * framing.ringPush);
-    camPos.lerp(vB, st.wRing); camLook.lerp(vA, st.wRing);
-    sy += framing.ringLift * st.wRing;
+  // the ring beat: push in on the ring finger, dolly in on the ring at its base, reframe for the fan, lift for the pick
+  if (st.wRing > 0) { handInner.localToWorld(ringMidLocal(shotL)); blendShot(st.wRing, framing.dSlide, 0, framing.sySlide); }
+  if (st.wZoom > 0) { handInner.localToWorld(ringRestLocal(shotL)); blendShot(st.wZoom, framing.dZoom, 0, framing.syZoom); }
+  if (st.wChoose > 0) { handInner.localToWorld(ringRestLocal(shotL)); blendShot(st.wChoose, framing.dChoose, framing.sxChoose, framing.syChoose); }
+  if (st.wPick > 0) { handInner.localToWorld(ringRestLocal(shotL)); blendShot(st.wPick, framing.dPick, framing.sxChoose, framing.syPick); }
+  // back out to the whole hand
+  if (st.wEnd > 0) {
+    shotL.set(0, 0, 0); shotP.set(0, 0.06, framing.dEnd);
+    camPos.lerp(shotP, st.wEnd); camLook.lerp(shotL, st.wEnd);
+    SX = lerp(SX, 0, st.wEnd); SY = lerp(SY, framing.syEnd, st.wEnd);
   }
   const k = Math.min(1, camPos.distanceTo(camLook) / framing.dAll);
   camPos.x += pointer.x * 0.24 * par * k;
@@ -1527,8 +2417,8 @@ function updateCamera(par) {
   camera.lookAt(camLook);
   camera.updateMatrixWorld();
   camera.updateProjectionMatrix();
-  camera.projectionMatrix.elements[8] = -sx;
-  camera.projectionMatrix.elements[9] = -sy;
+  camera.projectionMatrix.elements[8] = -SX;
+  camera.projectionMatrix.elements[9] = -SY;
   camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 }
 
@@ -1559,12 +2449,12 @@ function updateHandPoints() {
   const fp = fPos.array, fa = fAlpha.array, flareOn = clamp01((ft - 0.85) / 0.4);
   TIPS.forEach((j, k) => {
     fp[k * 3] = jp[j.idx * 3]; fp[k * 3 + 1] = jp[j.idx * 3 + 1]; fp[k * 3 + 2] = jp[j.idx * 3 + 2];
-    fa[k] = 0.38 * flareOn * (k ? 1 - CURL[k - 1] : 1);          // a fingertip tucked into the fist does not flare
+    fa[k] = 0.44 * flareOn * (k ? 1 - CURL[k - 1] : 1);          // a fingertip tucked into the fist does not flare
   });
   fPos.needsUpdate = true; fAlpha.needsUpdate = true;
 
   // rim light: dust on the silhouette (surface turned edge-on to the camera) glows, dust facing the camera recedes,
-  // so every phalanx reads as a slender tube and the palm as a rounded slab from any angle
+  // so every phalanx reads as a tube and the palm as a rounded slab from any angle
   camLocal.copy(camera.position); handInner.worldToLocal(camLocal);
   const dp = dPos.array, da = dAlpha.array;
   for (let i = 0; i < ND; i++) {
@@ -1607,62 +2497,243 @@ function updateLines() {
   lPos.needsUpdate = true; lAlpha.needsUpdate = true;
 }
 
-// ring path: from just above the fingertip down to where a ring sits
+// the band's path: from just above the fingertip, down the finger's own joints, to where a ring sits
 const ringPath = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
-const ringRad = [0.05, 0.05, 0.062, 0.072, 0.077].map(r => r * 1.32);
+const mvRing = new THREE.Matrix4(), nmRing = new THREE.Matrix3(), invRing = new THREE.Matrix4();
+const gN = new THREE.Vector3(), gP = new THREE.Vector3(), gH = new THREE.Vector3(), gL = new THREE.Vector3();
 function updateRing(dt) {
-  const on = st.ringA > 0.001 || st.planetA > 0.001;
-  ringGroup.visible = on; planetGroup.visible = st.planetA > 0.001;
+  const disP = st.disT / D_DIS;
+  const bandVis = st.bandIn > 0.001 && disP < 1;
+  const ringsVis = st.disT > 0 && st.ringsA > 0.001;
+  ringGroup.visible = bandVis || ringsVis;
+  bandMesh.visible = bandVis;
+  planetGroup.visible = st.planetA > 0.001;
   OCC.uOccA.value = st.planetA;
-  if (!on) return;
-  // slide position along the finger
+  if (!ringGroup.visible && !planetGroup.visible) return;
   const tip = FR.j[4].pos, dip = FR.j[3].pos, pip = FR.j[2].pos;
-  ringPath[0].copy(tip).sub(dip).normalize().multiplyScalar(0.06).add(tip);
+  ringPath[0].copy(tip).sub(dip).normalize().multiplyScalar(0.07).add(tip);
   ringPath[1].copy(tip); ringPath[2].copy(dip); ringPath[3].copy(pip); ringRestLocal(ringPath[4]);
   const lens = [0, 0, 0, 0]; let total = 0;
   for (let k = 0; k < 4; k++) { lens[k] = ringPath[k].distanceTo(ringPath[k + 1]); total += lens[k]; }
-  let d = st.slide * total, k = 0;
+  const sd = st.slide * total;
+  let d = sd, k = 0;
   while (k < 3 && d > lens[k]) { d -= lens[k]; k++; }
   const f = lens[k] ? Math.min(1, d / lens[k]) : 0;
   vA.copy(ringPath[k]).lerp(ringPath[k + 1], f);
-  const rFinger = lerp(ringRad[k], ringRad[k + 1], f);
-  // orientation follows the finger: distal bone near the tip, proximal near the base
-  FR.dist.getWorldQuaternion(qA); FR.prox.getWorldQuaternion(qB);
-  qA.slerp(qB, E.sine(st.slide));
-  const spinSpeed = reduceMotion ? 0.5 : lerp(2.4, 0.35, st.grow);
-  ringSpin += dt * spinSpeed;
-  qSpin.setFromAxisAngle(AXY, ringSpin);
-  planetCenterLocal(vB);
-  ringGroup.position.copy(vA).lerp(vB, st.grow);
-  ringGroup.quaternion.copy(qA).slerp(Q_SAT, st.grow).multiply(qSpin);
-  const restore = 1 - 0.15 * segE(tB, TB.ringOut, E.sine);
-  ringGroup.scale.setScalar(lerp(rFinger, R_PLANET * 2.3, st.grow) * restore);
-  const ra = st.ringA;
-  ringStars.material.uniforms.uOpacity.value = ra;
-  ringStars.material.uniforms.uSizeMul.value = lerp(0.8, 1.15, st.grow);
-  ringLineA.material.uniforms.uOpacity.value = ra * lerp(1, 0.5, st.grow);
-  ringLineB.material.uniforms.uOpacity.value = ra * lerp(1, 0.25, st.grow);
-  bands.material.uniforms.uOpacity.value = st.bandsA;
-  // planet
-  planetSpin += dt * 0.22;
-  planetGroup.position.copy(vB);
-  qSpin.setFromAxisAngle(AXY, planetSpin);
-  planetGroup.quaternion.copy(Q_SAT).multiply(qSpin);
-  planetGroup.scale.setScalar(lerp(0.7, 1, E.out(st.planetA)));
-  planetMat.uniforms.uOpacity.value = st.planetA;
+  // the band lies square to whichever bone it is on, easing across each joint
+  FR.dist.getWorldQuaternion(qDist); FR.mid.getWorldQuaternion(qMid); FR.prox.getWorldQuaternion(qProx);
+  const j1 = lens[0] + lens[1], j2 = j1 + lens[2], bl = 0.035;
+  if (sd < j1 - bl) qPath.copy(qDist);
+  else if (sd < j1 + bl) qPath.copy(qDist).slerp(qMid, E.sine((sd - (j1 - bl)) / (2 * bl)));
+  else if (sd < j2 - bl) qPath.copy(qMid);
+  else if (sd < j2 + bl) qPath.copy(qMid).slerp(qProx, E.sine((sd - (j2 - bl)) / (2 * bl)));
+  else qPath.copy(qProx);
+  // it turns around the finger as it goes, a loose band's slight wobble precessing with it; both settle at the base
+  const spinSpeed = (reduceMotion ? 0.6 : 1.7) * lerp(1, 0.2, clamp01(st.tiltW + Math.max(0, disP)));
+  spinA += dt * spinSpeed;
+  const wob = (reduceMotion ? 2.5 : 7.5) * DEG * (1 - 0.75 * st.slide) * (1 - clamp01(disP * 2));
+  wobAxis.set(Math.cos(spinA * 0.9), 0, Math.sin(spinA * 0.9));
+  qWob.setFromAxisAngle(wobAxis, wob);
+  qSpinQ.setFromAxisAngle(AXY, spinA);
+  ringGroup.position.copy(vA);
+  ringGroup.quaternion.copy(qPath).multiply(qWob).slerp(Q_SAT, st.tiltW).multiply(qSpinQ);
+  bandMesh.scale.setScalar(lerp(0.82, 1, E.out(st.bandIn)));
+  bandU.uDis.value = st.disT > 0 ? Math.min(1.001, disP) : 1 - st.bandIn;     // assembles at the tip, comes apart at the base
+  ringU.uDisT.value = st.disT;
+  ringU.uShadow.value = st.planetA;
+  if (ringPts) ringPts.material.uniforms.uOpacity.value = st.ringsA;
+  annMat.uniforms.uOpacity.value = st.annA * st.ringsA;
+  annulus.visible = st.annA * st.ringsA > 0.001;
+  // Saturn, where the ring came to rest
+  planetSpin += dt * 0.25;
+  planetGroup.position.copy(ringRestLocal(vB));
+  qSpinQ.setFromAxisAngle(AXY, planetSpin);
+  planetGroup.quaternion.copy(Q_SAT).multiply(qSpinQ);
+  planetGroup.scale.setScalar(lerp(0.86, 1, E.out(st.planetA)));
+  satMat.uniforms.uOpacity.value = st.planetA;
   halo.material.uniforms.uOpacity.value = st.planetA;
-  // occlusion uniforms (view space)
+  handInner.updateMatrixWorld(true);
+  // the light in ring-local space, for the planet's shadow across the rings
+  invRing.copy(ringGroup.matrixWorld).invert();
+  ringU.uLightL.value.copy(SUN_V).transformDirection(camera.matrixWorld).transformDirection(invRing);
+  // occlusion uniforms (view space): Saturn's near side hides the far part of the rings and dims the hand behind it
   vD.copy(vB); handInner.localToWorld(vD); vD.applyMatrix4(camera.matrixWorldInverse);
-  OCC.uOcc.value.set(vD.x, vD.y, vD.z, R_PLANET * planetGroup.scale.x);
+  OCC.uOcc.value.set(vD.x, vD.y, vD.z, R_SAT * planetGroup.scale.x);
+  // the glint: the point on the band's crown where the key light's reflection lands
+  let ga = 0;
+  if (bandVis) {
+    mvRing.multiplyMatrices(camera.matrixWorldInverse, ringGroup.matrixWorld);
+    nmRing.getNormalMatrix(mvRing);
+    gL.copy(bandKey.position).sub(camAim.position).normalize();
+    let best = 0, bi = 0, bt = 0;
+    const ro = BAND.ri + BAND.t;
+    for (let i = 0; i < 72; i++) for (const th of [-0.5, 0, 0.5]) {
+      const ph = (i / 72) * Math.PI * 2, ct = Math.cos(th);
+      gP.set(ro * Math.sin(ph), Math.sin(th) * BAND.w * 0.4, ro * Math.cos(ph)).applyMatrix4(mvRing);
+      gN.set(Math.sin(ph) * ct, Math.sin(th), Math.cos(ph) * ct).applyMatrix3(nmRing).normalize();
+      gH.copy(gP).negate().normalize().add(gL).normalize();
+      const s = gN.z > 0 ? Math.pow(Math.max(0, gN.dot(gH)), 70) : 0;
+      if (s > best) { best = s; bi = i; bt = th; }
+    }
+    const ph = (bi / 72) * Math.PI * 2;
+    glintPos.array.set([ro * 1.02 * Math.sin(ph), Math.sin(bt) * BAND.w * 0.4, ro * 1.02 * Math.cos(ph)]);
+    ga = 0.9 * best * (0.8 + 0.2 * Math.sin(clock * 7.0)) * E.out(st.bandIn) * (1 - clamp01(disP * 3));
+  }
+  glintAlpha.array[0] = ga; glintPos.needsUpdate = true; glintAlpha.needsUpdate = true;
+}
+
+function updateSun() {
+  sunDisc.visible = st.sun > 0.002;
+  if (!sunDisc.visible) return;
+  handInner.localToWorld(vA.copy(T.j[3].pos));
+  sunDisc.position.copy(vA);
+  sunDisc.quaternion.copy(camera.quaternion);
+  sunDisc.scale.setScalar(0.6);
+  sunMat.uniforms.uOpacity.value = st.sun * 0.6 * (0.92 + 0.08 * Math.sin(clock * 0.8));
+  sunMat.uniforms.uRot.value = clock * 0.03;
 }
 
 function updateGroups() {
-  const dim = 1 - 0.5 * st.hi;
+  const dim = 1 - 0.5 * st.hi * (1 - 0.75 * st.wChoose);   // while choosing, the whole hand comes back up behind the fan
   const fist = 1 - 0.42 * st.wThumb;          // on the thumb close-up the curled fingers recede so the thumb leads
   for (let g = 0; g < 6; g++) { GA[g] = dim * (g === 0 ? 1 : g === 5 ? lerp(1, fist, 0.6) : fist); GB[g] = 1; }
   GA[3] = st.fingerA * lerp(1, 1.25, st.hi) * fist;
   GB[3] = 1 + st.hi * (0.5 + 0.12 * Math.sin(clock * 3.1));
   GB[0] = 1 + 0.2 * st.wThumb + 0.75 * st.pulse;
+}
+
+// ---------- cards ----------
+const tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpN = new THREE.Vector3(), tmpW = new THREE.Vector3();
+const ptrF = { x: 0, y: 0 };
+const floatQ = new THREE.Quaternion(), floatE = new THREE.Euler();
+let sweepT = -1;
+function liftPose(flip, outP, outQ) {
+  const z = LAY.liftZ, par = reduceMotion ? 0.3 : 1, tk = tilt.on ? 1.6 : 1;
+  outP.set(LAY.liftX * TAN * aspect * z, LAY.liftY * TAN * z, -z);
+  q1.setFromAxisAngle(AY, flip);
+  q3.setFromAxisAngle(AX, -pointer.y * 0.18 * par * tk);
+  q2.setFromAxisAngle(AY, pointer.x * 0.22 * par * tk);
+  return outQ.copy(q2).multiply(q3).multiply(q1);
+}
+function floatTarget(outP, outQ) {
+  // a spot just above the ring fingertip, found on screen through the hand's camera, then placed at a fixed depth
+  // in the card camera's space at the size the hand's camera would show it
+  tmpW.copy(FR.j[4].pos); tmpW.y += FLOAT_GAP + FLOAT_H / 2 + (reduceMotion ? 0 : Math.sin(clock * 1.1) * 0.012);
+  handInner.localToWorld(tmpW);
+  tmpN.copy(tmpW).applyMatrix4(camera.matrixWorldInverse);
+  const depth = Math.max(0.1, -tmpN.z);
+  tmpN.copy(tmpW).project(camera);
+  const z = LAY.floatZ;
+  outP.set(tmpN.x * TAN * aspect * z, tmpN.y * TAN * z, -z);
+  const sc = FLOAT_H * z / (depth * CH);
+  floatE.set(reduceMotion ? 0 : Math.sin(clock * 0.7) * 0.05, reduceMotion ? 0 : Math.sin(clock * 0.5) * 0.16, reduceMotion ? 0 : Math.sin(clock * 0.9) * 0.03);
+  outQ.setFromEuler(floatE);
+  const hpx = FLOAT_H * H / (2 * TAN * depth), wpx = hpx * CW / CH, cxp = (tmpN.x * 0.5 + 0.5) * W, cyp = (-tmpN.y * 0.5 + 0.5) * H;
+  PK.floatRect = { left: cxp - wpx / 2, right: cxp + wpx / 2, top: cyp - hpx / 2, bottom: cyp + hpx / 2 };
+  return sc;
+}
+function updatePicked(c, dt) {
+  c.grp.visible = true;
+  if (phase === 'pick') {
+    if (!drag || !drag.flipping) {                // the deck's flip spring
+      const k = 90, dd = 2 * Math.sqrt(k) * 0.82;
+      c.flipVel += ((c.flipTarget - c.flip) * k - c.flipVel * dd) * dt;
+      c.flip += c.flipVel * dt;
+    }
+    liftPose(c.flip, tmpP, tmpQ);
+    c.grp.position.lerp(tmpP, damp(reduceMotion ? 12 : 8, dt));
+    c.grp.quaternion.slerp(tmpQ, damp(10, dt));
+    c.grp.scale.setScalar(1);
+  } else {
+    const sc = floatTarget(tmpP, tmpQ), w = st.floatW;
+    // it shrinks ahead of the move, so the big card never sweeps across the headers on its way to the finger
+    c.grp.position.lerpVectors(PK.fromP, tmpP, w);
+    c.grp.position.y += Math.sin(Math.PI * w) * (reduceMotion ? 0 : 0.08);
+    c.grp.quaternion.slerpQuaternions(PK.fromQ, tmpQ, w);
+    c.grp.scale.setScalar(lerp(1, sc, E.out(clamp01(w * 1.35))));
+  }
+}
+function updateCards(dt, par) {
+  ptrF.x = pointer.x * par; ptrF.y = pointer.y * par;
+  cardKey.position.set(ptrF.x * 3.2, 1.4 + ptrF.y * 2.2, 3.2);          // the deck's key light follows the pointer
+  const fanTime = phase === 'B' ? tB : phase === 'choose' ? TB.end + 99 : -1;
+  const fanOn = fanTime >= TB.deal;
+  const after = phase === 'pick' || phase === 'C' || phase === 'end';
+  let any = false;
+  for (const c of cards) {
+    const s = c.slot;
+    if (after && s === PK.slot) { updatePicked(c, dt); any = true; continue; }
+    if (after) {
+      // the other twenty withdraw together, down and out of frame, as one rigid body: no card moves relative to
+      // another, so none can pass through another on the way out
+      if (c.state === 'fan') { c.state = 'leaving'; c.lift = 0; }
+      if (c.state === 'leaving') {
+        const k = clamp01((clock - PK.leaveAt) / (reduceMotion ? 0.5 : 1.0));
+        const bob = reduceMotion ? 0 : Math.sin(clock * 0.9 + s * 0.5) * 0.03;
+        fanPose(s, tmpP, tmpQ, ptrF, 0, bob);
+        tmpN.set(0, (reduceMotion ? -1.6 : -6.5) * E.inOut(k), 0).applyQuaternion(fanRoot.quaternion);
+        c.grp.position.copy(tmpP.add(tmpN)); c.grp.quaternion.copy(tmpQ);
+        if (k >= 1) { c.grp.visible = false; c.state = 'gone'; }
+        any = any || c.grp.visible;
+      }
+      continue;
+    }
+    if (!fanOn) { if (c.state !== 'off') { c.state = 'off'; c.grp.visible = false; c.lift = 0; } continue; }
+    if (c.state !== 'fan') {                       // dealt up into the fan from below the screen
+      c.state = 'fan'; c.grp.visible = true; c.lift = 0; c.grp.scale.setScalar(1);
+      fanPose(s, c.grp.position, c.grp.quaternion, ptrF, 0, 0);
+      tmpN.set(0, reduceMotion ? -0.5 : -4.2, 0.6).applyQuaternion(fanRoot.quaternion);
+      c.grp.position.add(tmpN);
+    }
+    any = true;
+    if (fanTime < TB.deal + s * 0.035 * MB) continue;
+    c.lift += ((s === PK.hovered && phase === 'choose' ? 1 : 0) - c.lift) * damp(10, dt);
+    const bob = reduceMotion ? 0 : Math.sin(clock * 0.9 + s * 0.5) * 0.03;
+    fanPose(s, tmpP, tmpQ, ptrF, c.lift, bob);
+    c.grp.position.lerp(tmpP, damp(7, dt));
+    c.grp.quaternion.slerp(tmpQ, damp(8, dt));
+  }
+  // a light sweeps across the card as it lands face up (deck)
+  if (sweepT >= 0) {
+    sweepT += dt;
+    const p = Math.min(1, sweepT / 0.55), z = LAY.liftZ;
+    sweep.position.set(LAY.liftX * TAN * aspect * z - 1.1 + 2.2 * p, LAY.liftY * TAN * z + 0.6 - 1.2 * p, -z + 0.55);
+    sweep.intensity = Math.sin(p * Math.PI) * 6;
+    if (p >= 1) { sweepT = -1; sweep.intensity = 0; }
+  }
+  return any;
+}
+// A card on its way up out of the fan (and the chosen one) is drawn after the rest, each in its own pass with the depth
+// cleared, so it shows on top as it rises instead of cutting through the neighbours it is passing (the deck's lift
+// moves it outward through their layers; at rest and fully lifted the fan is clash-free either way).
+const topCards = [];
+const topRank = c => (c.slot === PK.slot ? 1e3 : c.slot === PK.hovered ? 100 + c.lift : c.lift);
+function renderCards() {
+  topCards.length = 0;
+  const after = phase === 'pick' || phase === 'C' || phase === 'end';
+  for (const c of cards) {
+    if (!c.grp.visible) continue;
+    if ((after && c.slot === PK.slot) || (c.state === 'fan' && c.lift > 0.1)) topCards.push(c);
+  }
+  topCards.sort((a, b) => topRank(a) - topRank(b));
+  for (const c of topCards) c.grp.visible = false;
+  renderer.clearDepth(); renderer.render(cardScene, cardCam);
+  if (!topCards.length) return;
+  const shown = cards.filter(c => c.grp.visible);
+  for (const c of shown) c.grp.visible = false;
+  for (const c of topCards) {
+    c.grp.visible = true;
+    renderer.clearDepth(); renderer.render(cardScene, cardCam);
+    c.grp.visible = false;
+  }
+  for (const c of shown) c.grp.visible = true;
+  for (const c of topCards) c.grp.visible = true;
+}
+function snapFan() {                               // debug jumps: put every card in the fan at once
+  for (const c of cards) {
+    c.state = 'fan'; c.grp.visible = true; c.lift = 0; c.grp.scale.setScalar(1);
+    fanPose(c.slot, c.grp.position, c.grp.quaternion, { x: 0, y: 0 }, 0, 0);
+  }
 }
 
 /* ---------- loop ---------- */
@@ -1688,10 +2759,22 @@ function frame(now) {
     evalA(TA.end);
   } else if (phase === 'B') {
     tB += dt;
-    if (tB >= TB.end) { tB = TB.end; setPhase('end'); }
-    evalB(tB);
-  } else {
+    if (tB >= TB.end) { tB = TB.end; evalB(tB); enterChoose(); } else evalB(tB);
+  } else if (phase === 'choose') {
     evalB(TB.end);
+    if (PK.autoPickAt > 0 && clock >= PK.autoPickAt) {
+      PK.autoPickAt = -1;
+      const want = Number(qs.get('pick'));
+      choose(Number.isInteger(want) && want >= 0 && want < FAN_N ? want : Math.floor(FAN_N / 2));
+    }
+  } else if (phase === 'pick') {
+    evalB(TB.end); PK.t += dt; evalPick(); checkPick();
+  } else if (phase === 'C') {
+    tC += dt;
+    if (tC >= TC.end) { tC = TC.end; setPhase('end'); }
+    evalB(TB.end); evalPick(1); evalC(tC);
+  } else {
+    evalB(TB.end); evalPick(1); evalC(TC.end);
   }
 
   // gentle idle life in the fingers once the hand exists
@@ -1710,7 +2793,8 @@ function frame(now) {
   updateGroups();
   updateHandPoints();
   updateLines();
-  updateRing(rdt);
+  updateRing(dt);
+  updateSun();
 
   skyNear.position.set(pointer.x * 0.22 * par, pointer.y * 0.14 * par, 0);
   skyMid.position.set(pointer.x * 0.06 * par, pointer.y * 0.04 * par, 0);
@@ -1719,11 +2803,14 @@ function frame(now) {
   const skyA = 0.25 + 0.75 * st.starsIn;
   for (const lay of [skyFar, skyMid, skyNear, skyConst]) for (const c of lay.children) if (c.material && c.material.uniforms) c.material.uniforms.uOpacity.value = skyA;
 
+  const cardsOn = updateCards(dt, par);
   setCaption(st.caption);
-  placeLabel(result ? st.label : 0, rdt);
+  updateTags(rdt);
   mathEl.style.opacity = st.math.toFixed(3);
 
+  renderer.clear();
   renderer.render(scene, camera);
+  if (cardsOn) renderCards();
   window.__frames = ++frames;
   requestAnimationFrame(frame);
 }
@@ -1750,33 +2837,90 @@ resize();
   joints.forEach(j => take(j.pos));
   dust.forEach(dd => { if (!dd.arm) take(dustTarget(dd, q)); });
   for (const k in ext) FIG[k] = ext[k] * 1.04;
+  // and the open hand as the ring beat and the end shot see it (hand-local axes, pivot at the origin)
+  applyPose(POSES.open);
+  handRoot.rotation.set(-0.04, 0, 0); handRoot.updateMatrixWorld(true);
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  const grab = v => { p.copy(v); handInner.localToWorld(p); x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); };
+  joints.forEach(j => grab(j.pos));
+  dust.forEach(dd => { if (!dd.arm) grab(dustTarget(dd, q)); });
+  const sat = handInner.localToWorld(ringRestLocal(new THREE.Vector3()));
+  const rtip = handInner.localToWorld(FR.j[4].pos.clone());
+  Object.assign(OPEN, { up: y1, down: -y0, width: x1 - x0, handCxRel: (x0 + x1) / 2 - sat.x, tipAboveSat: y1 - sat.y, ringTipY: rtip.y, ringLen: sat.distanceTo(rtip) + 0.07 });
   resize();
 }
+buildRingParticles(TB.dis[1]);
 prepareFormation();
 setPhase('A');
-setHint();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measureTags(); resize(); });
 
-// debug hooks (harmless in production): ?t=seconds into the intro, ?b=seconds after Reveal, ?freeze, ?pose=open|one|thumb
+// debug hooks (harmless in production): ?t=seconds into the intro, ?b=seconds after Reveal, ?r=seconds into the ring
+// beat, ?c=seconds into the after-pick (with a card already chosen), ?pick=fan position to choose by itself,
+// ?flip to turn it by itself, ?freeze, ?pose=open|one|thumb
 if (qs.has('pose') && POSES[qs.get('pose')]) {
   const n = k => (qs.has(k) ? Number(qs.get(k)) * DEG : null);
   debugPose = {
     pose: POSES[qs.get('pose')],
-    st: { starsIn: 1, formT: 1e4, lines: 1, yaw: n('yaw') ?? 0, pitch: n('pitch') ?? 0, roll: n('roll') ?? 0, dolly: 1, arcX: 0, wThumb: qs.get('view') === 'thumb' ? 1 : 0, wRing: 0, label: 0, math: 0, caption: 0, hi: 0, ringA: 0, grow: 0, fingerA: 1, planetA: 0, bandsA: 0, pulse: 0 },
+    st: { starsIn: 1, formT: 1e4, lines: 1, yaw: n('yaw') ?? 0, pitch: n('pitch') ?? 0, roll: n('roll') ?? 0, dolly: 1, arcX: 0, wThumb: qs.get('view') === 'thumb' ? 1 : 0, wRing: 0, wZoom: 0, wChoose: 0, wPick: 0, wEnd: 0, math: 0, caption: '', tagT: 0, tagR: 0, hi: 0, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, fingerA: 1, planetA: 0, ringsA: 0, annA: 0, pulse: 0, sun: 0, floatW: 0 },
   };
   skipBtn.hidden = true;
 }
+function jumpB(t) {
+  if (!result) reveal();
+  if (phase !== 'B') { resetPick(); setPhase('B'); }
+  tB = Math.max(0, Math.min(TB.end, t));
+}
+function jumpC(t, slot = Math.floor(FAN_N / 2)) {
+  jumpB(TB.end); enterChoose(); PK.autoPickAt = -1;
+  snapFan();
+  choose(slot);
+  const c = cards[slot];
+  c.flip = c.flipTarget = 2 * Math.PI; c.flipVel = 0;
+  liftPose(c.flip, c.grp.position, c.grp.quaternion);
+  for (const o of cards) if (o !== c) { o.grp.visible = false; o.state = 'gone'; }
+  PK.t = 10;
+  revealCard(); sweepT = -1;
+  enterC(); tC = Math.max(0, Math.min(TC.end, t));
+}
 if (qs.has('t')) tA = Math.min(TA.end, Number(qs.get('t')) || 0);
 if (qs.has('b')) { reveal(); tB = Math.min(TB.end, Number(qs.get('b')) || 0); }
+if (qs.has('r')) jumpB(TB.ring0 + (Number(qs.get('r')) || 0));
+if (qs.has('c')) jumpC(Number(qs.get('c')) || 0, qs.has('pick') ? Math.max(0, Math.min(FAN_N - 1, Number(qs.get('pick')) | 0)) : undefined);
 window.__seq = {
-  get phase() { return phase; }, get tA() { return tA; }, get tB() { return tB; }, TA, TB, st,
-  jumpA(t) { setPhase('A'); tA = t; }, jumpB(t) { if (!result) reveal(); tB = t; }, reveal, restart,
+  get phase() { return phase; }, phases: PHASES,
+  get tA() { return tA; }, get tB() { return tB; }, get tC() { return tC; }, TA, TB, TC, st,
+  jumpA(t) { setPhase('A'); tA = t; }, jumpB, jumpR(r) { jumpB(TB.ring0 + r); }, jumpC, reveal, restart,
+  pick(i = Math.floor(FAN_N / 2)) { if (phase !== 'choose') { jumpB(TB.end); enterChoose(); PK.autoPickAt = -1; snapFan(); } choose(i); return { slot: PK.slot, card: PK.card }; },
+  flip() { flipToFace(); },
+  get sealed() { return sealed ? [...sealed] : null; },
+  get picked() { return { slot: PK.slot, card: PK.card, name: PK.card >= 0 ? MAJORS[PK.card].join(' · ') : null, revealed: PK.revealed, hovered: PK.hovered }; },
+  slotAt, backColors, DEFAULT_BACK,
+  fan: () => ({ N: FAN_N, fanR: FAN.fanR, maxA: FAN.maxA, TWIST, STEP, LIFT_OUT, Df: FAN.Df, camInFan: [0, 0.25, FAN.Df], ndc: [FAN.nx, FAN.ny], layout: { ...LAY } }),
+  // every slot must be reachable: screen points (on a grid) whose topmost card is that slot, and one sample point each
+  fanReach(step = 3) {
+    const counts = new Array(FAN_N).fill(0), pts = Array.from({ length: FAN_N }, () => []);
+    for (let y = Math.max(0, LAY.fanTop - 40); y < Math.min(H, LAY.fanBottom + 10); y += step)
+      for (let x = 2; x < W - 2; x += step) { const s = slotAt(x, y); if (s >= 0) { counts[s]++; pts[s].push([x, y]); } }
+    return { counts, pts: pts.map(p => (p.length ? p[Math.floor(p.length / 2)] : null)) };
+  },
+  sizes: () => ({ R_FINGER, R_SAT, RING_IN, RING_OUT, band: { ...BAND }, fingerBaseWidth: 2 * BONE_RP.r0, saturnDiameter: 2 * R_SAT, ringsOuterDiameter: 2 * RING_OUT, ringsToSaturn: RING_OUT / R_SAT }),
+  // on screen, in px: Saturn's diameter, the rings' outer diameter and the ring finger's width at its base
+  saturnPx() {
+    const c = screenOf(ringRestLocal(new THREE.Vector3()), new THREE.Vector3());
+    const ppu = H / (2 * TAN * c.z);
+    return { x: Math.round(c.x), y: Math.round(c.y), saturn: +(2 * R_SAT * ppu).toFixed(1), rings: +(2 * RING_OUT * ppu).toFixed(1), fingerBase: +(2 * BONE_RP.r0 * ppu).toFixed(1), planetA: +st.planetA.toFixed(3), fingerA: +st.fingerA.toFixed(3), camDist: +c.z.toFixed(3) };
+  },
+  tags() {
+    const one = (t, n) => ({ opacity: +n.style.opacity || 0, rect: t.rect && Object.fromEntries(Object.entries(t.rect).map(([k, v]) => [k, Math.round(v)])), spot: t.spot, text: n.innerText.replace(/\s+/g, ' ').trim() });
+    return { thumb: one(tagT, thumbTagEl), ring: one(tagR, ringTagEl), caption: capShown, captionText: captionP.textContent };
+  },
   joints: () => joints.map(j => j.pos.toArray().map(v => +v.toFixed(4))),
   fk(poseDeg) { applyPose(Float32Array.from(poseDeg, x => x * DEG)); return joints.map(j => j.pos.toArray().map(v => +(v / CM).toFixed(3))); },
   setDebugPose(p, s) { debugPose = { pose: Float32Array.from(p, x => x * DEG), st: Object.assign({}, debugPose ? debugPose.st : {}, s) }; },
   thumbCheck,
-  get labelSide() { return labDebug.side; },
-  FIG, framing,
-  // screen-space [x, y, alpha, kind] for every visible hand, ring and planet star (layout tests)
+  get labelSide() { return tagT.spot; },
+  FIG, OPEN, framing, LAY,
+  // screen-space [x, y, alpha, kind] for every visible hand star, plus Saturn's centre (layout tests)
   project() {
     const out = [], u = new THREE.Vector3();
     const add = (x, y, z, obj, a, kind) => {
@@ -1786,14 +2930,7 @@ window.__seq = {
     const jp = jPos.array, ja = jAlpha.array, dp = dPos.array, da = dAlpha.array;
     for (let i = 0; i < NJ; i++) add(jp[i * 3], jp[i * 3 + 1], jp[i * 3 + 2], handInner, ja[i] * GA[joints[i].group], 'j');
     for (let i = 0; i < ND; i++) add(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2], handInner, da[i] * GA[dust[i].group], dust[i].arm ? 'arm' : 'd');
-    if (ringGroup.visible) {
-      const rp = ringStars.geometry.attributes.position.array;
-      for (let i = 0; i < RING_N; i++) add(rp[i * 3], rp[i * 3 + 1], rp[i * 3 + 2], ringStars, ringStars.material.uniforms.uOpacity.value, 'ring');
-    }
-    if (planetGroup.visible) {
-      const pp = planetGroup.children[0].geometry.attributes.position.array;
-      for (let i = 0; i < pp.length / 3; i += 4) add(pp[i * 3], pp[i * 3 + 1], pp[i * 3 + 2], planetGroup.children[0], planetMat.uniforms.uOpacity.value, 'planet');
-    }
+    if (planetGroup.visible) add(0, 0, 0, planetGroup, st.planetA, 'saturn');
     return out;
   },
 };
