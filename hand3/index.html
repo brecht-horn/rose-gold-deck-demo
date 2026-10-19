@@ -988,7 +988,7 @@ const RING_T = 0.3;                                             // a ring sits 3
 const R_FINGER = lerp(BONE_RP.r0, BONE_RP.r1, RING_T);
 const PLANET_R = BONE_RP.r0;          // the planets' one shared finger-base radius (the ring finger at its base), so their sizes compare
 const BAND = { ri: R_FINGER * 0.9, t: R_FINGER * 0.15, w: R_FINGER * 0.5 };   // a band that fits the finger, not a bangle
-const BAND_PTS = 48, BAND_SEG = 128, DIS_W = 128, DIS_H = 32;
+const BAND_PTS = 48, BAND_SEG = 128, DIS_W = 256, DIS_H = 32;
 function bandProfile(v, out) {            // v in [0, 1] around the cross-section, starting and ending on the inner face
   const a = Math.PI + v * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
   const pc = Math.sign(c) * Math.pow(Math.abs(c), c > 0 ? 0.82 : 0.6);   // domed outside, a flatter comfort-fit inside
@@ -1002,14 +1002,19 @@ const bandGeo = new THREE.LatheGeometry(Array.from({ length: BAND_PTS + 1 }, (_,
 const DIS_SEED = 0.62;
 const disData = new Uint8Array(DIS_W * DIS_H);
 {
-  const GU = 16, GV = 4, g = Array.from({ length: GU * GV }, () => Math.random());
   const sm = x => x * x * (3 - 2 * x);
-  const at = (i, j) => g[((j % GV) + GV) % GV * GU + ((i % GU) + GU) % GU];
+  const noise = (GU, GV) => {                       // value noise that wraps around the band and its profile
+    const g = Array.from({ length: GU * GV }, () => Math.random()), at = (i, j) => g[((j % GV) + GV) % GV * GU + ((i % GU) + GU) % GU];
+    return (u, v) => {
+      const x = u * GU, y = v * GV, i0 = Math.floor(x), j0 = Math.floor(y), fx = sm(x - i0), fy = sm(y - j0);
+      return lerp(lerp(at(i0, j0), at(i0 + 1, j0), fx), lerp(at(i0, j0 + 1), at(i0 + 1, j0 + 1), fx), fy);
+    };
+  };
+  const n1 = noise(14, 4), n2 = noise(46, 8);       // broad wisps, and finer fraying at their edges
   for (let j = 0; j < DIS_H; j++) for (let i = 0; i < DIS_W; i++) {
-    const u = (i + 0.5) / DIS_W, x = u * GU, y = (j + 0.5) / DIS_H * GV, i0 = Math.floor(x), j0 = Math.floor(y), fx = sm(x - i0), fy = sm(y - j0);
-    const nz = lerp(lerp(at(i0, j0), at(i0 + 1, j0), fx), lerp(at(i0, j0 + 1), at(i0 + 1, j0 + 1), fx), fy);
+    const u = (i + 0.5) / DIS_W, v = (j + 0.5) / DIS_H;
     let du = Math.abs(u - DIS_SEED); du = Math.min(du, 1 - du) * 2;   // 0 at the seed, 1 opposite it
-    disData[j * DIS_W + i] = Math.round(255 * (0.1 + 0.9 * clamp01(0.5 * nz + 0.5 * du)));
+    disData[j * DIS_W + i] = Math.round(255 * (0.1 + 0.9 * clamp01(0.4 * n1(u, v) + 0.22 * n2(u, v) + 0.38 * du)));
   }
 }
 const disTex = new THREE.DataTexture(disData, DIS_W, DIS_H, THREE.RedFormat, THREE.UnsignedByteType);
@@ -1045,26 +1050,28 @@ const BAND_FS = /* glsl */`
   float gridLine(float x) { return 1.0 - smoothstep(0.0, fwidth(x) * 1.4, abs(fract(x) - 0.5)); }
   void main() {
     float th = texture2D(uDisMap, vUv).r, cut = uDis * 1.15;
-    float keep = smoothstep(cut - 0.1, cut, th);                       // it frays softly, never in hard cells
+    float keep = smoothstep(cut - 0.15, cut, th);                      // it frays softly, never in hard cells
     if (keep * uOpacity < 0.01) discard;
     vec3 N = normalize(vN), V = normalize(-vV), L = normalize(uLight);
     float ndv = clamp(dot(N, V), 0.0, 1.0), fres = pow(1.0 - ndv, 2.2);
     float dif = clamp(0.5 + 0.5 * dot(N, L), 0.0, 1.0);
     float spec = pow(max(dot(N, normalize(L + V)), 0.0), 26.0);
     float sweep = exp(-pow((fract(vUv.x - uTime * 0.09) - 0.5) * 7.0, 2.0));   // a sheen sliding round the band
-    vec3 deep = vec3(0.34, 0.18, 0.12), mid = vec3(0.95, 0.63, 0.46), hi = vec3(1.0, 0.9, 0.78);
+    vec3 deep = vec3(0.46, 0.26, 0.17), mid = vec3(0.95, 0.63, 0.46), hi = vec3(1.0, 0.9, 0.78);
     vec3 col = mix(deep, mid, dif * dif) * 0.6;                        // the soft gold body
     col += mid * fres * 1.1;                                           // its silhouette, drawn in light
     col += hi * (spec * 0.8 + sweep * dif * 0.3);                      // the highlight
-    float wire = max(gridLine(vUv.x * 36.0), gridLine(vUv.y * 4.0));  // the faint wireframe (meridians, the four edges)
-    col += hi * wire * 0.3;
+    float wire = max(gridLine(vUv.x * 24.0) * 0.5, gridLine(vUv.y * 4.0));   // the faint wireframe (meridians, the four edges)
+    col += hi * wire * 0.26;
     vec2 cg = vUv * vec2(90.0, 9.0), cf = fract(cg) - 0.5;             // and starlight in the gold
     float hs = fract(sin(dot(floor(cg), vec2(12.9898, 78.233))) * 43758.5453);
     float tw = step(0.88, hs) * pow(0.5 + 0.5 * sin(uTime * (1.3 + 2.6 * hs) + hs * 40.0), 4.0);
     col += vec3(1.0, 0.9, 0.8) * tw * (1.0 - smoothstep(0.05, 0.3, length(cf * vec2(1.0, 0.7)))) * 1.4;
-    float edge = uDis > 0.001 ? 1.0 - smoothstep(0.0, 0.08, abs(th - cut + 0.05)) : 0.0;
+    float edge = uDis > 0.001 ? 1.0 - smoothstep(0.0, 0.1, abs(th - cut + 0.07)) : 0.0;
     col += vec3(1.0, 0.72, 0.5) * edge * 0.6;                          // a soft ember where it is coming apart
-    float a = uOpacity * keep * clamp(0.6 + 0.4 * fres + 0.25 * wire + 0.3 * spec, 0.0, 1.0);
+    float a = uOpacity * keep * clamp(0.76 + 0.24 * fres + 0.2 * wire + 0.3 * spec, 0.0, 1.0);
+    float dd = clamp(uDis, 0.0, 1.0);                                  // as it comes apart, what is left turns to light
+    col = mix(col, mid * 0.85 + hi * 0.2, dd * 0.55); a *= 1.0 - 0.5 * dd;
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -1167,7 +1174,8 @@ ringGroup.visible = false;
 const PALM_LINES = [
   [[-2.9, 7.3], [-2.05, 7.5], [-1.15, 7.72], [-0.25, 7.98], [0.6, 8.3], [1.32, 8.78]],                  // heart line
   [[2.8, 6.72], [1.9, 6.42], [0.95, 6.12], [0.0, 5.82], [-0.95, 5.46], [-1.85, 5.0], [-2.45, 4.6]],      // head line
-  [[2.72, 6.55], [2.1, 6.0], [1.58, 5.2], [1.3, 4.2], [1.26, 3.2], [1.42, 2.2], [1.72, 1.3]],            // life line
+  // life line: one wide, even arc around the ball of the thumb, then down to the wrist (photo 1), not hooked back into it
+  [[2.72, 6.55], [2.12, 6.2], [1.6, 5.7], [1.2, 5.05], [0.92, 4.3], [0.78, 3.5], [0.76, 2.7], [0.8, 1.9], [0.88, 1.1]],
 ];
 const palmPoint = (x, y, lift = 0.08) => { const X = x * PALM_W; return V(X, y, palmHalf(X, y).front + lift); };
 const plPos = [], plA = [], plS = [], plC = [], plSegs = [];
@@ -1896,7 +1904,7 @@ function blendPose(out, a, b, w, stag) {
 // from facing us, curled fingers stacked down the left, the thumb up on the right, the wrist at the lower right.
 // Turn 2 reaches it from the back of the hand (yaw -pi) by turning counter-clockwise, the way turn 1 came.
 const END_YAW = -0.19 * Math.PI;
-const ROLL_LEAN = 13 * DEG;                          // photo 2: at the end of the turn the thumb still leans right a little
+const ROLL_LEAN = (qs.has('lean') && Number.isFinite(+qs.get('lean')) ? +qs.get('lean') : 13) * DEG;   // photo 2: the thumb's lean at the end of the turn (?lean=deg)
 // roll: solved at load so the thumb's first bone stands straight up (photo 3); roll2 = roll - ROLL_LEAN (photo 2)
 let ROT_T = { yaw: END_YAW, pitch: -0.06, roll: 0.86, roll2: 0.64 };
 function evalHome() {                               // the whole open hand, palm to us: between beats, and the end
