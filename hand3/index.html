@@ -1821,12 +1821,13 @@ function resize() {
     S.dF = dAtPpu(ppuF); S.sxF = S.sxP; S.syF = S.syP;
   }
   // ---- behind the deck: how far the open hand draws back around each finger's planet to be seen whole (BODY_K) ----
-  for (let b = 1; b <= 4; b++) {
-    const S = SHOT[b], mx = (1 + S.sxP) / 2 * W, my = (1 - S.syP) / 2 * H, P = HOME.P && HOME.P[b];
+  for (let b = 0; b <= 4; b++) {
+    const S = SHOT[b], mx = (1 + S.sxP) / 2 * W, my = (1 - S.syP) / 2 * H, P = b === 0 ? HOME.sunP : HOME.P && HOME.P[b];
+    const pts = b === 0 ? HOME.fistPts : HOME.pts;      // the thumb's beat: the thumbs-up, around the Sun
     let k = 1;
-    if (BODY_ON && P && HOME.pts) {
+    if (BODY_ON && P && pts) {
       const top = LAY.top + S.headH + 6, bot = H - LAY.bottom - 4;
-      for (const [x, y, , hx, hy] of HOME.pts) {
+      for (const [x, y, , hx, hy] of pts) {
         if (hx) continue;                                 // the small cards' boxes are not part of the hand
         const dx = (x - P.x) * S.ppuP, dy = (y - P.y) * S.ppuP;
         if (dx > 0) k = Math.min(k, (W - 14 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - 14) / -dx);
@@ -1967,6 +1968,7 @@ function evalA(t) {                                 // the intro and the thumb, 
   st.fingerA = 1 - segE(t, TA.fade, E.sine);
   st.collapse = segE(t, TA.fade, E.sine);         // one gentle ease (no double cubic): the stars pour in, not snap
   st.backW = segE(t, TA.back, E.sine);
+  st.bodyK = lerp(1, BODY_K[0], st.backW);            // the thumbs-up comes back drawn in around the Sun
   st.restA = lerp(lerp(1, REST_LOW, segE(t, TA.rest, E.sine)), REST_BACK, st.backW);
   st.planetA = segE(t, TA.plA, E.sine);
   st.reveal = segE(t, TA.reveal, E.sine);
@@ -2478,8 +2480,7 @@ const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new TH
 const RIM_FLOOR = 0.33, RIM_GAIN = 1.0;
 // Behind the deck the camera stays in close on the planet, where the full-size hand is only a scatter of stars at the
 // screen's edges; so the hand (not the planet) draws back around the planet, small enough to be seen whole, the planet
-// standing where its finger was. Per beat; 1 = off (the thumb, whose Sun shares the screen with the sheet, and the palm,
-// whose lines frame Mars). ?handk=0 turns it off.
+// standing where its finger was. Per beat (the palm keeps 1: its lines frame Mars). ?handk=0 turns it off.
 const BODY_K = [1, 1, 1, 1, 1, 1];
 const BODY_ON = qs.get('handk') !== '0';
 const BODY_PTS_K = qs.has('bpk') && Number.isFinite(+qs.get('bpk')) ? +qs.get('bpk') : 0.55;
@@ -3021,6 +3022,10 @@ resize();
   // photo 3: the close-up frames the thumb (its two bones and where it leaves the palm), not the whole fist; the
   // curled index finger is left to show at the lower left
   [T.j[1], T.j[2], T.j[3]].forEach(j => take(j.pos));
+  HOME.fistPts = [];
+  { const g = v => { const w = handInner.localToWorld(v.clone()); HOME.fistPts.push([w.x, w.y, w.z, 0, 0]); };
+    joints.forEach(j => g(j.pos)); dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) g(dustTarget(dd, q)); });
+    HOME.sunP = handInner.localToWorld(planetLocal(0, new THREE.Vector3())); }
   dust.forEach(dd => { if (!dd.stat && dd.group === 0 && (BONES[dd.bone].a !== T.j[0] || dd.t > 0.45)) take(dustTarget(dd, q)); });
   for (const k in ext) FIG[k] = ext[k] * 1.06;
   // the open hand, palm to us, with its six small cards, as the home shot sees it (world units around the pivot)
