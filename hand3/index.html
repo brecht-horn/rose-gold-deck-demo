@@ -764,6 +764,11 @@ seg2(wU, ULNAR, 5, 0.14, 0);
 seg2(ULNAR, FP.j[1], 5, 0.14, 1);
 seg2(T.j[0], T.j[1], 0, 0.3, 1);
 seg2(FI.j[1], FM.j[1], 5, 0.18, 2); seg2(FM.j[1], FR.j[1], 5, 0.18, 2); seg2(FR.j[1], FP.j[1], 5, 0.18, 2);
+// while a finger is its planet, the palm lines that meet at its knuckle go with it and one rung bridges its neighbours
+// (v2's ring-finger fix, for every finger): middle FI-FR, ring FM-FP, little finger FR to the palm's outer edge
+seg2(FI.j[1], FR.j[1], 5, 0.18, 2); SEGS[SEGS.length - 1].bridge = 2;
+seg2(FM.j[1], FP.j[1], 5, 0.18, 2); SEGS[SEGS.length - 1].bridge = 3;
+seg2(FR.j[1], ULNAR, 5, 0.14, 1); SEGS[SEGS.length - 1].bridge = 4;
 for (const f of FINGERS) seg2(f.j[1], f.j[2], f.g, 0.32, 2);
 seg2(T.j[1], T.j[2], 0, 0.32, 2);
 for (const f of FINGERS) seg2(f.j[2], f.j[3], f.g, 0.32, 3);
@@ -771,6 +776,8 @@ seg2(T.j[2], T.j[3], 0, 0.32, 3);
 for (const f of FINGERS) seg2(f.j[3], f.j[4], f.g, 0.32, 4);
 // in a fist: the proximal bone (the top of the fist) stays, the tucked middle and distal bones recede
 for (const s of SEGS) { s.fin = s.group >= 1 && s.group <= 4 ? s.group - 1 : -1; s.fade = [0, 0, 0.15, 0.55, 0.9][s.level]; }
+// a palm line that ends at a finger's (or the thumb's) joint goes with that finger into its planet
+for (const s of SEGS) if (s.group === 5 && s.bridge === undefined) s.drop = [s.a.group, s.b.group].filter(g => g <= 4);
 const NS = SEGS.length;
 const lGeo = new THREE.BufferGeometry();
 const lPos = attr(lGeo, 'position', new Float32Array(NS * 6), 3);
@@ -1852,7 +1859,7 @@ const TA = (() => {
 const TI = (() => {                        // index, middle, little finger, palm: from the whole hand to the deck
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return {
-    hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
+    hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9), placedOff: w(0.1, 0.85),
     // the finger pours slowly into its planet (about 3 s, eased), its stars arriving as the camera settles
     zoom: w(4.6, 3.1), fade: w(4.7, 2.9), rest: w(4.7, 1.8), plA: w(4.75, 0.9), reveal: w(4.75, 3.0),
     back: w(8.5, 1.4), prompt: s(8.8), deal: s(9.1), end: s(10.8),
@@ -1861,7 +1868,7 @@ const TI = (() => {                        // index, middle, little finger, palm
 const TR = (() => {                        // the ring finger: the band slides down first, then comes apart into Saturn
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return {
-    hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
+    hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9), placedOff: w(0.1, 0.85),
     bandIn: w(1.9, 0.7), slide: w(1.9, 4.4),          // the band slides slowly from the fingertip down to the base
     zoom: w(6.0, 3.2),                                // the camera dollies in on the ring
     dis: [s(6.3), s(2.8)],                            // the band comes apart
@@ -1872,7 +1879,7 @@ const TR = (() => {                        // the ring finger: the band slides d
 })();
 const TO = (() => {                        // after a card is read: back out to the whole hand
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
-  return { head: w(0, 0.8), cap: s(0.9), plOut: w(0.2, 1.5), hiOff: w(0.3, 1.2), unfade: w(0.5, 1.7), cam: w(0.0, 2.9), float: w(0.05, 2.5), placed: w(1.6, 1.2), end: s(3.6) };
+  return { head: w(0, 0.8), cap: s(0.9), plOut: w(0.2, 1.5), hiOff: w(0.3, 1.2), unfade: w(0.5, 1.7), cam: w(0.0, 2.9), float: w(0.05, 2.5), placed: w(1.6, 1.2), end: s(4.0) };
 })();
 const TO0 = (() => {                       // after the thumb: the thumbs-up opens and turns to face us, palm out
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
@@ -1904,7 +1911,8 @@ function blendPose(out, a, b, w, stag) {
 // from facing us, curled fingers stacked down the left, the thumb up on the right, the wrist at the lower right.
 // Turn 2 reaches it from the back of the hand (yaw -pi) by turning counter-clockwise, the way turn 1 came.
 const END_YAW = -0.19 * Math.PI;
-const ROLL_LEAN = (qs.has('lean') && Number.isFinite(+qs.get('lean')) ? +qs.get('lean') : 13) * DEG;   // photo 2: the thumb's lean at the end of the turn (?lean=deg)
+// photo 2: at the end of the turn the thumb stands nearly straight up (its tip curls back on its own); ?lean=deg to try others
+const ROLL_LEAN = (qs.has('lean') && Number.isFinite(+qs.get('lean')) ? +qs.get('lean') : 3) * DEG;
 // roll: solved at load so the thumb's first bone stands straight up (photo 3); roll2 = roll - ROLL_LEAN (photo 2)
 let ROT_T = { yaw: END_YAW, pitch: -0.06, roll: 0.86, roll2: 0.64 };
 function evalHome() {                               // the whole open hand, palm to us: between beats, and the end
@@ -1961,7 +1969,7 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   st.restA = lerp(lerp(lerp(1, 0.55, st.hi), REST_LOW, segE(t, T.rest, E.sine)), REST_BACK, eBack);
   st.planetA = segE(t, T.plA, E.sine);
   st.reveal = segE(t, T.reveal, E.sine);
-  st.placedA = 1 - segE(t, T.push, E.sine);   // the cards already placed step aside as we dolly in, until we pull back
+  st.placedA = 1 - segE(t, T.placedOff, E.sine);   // the cards already placed step aside as we dolly in (gone before the header)
   st.cap = t >= T.prompt ? `choose${b}` : '';
   if (b === 5) {
     // the palm's lines are bright as the camera starts in, pour into Mars with the palm, and are back behind the deck
@@ -2557,6 +2565,7 @@ function updateHandPoints() {
 
 function updateLines() {
   const lp = lPos.array, la = lAlpha.array, p = st.lines, cg = beatGroup(), cl = collapseK;
+  const gone = cg >= 0 && cg <= 4 ? clamp01(1 - st.fingerA) : 0;      // how far the beat's finger has gone into its planet
   // the palm scaffolding (wrist, metacarpals, knuckle rungs) only reads while the hand is open and faces us;
   // in a fist or side-on it turns into an x-ray ladder, so it fades with the curl and the edge-on angle
   let curl = 0;
@@ -2569,7 +2578,9 @@ function updateLines() {
     let A = s.a.pos, B = s.b.pos;
     if (cl > 0 && s.group === cg) { if (s.a.group === cg) A = lA.copy(A).lerp(PCL, cl); if (s.b.group === cg) B = lB.copy(B).lerp(PCL, cl); }
     const local = clamp01((p - s.level * 0.16) / 0.36), e = E.out(local);
-    const a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * TUCKF[s.fin] : 1) * Math.min(1, local * 3);
+    let a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * TUCKF[s.fin] : 1) * Math.min(1, local * 3);
+    if (s.bridge !== undefined) a *= s.bridge === cg ? gone : 0;
+    else if (s.drop && s.drop.includes(cg)) a *= 1 - gone;
     lp[k * 6] = A.x; lp[k * 6 + 1] = A.y; lp[k * 6 + 2] = A.z;
     lp[k * 6 + 3] = A.x + (B.x - A.x) * e; lp[k * 6 + 4] = A.y + (B.y - A.y) * e; lp[k * 6 + 5] = A.z + (B.z - A.z) * e;
     la[k * 2] = a; la[k * 2 + 1] = a * (0.5 + 0.5 * e);
