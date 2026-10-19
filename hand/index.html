@@ -156,13 +156,13 @@
     font-size: 13px; line-height: 1.7; color: var(--muted);
   }
   @media (min-width: 700px) { #caption p { max-width: 31ch; } }
-  /* short landscape (a phone on its side): no room under the hand, so the narrative line takes the open column
+  /* short landscape (a phone on its side, a short laptop window): no room under the hand, so the narrative line takes the open column
      on the pinky side. The thumb side stays free for the card label and the arithmetic. */
   .short #caption {
     right: auto; top: 0; bottom: 0; align-items: center; justify-content: flex-start;
-    width: min(31vw, 300px); padding-left: max(5vw, env(safe-area-inset-left, 0px)); padding-right: 0;
+    width: min(31vw, 340px); padding-left: max(5vw, env(safe-area-inset-left, 0px)); padding-right: 0;
   }
-  .short #caption p { max-width: none; text-align: left; font-size: 21px; line-height: 1.28; }
+  .short #caption p { max-width: none; text-align: left; font-size: clamp(20px, 1.1vw + 12px, 26px); line-height: 1.28; }
   @media (max-width: 420px) {
     #hint { max-width: 22ch; }
     .lab-name { white-space: normal; max-width: 7.4em; font-size: 18px; line-height: 1.15; }
@@ -1092,7 +1092,9 @@ function resize() {
   // ring beat: a gentle push toward the ring finger, lifted so the wrist clears the two-line caption
   framing.ringPush = portrait ? 0.96 : 0.88;
   framing.ringCenter = portrait ? 0.62 : 0.45;
-  const short = side && H < 520;                   // a phone on its side: the caption moves to the pinky-side column
+  // a phone on its side, or a short laptop window: no room for the caption under the pushed-in hand, so it moves
+  // to the pinky-side column (900x640 and taller keep it centred below)
+  const short = side && H < 620;
   framing.ringLift = short ? 0 : portrait ? 0.06 : 0.12;
   framing.arcK = portrait ? 0.3 : 1;              // the camera's sideways arc on the pull-back; a narrow screen has no room for it
   document.documentElement.classList.toggle('wide', side);
