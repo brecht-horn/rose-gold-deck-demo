@@ -1899,7 +1899,7 @@ const st = {
   head: 0, cap: '', math: 0,
   hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0,
   bandIn: 0, slide: 0, disT: -1e4, tiltW: 0,
-  placedA: 1, floatW: 0,
+  placedA: 1, floatW: 0, backW: 0,
 };
 function blendPose(out, a, b, w, stag) {
   for (let k = 0; k < NP; k++) {
@@ -1922,7 +1922,7 @@ function evalHome() {                               // the whole open hand, palm
   st.head = 0; st.cap = ''; st.math = 0;
   st.hi = 0; st.fingerA = 1; st.collapse = 0; st.restA = 1; st.planetA = 0; st.reveal = 0; st.palmHi = 0;
   st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
-  st.placedA = 1; st.floatW = 0;
+  st.placedA = 1; st.floatW = 0; st.backW = 0;
 }
 function evalA(t) {                                 // the intro and the thumb, up to the sheet
   st.starsIn = segE(t, TA.stars, E.sine);
@@ -1949,7 +1949,8 @@ function evalA(t) {                                 // the intro and the thumb, 
   st.hi = segE(t, TA.hi);
   st.fingerA = 1 - segE(t, TA.fade, E.sine);
   st.collapse = segE(t, TA.fade, E.sine);         // one gentle ease (no double cubic): the stars pour in, not snap
-  st.restA = lerp(lerp(1, REST_LOW, segE(t, TA.rest, E.sine)), REST_BACK, segE(t, TA.back, E.sine));
+  st.backW = segE(t, TA.back, E.sine);
+  st.restA = lerp(lerp(1, REST_LOW, segE(t, TA.rest, E.sine)), REST_BACK, st.backW);
   st.planetA = segE(t, TA.plA, E.sine);
   st.reveal = segE(t, TA.reveal, E.sine);
   st.palmHi = 0; st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
@@ -1966,6 +1967,7 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   const fadeE = segE(t, T.fade, E.sine);
   st.collapse = b === 5 && t >= T.back[0] ? 0 : fadeE;   // the palm's stars are back in place (unseen) as the deck comes
   const eBack = segE(t, T.back, E.sine);
+  st.backW = eBack;
   st.restA = lerp(lerp(lerp(1, 0.55, st.hi), REST_LOW, segE(t, T.rest, E.sine)), REST_BACK, eBack);
   st.planetA = segE(t, T.plA, E.sine);
   st.reveal = segE(t, T.reveal, E.sine);
@@ -2007,6 +2009,7 @@ function evalOut(b, t) {                            // the card is read: back ou
   st.fingerA = lerp(st.fingerA, 1, un);
   st.collapse *= 1 - segE(t, O.unfade, E.inOut);
   st.restA = lerp(st.restA, 1, un);
+  st.backW *= 1 - cam;
   st.hi *= 1 - segE(t, O.hiOff); st.palmHi *= 1 - segE(t, O.hiOff);
   st.head *= 1 - segE(t, O.head, E.sine);
   st.cap = t < O.cap ? `card${b}` : '';
@@ -2454,6 +2457,8 @@ const VIEW_T = new THREE.Vector3(0.08, 0.06, 1).normalize();
 const idlePose = new Float32Array(NP);
 const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new THREE.Vector3(), PCL = new THREE.Vector3();
 const RIM_FLOOR = 0.33, RIM_GAIN = 1.0;
+const BACK_LINES = qs.has('lb') && Number.isFinite(+qs.get('lb')) ? +qs.get('lb') : 1.9;   // the hand's lines, brighter behind the deck
+const BACK_GB = qs.has('gb') && Number.isFinite(+qs.get('gb')) ? +qs.get('gb') : 0.12;
 let SX = 0, SY = 0, spinA = 0, collapseK = 0;
 function planetShotLocal(b, out) { return planetLocal(b, out); }
 const beatGroup = () => (phase === 'end' ? -1 : beat);
@@ -2581,6 +2586,7 @@ function updateLines() {
     let a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * TUCKF[s.fin] : 1) * Math.min(1, local * 3);
     if (s.bridge !== undefined) a *= s.bridge === cg ? gone : 0;
     else if (s.drop && s.drop.includes(cg)) a *= 1 - gone;
+    if (s.group !== cg) a *= 1 + (BACK_LINES - 1) * st.backW;
     lp[k * 6] = A.x; lp[k * 6 + 1] = A.y; lp[k * 6 + 2] = A.z;
     lp[k * 6 + 3] = A.x + (B.x - A.x) * e; lp[k * 6 + 4] = A.y + (B.y - A.y) * e; lp[k * 6 + 5] = A.z + (B.z - A.z) * e;
     la[k * 2] = a; la[k * 2 + 1] = a * (0.5 + 0.5 * e);
@@ -2683,7 +2689,7 @@ function updatePlanet(dt) {
 function updateGroups() {
   const fist = 1 - 0.42 * st.fist;          // on the thumb close-up the curled fingers recede so the thumb leads
   const cg = beatGroup();
-  for (let g = 0; g < 6; g++) { GA[g] = st.restA * (g === 0 ? 1 : g === 5 ? lerp(1, fist, 0.6) : fist); GB[g] = 1; }
+  for (let g = 0; g < 6; g++) { GA[g] = st.restA * (g === 0 ? 1 : g === 5 ? lerp(1, fist, 0.6) : fist); GB[g] = 1 + BACK_GB * st.backW; }
   if (cg >= 0) {
     GA[cg] = st.fingerA * lerp(1, 1.2, st.hi) * (cg === 0 ? 1 : cg === 5 ? lerp(1, fist, 0.6) : fist);
     GB[cg] = 1 + st.hi * (0.5 + 0.12 * Math.sin(clock * 3.1));
