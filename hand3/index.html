@@ -1761,12 +1761,12 @@ const TA = (() => {
   o.hi = [o.push[0] + o.push[1] * 0.45, 1.0 * MA];
   o.head = [o.push[0] + o.push[1] * 0.62, 0.9 * MA];
   c += 3.2 * HA;                           // the header and the three lines, read on the thumb
-  o.pzoom = [c, 2.9 * MA];                 // the camera dollies in on the Sun as it forms
-  o.fade = [c + 0.4 * MA, 1.6 * MA];       // the thumb's stars stream into the Sun
-  o.rest = [c + 0.4 * MA, 1.4 * MA];       // the rest of the hand fades away
-  o.plA = [c + 0.5 * MA, 0.7 * MA];
-  o.reveal = [c + 0.5 * MA, 2.6 * MA];
-  c += 3.4 * MA;
+  o.pzoom = [c, 3.1 * MA];                 // the camera dollies in on the Sun as it forms...
+  o.fade = [c + 0.15 * MA, 2.9 * MA];      // ...while the thumb's stars stream slowly into it, arriving as the camera settles
+  o.rest = [c + 0.15 * MA, 1.8 * MA];      // the rest of the hand fades away
+  o.plA = [c + 0.2 * MA, 0.9 * MA];
+  o.reveal = [c + 0.2 * MA, 3.0 * MA];     // the Sun forms over the same span as the collapse
+  c += 3.6 * MA;
   o.back = [c, 1.4 * MA];                  // the hand comes back behind the Sun as the sheet arrives
   o.sheet = c + 0.3 * HA;
   o.end = c + 1.4 * MA;                    // (the intro's clock runs on under the sheet until the hand is back)
@@ -1776,7 +1776,8 @@ const TI = (() => {                        // index, middle, little finger, palm
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return {
     hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
-    zoom: w(4.6, 2.9), fade: w(5.0, 1.6), rest: w(5.0, 1.4), plA: w(5.1, 0.7), reveal: w(5.1, 2.6),
+    // the finger pours slowly into its planet (about 3 s, eased), its stars arriving as the camera settles
+    zoom: w(4.6, 3.1), fade: w(4.7, 2.9), rest: w(4.7, 1.8), plA: w(4.75, 0.9), reveal: w(4.75, 3.0),
     back: w(8.5, 1.4), prompt: s(8.8), deal: s(9.1), end: s(10.8),
   };
 })();
@@ -1785,10 +1786,10 @@ const TR = (() => {                        // the ring finger: the band slides d
   return {
     hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
     bandIn: w(1.9, 0.7), slide: w(1.9, 4.4),          // the band slides slowly from the fingertip down to the base
-    zoom: w(6.0, 2.9),                                // the camera dollies in on the ring
-    dis: [s(6.4), s(1.9)],                            // the band comes apart cell by cell
-    tilt: w(6.5, 2.4),                                // ...and turns into Saturn's ring plane
-    fade: w(6.6, 1.6), rest: w(6.6, 1.4), plA: w(6.6, 0.7), reveal: w(6.7, 2.7),
+    zoom: w(6.0, 3.2),                                // the camera dollies in on the ring
+    dis: [s(6.3), s(2.8)],                            // the band comes apart
+    tilt: w(6.4, 2.7),                                // ...and turns into Saturn's ring plane
+    fade: w(6.4, 2.9), rest: w(6.4, 1.8), plA: w(6.45, 0.9), reveal: w(6.5, 3.0),
     back: w(10.3, 1.4), prompt: s(10.6), deal: s(10.9), end: s(12.6),
   };
 })();
@@ -1862,7 +1863,7 @@ function evalA(t) {                                 // the intro and the thumb, 
   st.math = 0;
   st.hi = segE(t, TA.hi);
   st.fingerA = 1 - segE(t, TA.fade, E.sine);
-  st.collapse = segE(t, TA.fade, E.inOut);
+  st.collapse = segE(t, TA.fade, E.sine);         // one gentle ease (no double cubic): the stars pour in, not snap
   st.restA = lerp(lerp(1, REST_LOW, segE(t, TA.rest, E.sine)), REST_BACK, segE(t, TA.back, E.sine));
   st.planetA = segE(t, TA.plA, E.sine);
   st.reveal = segE(t, TA.reveal, E.sine);
@@ -1877,7 +1878,7 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   st.head = segE(t, T.head, E.sine);
   st.wPlanet = segE(t, T.zoom);
   st.fingerA = 1 - segE(t, T.fade, E.sine);
-  st.collapse = b === 5 ? 0 : segE(t, T.fade, E.inOut);
+  st.collapse = b === 5 ? 0 : segE(t, T.fade, E.sine);
   const eBack = segE(t, T.back, E.sine);
   st.restA = lerp(lerp(lerp(1, 0.55, st.hi), REST_LOW, segE(t, T.rest, E.sine)), REST_BACK, eBack);
   st.planetA = segE(t, T.plA, E.sine);
@@ -2420,7 +2421,7 @@ function updateHandPoints() {
   const forming = ft < 1.6;
   // the beat's finger streams into its planet: its stars draw in toward the planet's centre as they fade
   const cg = beatGroup();
-  const cl = cg >= 0 && cg !== 5 && st.collapse > 0.001 ? E.inOut(clamp01(st.collapse)) * 0.94 : 0;
+  const cl = cg >= 0 && cg !== 5 && st.collapse > 0.001 ? clamp01(st.collapse) * 0.94 : 0;
   collapseK = cl;
   if (cl > 0) planetLocal(beat, PCL);
   const jp = jPos.array, ja = jAlpha.array, js = jSize.array;
@@ -2510,7 +2511,7 @@ const ringPath = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(),
 const mvRing = new THREE.Matrix4(), nmRing = new THREE.Matrix3();
 const gN = new THREE.Vector3(), gP = new THREE.Vector3(), gH = new THREE.Vector3(), gL = new THREE.Vector3();
 function updateBand(dt) {
-  const disP = st.disT / D_DIS;
+  const disL = st.disT / D_DIS, disP = disL > 0 && disL < 1 ? E.sine(disL) : disL;   // eased, like every collapse
   const bandVis = st.bandIn > 0.001 && disP < 1;
   ringGroup.visible = bandVis;
   if (!bandVis) return;
