@@ -1018,6 +1018,35 @@ renderer.autoClear = false;
 const pmrem = new THREE.PMREMGenerator(renderer);
 const ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environment = ENV;
+// v7: the cards' own room (founder: the rose gold "tends to blow out the details when the top edge of the phone is
+// tilted down"). The same room as ENV, so the backs look as they did held level, but with its emissive panels capped:
+// tipping the card back used to mirror the panel behind the camera (intensity 43) and the ceiling's (100), and the
+// card went white. That panel is now a stack of softer strips at rising heights, so tilting carries a sheen across
+// the metal instead of a glare, and the room's lamp is a little lower, so tipping it forward is not a flat pale wash.
+const CARD_ENV_P = { cap: 3.2, strips: [[9, 3.4], [24, 3.0], [39, 2.6], [54, 2.2]], stripW: 7.5, stripH: 1.5, main: 720, sigma: 0.06 };
+let cardEnvRT = null;
+function buildCardEnv(p = CARD_ENV_P) {
+  const room = new RoomEnvironment(), panels = [];
+  room.traverse(o => {
+    if (o.isPointLight) o.intensity = p.main;
+    if (o.isMesh && o.material.isMeshBasicMaterial) panels.push(o);
+  });
+  for (const o of panels) o.material.color.setScalar(Math.min(o.material.color.r, p.cap));
+  const back = panels.find(o => o.position.z > 14);                    // the +z panel, behind the camera
+  if (back) back.visible = false;
+  const box = new THREE.BoxGeometry();
+  for (const [elev, k] of p.strips) {
+    const m = new THREE.MeshBasicMaterial(); m.color.setScalar(k);
+    const s = new THREE.Mesh(box, m);
+    s.position.set(-0.4, 14.4 * Math.tan(elev * DEG), 14.4); s.scale.set(p.stripW, p.stripH, 0.08);
+    room.add(s);
+  }
+  const rt = pmrem.fromScene(room, p.sigma);
+  room.dispose(); box.dispose();
+  if (cardEnvRT) cardEnvRT.dispose();
+  cardEnvRT = rt;
+  return rt.texture;
+}
 scene.environmentIntensity = 0.95;
 scene.add(camera);
 const camAim = new THREE.Object3D(); camAim.position.set(0, 0, -1); camera.add(camAim);
@@ -1568,13 +1597,14 @@ edgeMat.color.setStyle(hsl({ h: backColors.metal.h, s: backColors.metal.s, l: Ma
 const blankFaceMat = new THREE.MeshStandardMaterial({ color: 0x150e19, roughness: 0.7, metalness: 0 });
 
 const cardScene = new THREE.Scene();
-cardScene.environment = ENV;
+cardScene.environment = buildCardEnv();             // v7: the cards' own capped room (see CARD_ENV_P)
 cardScene.environmentIntensity = 0.85;
 const cardCam = new THREE.PerspectiveCamera(FOV, 1, 1.0, 120);     // fixed at the origin, looking down -z; no card comes nearer than ~4
 cardScene.add(cardCam);
 cardScene.add(new THREE.AmbientLight(0xffffff, 0.15));
 const fanRoot = new THREE.Group(); cardScene.add(fanRoot);          // the deck's world: the fan is laid out in here
-const cardKey = new THREE.PointLight(0xffe6d8, 46, 0, 2); fanRoot.add(cardKey);
+const CARD_KEY = { i: 46, y: 2.2 };   // v7: the key's intensity and how far it rides up and down with the tilt
+const cardKey = new THREE.PointLight(0xffe6d8, CARD_KEY.i, 0, 2); fanRoot.add(cardKey);
 const cardRimT = new THREE.Object3D(); fanRoot.add(cardRimT);
 const cardRim = new THREE.DirectionalLight(0x9a7bff, 0.9); cardRim.position.set(-4, 3, -3); cardRim.target = cardRimT; fanRoot.add(cardRim);
 const sweep = new THREE.PointLight(0xfff3ea, 0, 2.2, 2); cardCam.add(sweep);
@@ -2933,7 +2963,8 @@ function snapFan() {                               // debug jumps: put every car
 }
 function updateCards(dt, par) {
   ptrF.x = pointer.x * par; ptrF.y = pointer.y * par;
-  cardKey.position.set(ptrF.x * 3.2, 1.4 + ptrF.y * 2.2, 3.2);          // the deck's key light follows the pointer
+  cardKey.position.set(ptrF.x * 3.2, 1.4 + ptrF.y * CARD_KEY.y, 3.2);   // the deck's key light follows the pointer
+  cardKey.intensity = CARD_KEY.i;
   const deckUp = beat >= 1 && pool && ((phase === 'in' && tIn >= timelineIn(beat).deal) || phase === 'choose' || phase === 'pick' || phase === 'read');
   if (deckUp && !fan.length) deal();
   const held = phase === 'pick' || phase === 'read' || phase === 'out';
@@ -3299,6 +3330,17 @@ window.__seq = {
     return { ring: { n: ring.n, rMin: k(ring.rMin), rMax: k(ring.rMax), yMax: k(ring.yMax), bandRi: k(BAND.ri), bandRo: k(BAND_RO * lerp(1, BAND_GROW, 0.25)) }, body: { n: body.n, nearFinger: body.nearFinger, maxD: k(body.maxD), fingerR: k(BONE_RP.r0) } };
   },
   thumbCheck, get ROT_T() { return { ...ROT_T }; },
+  // v7: the card light (debug): rebuild the cards' room with other values, or set the back's material and lights
+  cardEnv(p) { cardScene.environment = buildCardEnv({ ...CARD_ENV_P, ...p }); return { ...CARD_ENV_P, ...p }; },
+  cardLook(o = {}) {
+    for (const k of ['clearcoat', 'clearcoatRoughness', 'envMapIntensity', 'roughness', 'bumpScale']) if (o[k] !== undefined) backMat[k] = o[k];
+    if (o.envI !== undefined) cardScene.environmentIntensity = o.envI;
+    if (o.key !== undefined) CARD_KEY.i = o.key;
+    if (o.keyY !== undefined) CARD_KEY.y = o.keyY;
+    return { cc: backMat.clearcoat, ccr: backMat.clearcoatRoughness, env: backMat.envMapIntensity, envI: cardScene.environmentIntensity, key: { ...CARD_KEY } };
+  },
+  // v7: the tilt / pointer state (the re-zero checks)
+  tiltState: () => ({ on: tilt.on, neutral: tilt.neutral && { ...tilt.neutral }, last: tilt.last && { ...tilt.last }, easing: !!tilt.rz, ptr: [+pointer.x.toFixed(4), +pointer.y.toFixed(4)], target: [+pointer.tx.toFixed(4), +pointer.ty.toFixed(4)], offset: [+pointer.ox.toFixed(4), +pointer.oy.toFixed(4)] }),
   FIG, HOME, FLEN, framing, LAY, SHOT,
   // screen-space [x, y, alpha, kind, group] for every visible hand star, plus the planet's centre (layout tests)
   project() {
