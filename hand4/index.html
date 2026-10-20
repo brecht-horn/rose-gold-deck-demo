@@ -1923,7 +1923,8 @@ const TA = (() => {
   o.reveal = [S + 0.05 * MA, 3.0 * MA];    // the Sun forms over the same span as the collapse
   c = o.reveal[0] + o.reveal[1];           // the Sun has formed...
   o.back = [c, 1.4 * MA];
-  o.sheet = c + 0.3 * MA;                  // ...and the sheet comes up 0.3 s later (founder: "at most a half second after")
+  o.sheet = c;                             // ...and the sheet starts rising as the last stars land (founder: "at most a half
+                                           // second after"; its 0.9 s fade is ~70% in by then)
   o.end = c + 1.4 * MA;                    // (the intro's clock runs on under the sheet until the hand is back)
   return o;
 })();
@@ -2204,6 +2205,7 @@ function enterChoose() {
 }
 function holdCard(c, major, slot) {
   PK.slot = slot; PK.card = major; PK.obj = c; PK.t = 0; PK.revealed = false; PK.hovered = -1; PK.autoFlipAt = -1;
+  recentre();                                    // v7: re-zero the tilt as the chosen card starts toward the camera
   c.state = 'held'; c.grp.visible = true;
   c.flipTarget = Math.round(c.flip / (2 * Math.PI)) * 2 * Math.PI + Math.PI; c.flipVel = 0;
   if (c === thumbCardObj) {
@@ -2276,6 +2278,7 @@ function continueBeat() {
   const c = PK.obj;
   PK.fromP.copy(c.grp.position); PK.fromQ.copy(c.grp.quaternion);
   for (const o of fan) if (o !== c && o.state === 'fan') { o.state = 'leaving'; o.leaveAt = clock; }
+  releasePointerOffset();
   tOut = 0; setPhase('out');
 }
 function ownMaterials(c) {                      // a placed card fades on its own, so it gets its own back and edge
@@ -2355,7 +2358,7 @@ function setCaption(key) {
 /* =====================================================================
    Pointer and device tilt (ported from the deck)
    ===================================================================== */
-const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+const pointer = { x: 0, y: 0, tx: 0, ty: 0, rx: 0, ry: 0, ox: 0, oy: 0, rz: null };   // rx, ry: raw; ox, oy: v7's re-zero offset
 function setHint(msg) {
   hintEl.classList.remove('cue');
   if (msg) { hintEl.textContent = msg; return; }
@@ -2366,12 +2369,20 @@ function setHint(msg) {
 }
 
 // ---------- device tilt ----------
-const tilt = { on: false, neutral: null, got: false };
+// tilt.last: the latest reading (screen-aligned degrees); tilt.neutral: the orientation that reads as "centred"
+const tilt = { on: false, neutral: null, got: false, last: null, rz: null };
 const coarse = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 if (typeof DeviceOrientationEvent !== 'undefined' && coarse) tiltBtn.hidden = false;
 function screenAngle() {
   const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
   return ((a % 360) + 360) % 360;
+}
+const clamp1 = v => Math.max(-1, Math.min(1, v));
+function applyTilt() {
+  if (!tilt.last || !tilt.neutral) return;
+  const range = 22;
+  pointer.tx = clamp1((tilt.last.x - tilt.neutral.x) / range);
+  pointer.ty = clamp1(-(tilt.last.y - tilt.neutral.y) / range);
 }
 function onOrient(e) {
   if (e.beta == null || e.gamma == null) return;
@@ -2381,13 +2392,42 @@ function onOrient(e) {
   if (a === 90) { x = e.beta; y = -e.gamma; }
   else if (a === 270) { x = -e.beta; y = e.gamma; }
   else if (a === 180) { x = -e.gamma; y = -e.beta; }
+  tilt.last = { x, y };
   if (!tilt.neutral) tilt.neutral = { x, y };
-  const range = 22;
-  pointer.tx = Math.max(-1, Math.min(1, (x - tilt.neutral.x) / range));
-  pointer.ty = Math.max(-1, Math.min(1, -(y - tilt.neutral.y) / range));
+  if (!tilt.rz) applyTilt();
+}
+// v7 (founder: "the tilt should recenter every time right after it's chosen and right before a card is zoomed in on"):
+// the moment a card is chosen and starts to lift toward the camera (the thumb's card as it rises, too), the tilt's
+// neutral moves to how the phone is held right then; without tilt, the pointer's offset moves to where the pointer
+// is. Nothing stops for it: the neutral (the offset) eases there over half a second while everything else carries on.
+const RZ_T = 0.5;
+function applyPointer() { pointer.tx = clamp1(pointer.rx - pointer.ox); pointer.ty = clamp1(pointer.ry - pointer.oy); }
+function recentre() {
+  if (tilt.on) {
+    if (tilt.neutral && tilt.last) tilt.rz = { from: { ...tilt.neutral }, to: { ...tilt.last }, t: 0, d: RZ_T };
+    else tilt.neutral = null;                     // the next reading sets it
+  } else pointer.rz = { from: { x: pointer.ox, y: pointer.oy }, to: { x: pointer.rx, y: pointer.ry }, t: 0, d: RZ_T };
+}
+// without tilt the offset is only for the chosen card: once it has been read it eases back, so the mouse (the drag)
+// steers the drift from the screen's centre again
+function releasePointerOffset() { if (!tilt.on && (pointer.ox || pointer.oy)) pointer.rz = { from: { x: pointer.ox, y: pointer.oy }, to: { x: 0, y: 0 }, t: 0, d: 1.2 }; }
+function updateRecentre(dt) {
+  const step = r => { r.t += dt; return E.inOut(clamp01(r.t / r.d)); };
+  if (tilt.rz) {
+    const r = tilt.rz, k = step(r);
+    tilt.neutral = { x: lerp(r.from.x, r.to.x, k), y: lerp(r.from.y, r.to.y, k) };
+    applyTilt();
+    if (r.t >= r.d) tilt.rz = null;
+  }
+  if (pointer.rz) {
+    const r = pointer.rz, k = step(r);
+    pointer.ox = lerp(r.from.x, r.to.x, k); pointer.oy = lerp(r.from.y, r.to.y, k);
+    if (!tilt.on) applyPointer();
+    if (r.t >= r.d) pointer.rz = null;
+  }
 }
 tiltBtn.addEventListener('click', async () => {
-  if (tilt.on) { tilt.neutral = null; setHint('Recentered. Hold the phone the way you like and tilt from there.'); setTimeout(() => setHint(), 2200); return; }
+  if (tilt.on) { recentre(); setHint('Recentered. Hold the phone the way you like and tilt from there.'); setTimeout(() => setHint(), 2200); return; }
   try {
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       const res = await DeviceOrientationEvent.requestPermission();
@@ -2458,8 +2498,9 @@ el.addEventListener('pointermove', ev => {
   // a finger held on the fan, or turning the card, does not also steer the parallax (the fan would swim under it)
   const holding = drag && ev.pointerType !== 'mouse' && (phase === 'choose' || phase === 'pick');
   if (!tilt.on && !holding && !(drag && drag.flipping)) {
-    pointer.tx = ((ev.clientX - r.left) / r.width) * 2 - 1;
-    pointer.ty = -(((ev.clientY - r.top) / r.height) * 2 - 1);
+    pointer.rx = ((ev.clientX - r.left) / r.width) * 2 - 1;
+    pointer.ry = -(((ev.clientY - r.top) / r.height) * 2 - 1);
+    applyPointer();
   }
   if (phase === 'choose' && (drag || ev.pointerType === 'mouse')) {
     PK.hovered = slotAt(ev.clientX, ev.clientY);         // touch: scrub along the fan; mouse: hover
@@ -3003,6 +3044,7 @@ function frame(now) {
   const sdt = holdSeq ? 0 : dt;                  // ?hold: the sequence's clocks stop, everything else lives (for screenshots)
   clock += rdt; U.uTime.value = clock;
   const par = reduceMotion ? 0.3 : 1;
+  updateRecentre(rdt);
   pointer.x += (pointer.tx - pointer.x) * damp(5, rdt);
   pointer.y += (pointer.ty - pointer.y) * damp(5, rdt);
 
