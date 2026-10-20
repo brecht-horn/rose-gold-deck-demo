@@ -3346,6 +3346,8 @@ window.__seq = {
     if (o.keyDim !== undefined) CARD_KEY.dim = o.keyDim;
     return { cc: backMat.clearcoat, ccr: backMat.clearcoatRoughness, env: backMat.envMapIntensity, envI: cardScene.environmentIntensity, key: { ...CARD_KEY } };
   },
+  // v7: the current planet's spin (phase in rad, its own clock, its rate) and the phase it is in (rotation checks)
+  planetSpin: () => (PL && PL.obj.spin ? { kind: PL.kind, phase, ...PL.obj.spin } : null),
   // v7: the tilt / pointer state (the re-zero checks)
   tiltState: () => ({ on: tilt.on, neutral: tilt.neutral && { ...tilt.neutral }, last: tilt.last && { ...tilt.last }, easing: !!tilt.rz, ptr: [+pointer.x.toFixed(4), +pointer.y.toFixed(4)], target: [+pointer.tx.toFixed(4), +pointer.ty.toFixed(4)], offset: [+pointer.ox.toFixed(4), +pointer.oy.toFixed(4)] }),
   FIG, HOME, FLEN, framing, LAY, SHOT,

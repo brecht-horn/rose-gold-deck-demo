@@ -52,14 +52,18 @@ const HEMI_MARGIN = 0.32;
 export const PLANET_KINDS = ['sun', 'jupiter', 'venus', 'saturn', 'mercury', 'mars'];
 
 /* Body radius in finger-base radii, the suggested orientation (Euler degrees about X then Z, order 'ZXY', as v2's
-   Q_SAT), spin (rad/s) and the starting spin phase (it once brought each planet's signature feature round; v5 keeps the values). */
+   Q_SAT), spin (rad/s) and the starting spin phase (it once brought each planet's signature feature round; v5 keeps the values).
+   v7 (founder: "after forming all the planets should continue to slowly rotate"): nothing ever stopped them, but at
+   0.035-0.1 rad/s the surface crept at 2-5 px/s on a phone, which reads as still. Each spin now carries the centre of
+   its disc at about 16 px/s at the page's planet shot on a 390x844 phone (the small, close ones capped at 0.35 rad/s):
+   a turn every 18-31 s. */
 export const PLANET_SPECS = {
-  sun:     { size: 1.5,  tilt: [8, -10],  spin: 0.05, spin0: 0.0 },
-  jupiter: { size: 1.15, tilt: [-6, -8],  spin: 0.07, spin0: -0.3 },
-  venus:   { size: 0.8,  tilt: [10, -10], spin: 0.035, spin0: 0.1 },
-  saturn:  { size: 0.95, tilt: [25, -13], spin: 0.2,  spin0: 0.0 },
-  mercury: { size: 0.45, tilt: [8, -6],   spin: 0.07, spin0: 0.25 },
-  mars:    { size: 0.6,  tilt: [20, -12], spin: 0.1, spin0: 88 * DEG },
+  sun:     { size: 1.5,  tilt: [8, -10],  spin: 0.2,  spin0: 0.0 },
+  jupiter: { size: 1.15, tilt: [-6, -8],  spin: 0.24, spin0: -0.3 },
+  venus:   { size: 0.8,  tilt: [10, -10], spin: 0.28, spin0: 0.1 },
+  saturn:  { size: 0.95, tilt: [25, -13], spin: 0.28, spin0: 0.0 },
+  mercury: { size: 0.45, tilt: [8, -6],   spin: 0.35, spin0: 0.25 },
+  mars:    { size: 0.6,  tilt: [20, -12], spin: 0.35, spin0: 88 * DEG },
 };
 
 /** The suggested orientation for a kind (not applied by makePlanet: the caller orients the group). */
@@ -677,11 +681,11 @@ function buildMars(c) {
 function buildSun(c) {
   const { st, ln, rnd, PX } = c;
   const R = (a, b) => lerp(a, b, rnd());
-  // Granulation, on the face turned to the camera (granules are short-lived, so the pattern needn't turn with the
-  // Sun; the wireframe does): bright cells of clustered stars with dark lanes between, every star flickering on its
-  // own. Facing-only, the whole budget lands where it can be seen.
+  // Granulation: bright cells of clustered stars with dark lanes between. v7: on the surface all the way round, so the
+  // Sun visibly turns with its spin (facing-only, view-space granules stood still); the far side is hidden as on every
+  // planet, and the twinkle keeps each star shimmering on its own.
   const toXYZ = (lon, lat) => [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)];
-  const CELLS = fibSphere(600, rnd, 1.1).map(([lo, la]) => toXYZ(lo, la)).filter(v => v[2] > 0.03);
+  const CELLS = fibSphere(600, rnd, 1.1).map(([lo, la]) => toXYZ(lo, la));
   const cellR = Math.sqrt((4 * Math.PI) / 600) * 0.5;
   for (const cpos of CELLS) {
     const n = 3 + Math.floor(rnd() * 2.2);
@@ -696,10 +700,9 @@ function buildSun(c) {
         p = [0, 1, 2].map(j => cpos[j] + (t1[j] * Math.cos(a) + t2[j] * Math.sin(a)) * d);
         const l = Math.hypot(p[0], p[1], p[2]); p = p.map(x => x / l);
       }
-      if (p[2] < 0.01) continue;
       const hot = i === 0;
       const col = hot ? [1.0, 0.96, 0.84] : mixc([1.0, 0.86, 0.6], [1.0, 0.93, 0.76], rnd());
-      st.add(K_VIEW, p[0], p[1], p[2], 0, [0, 0, 0.1, -1], col, PX * (hot ? R(10.5, 13) : R(8, 10)), (hot ? 1.0 : 0.82) * R(0.8, 1), 0);
+      st.add(K_SURF, Math.atan2(p[0], p[2]), Math.asin(Math.max(-1, Math.min(1, p[1]))), 0, 0, Z4, col, PX * (hot ? R(10.5, 13) : R(8, 10)), (hot ? 1.0 : 0.82) * R(0.8, 1), 0);
     }
   }
   // the corona: a soft, even halo of faint stars round the disc, thinning outward, with no rays or streamers
@@ -952,7 +955,9 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
   group.add(glow, lines, stars);
 
   /* ---------- API ---------- */
-  let clock = 0, reveal = 1, disposed = false;
+  // v7: the spin comes up to speed as the stars land (so the pour, planned against the planet at rest, does not cross
+  // its own streams), then never stops; drifts, swirls, orbits and twinkle run on the plain clock throughout
+  let clock = 0, spinT = 0, reveal = 1, disposed = false;
   const applyReveal = () => {
     starMat.uniforms.uReveal.value = reveal;
     lineMat.uniforms.uFade.value = smooth(0.72, 1.0, reveal);
@@ -961,9 +966,9 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
   };
   function smooth(a, b, x) { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); }
   const setClock = s => {
-    clock = s;
+    clock = s; spinT = s;
     U.uTime.value = clock;
-    U.uSpin.value = spin0 + clock * spinRate;
+    U.uSpin.value = spin0 + spinT * spinRate;
   };
   setClock(0);
   applyReveal();
@@ -979,8 +984,13 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
     /** dt drives the planet's own clock (spin, drift, swirl, twinkle), so it always appears in its hero pose.
         t and camera are accepted for the contract; light is view-space, so no camera math is needed. */
     update(dt /* , t, camera */) {
-      setClock(clock + Math.min(Math.max(dt || 0, 0), 0.1));
+      const d = Math.min(Math.max(dt || 0, 0), 0.1);
+      clock += d; spinT += d * smooth(0.3, 1.0, reveal);
+      U.uTime.value = clock;
+      U.uSpin.value = spin0 + spinT * spinRate;
     },
+    /** v7 (debug): the planet's clocks and spin phase */
+    get spin() { return { time: clock, spin: U.uSpin.value, rate: spinRate }; },
     setClock,
     setOpacity(a) { U.uOpacity.value = clamp01(a); group.visible = a > 0.001; },
     setReveal(p) { reveal = clamp01(p); applyReveal(); },
