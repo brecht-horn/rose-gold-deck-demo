@@ -998,6 +998,12 @@ const E = {
 const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
 const lerp = (a, b, t) => a + (b - a) * t;
 const segE = (t, w, e = E.inOut) => e(clamp01((t - w[0]) / w[1]));
+// the band's slide: a smooth start, then one steady pace, easing only over the last 10%, which falls inside the
+// dissolve, so it never comes to rest before it turns into Saturn's rings (founder, 2026-10-20)
+const SLIDE_A = 0.15, SLIDE_B = 0.1, SLIDE_V = 1 / (1 - SLIDE_A / 2 - SLIDE_B / 2);
+const slideE = t => (t < SLIDE_A ? 0.5 * SLIDE_V * t * t / SLIDE_A
+  : t <= 1 - SLIDE_B ? SLIDE_V * (t - SLIDE_A / 2)
+  : 1 - 0.5 * SLIDE_V * (1 - t) * (1 - t) / SLIDE_B);
 
 /* =====================================================================
    PBR: one environment map (shared by the wedding band and the cards) and a small light rig.
@@ -1927,7 +1933,8 @@ const TR = (() => {                        // the ring finger: the band slides d
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return {
     hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
-    bandIn: w(1.9, 0.7), slide: w(1.9, 4.4),          // the band slides slowly from the fingertip down to the base
+    bandIn: w(1.9, 0.7), slide: w(1.9, 5.6),          // the band slides slowly from the fingertip down to the base, never
+    // stopping: it keeps its pace and reaches the base as it starts coming apart into Saturn's rings (dis at 7.0)
     zoom: w(6.0, 3.8),                                // the camera dollies in on the ring, arriving as the last stars do
     tilt: w(6.0, 1.5),                                // at the base the band turns into Saturn's ring plane...
     dis: [s(7.0), s(2.7)],                            // ...then comes apart, opening out, as the rings bloom out of it
@@ -2053,7 +2060,7 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   if (b === 5) st.palmHi = st.hi * (1 - fadeE);       // the palm's lines are bright as the camera starts in, then pour into Mars
   if (b === 3) {
     st.bandIn = segE(t, T.bandIn, E.out);
-    st.slide = segE(t, T.slide, E.inOut);
+    st.slide = segE(t, T.slide, slideE);
     st.disT = t - T.dis[0];
     st.tiltW = segE(t, T.tilt, E.inOut);
   }
