@@ -998,14 +998,28 @@ const BONE_RP = BONES.find(b => b.frame === FR.prox);
 const RING_T = 0.3;                                             // a ring sits 30% along the proximal phalanx
 const R_FINGER = lerp(BONE_RP.r0, BONE_RP.r1, RING_T);
 const PLANET_R = BONE_RP.r0;          // the planets' one shared finger-base radius (the ring finger at its base), so their sizes compare
-const BAND = { ri: R_FINGER * 0.9, t: R_FINGER * 0.15, w: R_FINGER * 0.5 };   // a band that fits the finger, not a bangle
-const BAND_PTS = 48, BAND_SEG = 128, DIS_W = 256, DIS_H = 32;
+// v5: a comfort-fit wedding band. Its cross-section has a domed outside, a gently domed inside and fully rounded edges
+// (each edge a half circle as deep as the band is thick), so it has no square corners anywhere.
+const BAND = { ri: R_FINGER * 0.9, t: R_FINGER * 0.13, w: R_FINGER * 0.5, dOut: 0.34, dIn: 0.1 };   // dOut, dIn: domes, in t
+const BAND_PTS = 64, BAND_SEG = 128, DIS_W = 256, DIS_H = 32;
+const BAND_GROW = 1.4;                     // as it comes apart at the base it opens out toward Saturn's rings
 function bandProfile(v, out) {            // v in [0, 1] around the cross-section, starting and ending on the inner face
-  const a = Math.PI + v * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
-  const pc = Math.sign(c) * Math.pow(Math.abs(c), c > 0 ? 0.82 : 0.6);   // domed outside, a flatter comfort-fit inside
-  const ps = Math.sign(s) * Math.pow(Math.abs(s), 0.36);                 // flat sides with softly rounded edges
-  return out.set(BAND.ri + BAND.t / 2 + (BAND.t / 2) * pc, (BAND.w / 2) * ps);
+  // v 0..0.125 and 0.875..1: the inner face; 0.125..0.375: the lower edge; 0.375..0.625: the outer face (its crown at
+  // 0.5); 0.625..0.875: the upper edge. The four seams (0.125, 0.375, 0.625, 0.875) are where the shader draws its
+  // edge lines and the band's rim stars sit.
+  const t = BAND.t, rc = t / 2, L = BAND.w / 2 - rc;
+  const dome = y => { const q = 1 - (y / L) * (y / L); return q * q; };   // 1 at the middle, 0 (and flat) at the edges
+  v -= Math.floor(v);
+  if (v < 0.125 || v >= 0.875) {
+    const y = v < 0.125 ? -L * (v / 0.125) : L * (1 - (v - 0.875) / 0.125);
+    return out.set(BAND.ri - BAND.dIn * t * dome(y), y);
+  }
+  if (v < 0.375) { const a = Math.PI * (1 + (v - 0.125) / 0.25); return out.set(BAND.ri + rc + rc * Math.cos(a), -L + rc * Math.sin(a)); }
+  if (v < 0.625) { const y = -L + 2 * L * (v - 0.375) / 0.25; return out.set(BAND.ri + t + BAND.dOut * t * dome(y), y); }
+  const a = Math.PI * (v - 0.625) / 0.25;
+  return out.set(BAND.ri + rc + rc * Math.cos(a), L + rc * Math.sin(a));
 }
+const BAND_RO = BAND.ri + BAND.t * (1 + BAND.dOut);      // the crown's radius
 const bandGeo = new THREE.LatheGeometry(Array.from({ length: BAND_PTS + 1 }, (_, j) => bandProfile(j / BAND_PTS, new THREE.Vector2())), BAND_SEG);
 
 // The band's coming-apart map: smooth value noise around the band (u) and its profile (v), plus a slow sweep from one
@@ -1123,7 +1137,7 @@ const bandStarPos = [], bandStarA = [], bandStarS = [], bandSegs = [];
   }
   for (let k = 0; k < 6; k++) {                                        // a few stars just off the band, joined to it
     const u = (k + 0.3) / 6, h = (k % 2 ? -0.5 : 0.65), f = 1.6 + 0.12 * (k % 3);
-    const ro = BAND.ri + BAND.t, a = u * Math.PI * 2, p = [ro * f * Math.sin(a), h * BAND.w * 0.9, ro * f * Math.cos(a)];
+    const ro = BAND_RO, a = u * Math.PI * 2, p = [ro * f * Math.sin(a), h * BAND.w * 0.9, ro * f * Math.cos(a)];
     bandStarPos.push(p); bandStarA.push(0.6); bandStarS.push(0.012);
     const near = [...ob, ...ot].sort((m, q) => Math.hypot(m.p[0] - p[0], m.p[1] - p[1], m.p[2] - p[2]) - Math.hypot(q.p[0] - p[0], q.p[1] - p[1], q.p[2] - p[2]));
     bandSegs.push([near[0].p, p, 0.18], [near[3].p, p, 0.12]);
@@ -1288,11 +1302,16 @@ function createPlanet(b) {
     for (const j of joints) if (j.group === b) take(j.pos);
     for (const d of dust) if (d.group === b) take(dustTarget(d, _pv), 0.85);
   }
+  // Saturn: the ring finger's stars become the planet's body (sourcePoints) and the wedding band becomes its rings
+  // (ringSourcePoints): the band, lying in Saturn's ring plane at the base of the finger (it has turned into that plane
+  // before the planet starts to form) and opening out a little as it comes apart, blooms out into the rings
+  let ringSrc;
   if (b === 3) {
-    // the band, as it lies in Saturn's ring plane at the base of the finger: its stars pour out into the rings
-    for (let k = 0; k < 220; k++) { bandProfile(Math.random(), _p2); const a = Math.random() * Math.PI * 2; src.push(new THREE.Vector3(_p2.x * Math.sin(a), _p2.y, _p2.x * Math.cos(a))); }
+    ringSrc = [];
+    const k0 = lerp(1, BAND_GROW, 0.25);
+    for (let k = 0; k < 260; k++) { bandProfile(Math.random(), _p2); const a = Math.random() * Math.PI * 2; ringSrc.push(new THREE.Vector3(_p2.x * k0 * Math.sin(a), _p2.y * k0, _p2.x * k0 * Math.cos(a))); }
   }
-  const obj = makePlanet(THREE, kind, PLANET_R, { sourcePoints: src });
+  const obj = makePlanet(THREE, kind, PLANET_R, ringSrc ? { sourcePoints: src, ringSourcePoints: ringSrc } : { sourcePoints: src });
   obj.group.position.copy(at); obj.group.quaternion.copy(q); obj.group.scale.setScalar(groupScale(kind));
   obj.setReveal(0); obj.setOpacity(0);
   handInner.add(obj.group);
@@ -1859,16 +1878,17 @@ const TI = (() => {                        // index, middle, little finger, palm
     back: w(8.5, 1.4), prompt: s(8.8), deal: s(9.1), end: s(10.8),
   };
 })();
-const TR = (() => {                        // the ring finger: the band slides down first, then comes apart into Saturn
+const TR = (() => {                        // the ring finger: the band slides down first, then becomes Saturn's rings
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return {
     hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
     bandIn: w(1.9, 0.7), slide: w(1.9, 4.4),          // the band slides slowly from the fingertip down to the base
-    zoom: w(6.0, 3.2),                                // the camera dollies in on the ring
-    dis: [s(6.3), s(2.8)],                            // the band comes apart
-    tilt: w(6.4, 2.7),                                // ...and turns into Saturn's ring plane
-    fade: w(6.4, 2.9), rest: w(6.4, 1.8), plA: w(6.45, 0.9), reveal: w(6.5, 3.0),
-    back: w(10.3, 1.4), prompt: s(10.6), deal: s(10.9), end: s(12.6),
+    zoom: w(6.0, 3.4),                                // the camera dollies in on the ring
+    tilt: w(6.0, 1.5),                                // at the base the band turns into Saturn's ring plane...
+    dis: [s(7.0), s(2.7)],                            // ...then comes apart, opening out, as the rings bloom out of it
+    // the finger's stars pour into the planet's body
+    fade: w(6.9, 2.9), rest: w(6.8, 1.8), plA: w(6.9, 0.9), reveal: w(7.0, 3.0),
+    back: w(10.7, 1.4), prompt: s(11.0), deal: s(11.3), end: s(13.0),
   };
 })();
 const TO = (() => {                        // after a card is read: back out to the whole hand
@@ -2639,6 +2659,7 @@ function updateBand(dt) {
   qWob.setFromAxisAngle(wobAxis, wob);
   qSpinQ.setFromAxisAngle(AXY, spinA);
   ringGroup.position.copy(vA);
+  ringGroup.scale.setScalar(st.disT > 0 ? lerp(1, BAND_GROW, E.inOut(clamp01(st.disT / D_DIS))) : 1);
   // at the base it turns into Saturn's ring plane, so its light pours straight into the rings
   ringGroup.quaternion.copy(qPath).multiply(qWob).slerp(planetQuat('saturn', qSatL), st.tiltW).multiply(qSpinQ);
   const sc = lerp(0.82, 1, E.out(st.bandIn));
@@ -2654,7 +2675,7 @@ function updateBand(dt) {
   nmRing.getNormalMatrix(mvRing);
   gL.copy(bandKey.position).sub(camAim.position).normalize();
   let best = 0, bi = 0, bt = 0;
-  const ro = BAND.ri + BAND.t;
+  const ro = BAND_RO;
   for (let i = 0; i < 72; i++) {
     for (const th of [-0.5, 0, 0.5]) {
       const ph = (i / 72) * Math.PI * 2, ct = Math.cos(th);
@@ -3126,6 +3147,9 @@ window.__seq = {
       const w = v.clone(); v.project(camera);
       return { k, world: w.toArray().map(x => +x.toFixed(3)), px: [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)] };
     });
+  },
+  thumbPx() {            // the thumb's joints (CMC, MCP, IP, tip) on screen, px (layout tests)
+    return T.j.map(j => { const v = j.pos.clone(); handBody.localToWorld(v); v.project(camera); return [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)]; });
   },
   thumbCheck, get ROT_T() { return { ...ROT_T }; },
   FIG, HOME, FLEN, framing, LAY, SHOT,
