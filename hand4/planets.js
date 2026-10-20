@@ -22,6 +22,10 @@
                        straight out into the rings), starting almost at once, while the BODY stars still come from
                        sourcePoints (or the shell). Without it, everything behaves as before: rings and body both
                        pour from sourcePoints. The ring's edge lines, like every planet's lines, fade in late.
+     ringSpin          rad/s (v7, Saturn): the whole ring system turns at this rate on average (each ring keeps a
+                       little of its own faster-inside, slower-outside drift around it), from the moment the planet is
+                       made, and the ring stars' formation sources turn with it at exactly this rate, so a band
+                       spinning at ringSpin as it comes apart pours into rings that carry on at the same speed.
      seed, spin0, spinRate, lightDir (view space), atten, refDistance, renderOrder, occluder (false: no dark
      disc), occluderAlpha.
 
@@ -129,6 +133,7 @@ const COMMON_GLSL = /* glsl */`
   uniform vec3 uLight;      // view space, toward the light
   uniform vec4 uVortex;     // lon0, lat0, half-width (rad of arc), half-height (rad)
   uniform float uRings;     // 1: the body is shadowed and crossed by Saturn's rings
+  uniform float uRingSpin;  // v7: added to every ring star's own orbit (rad/s), see opts.ringSpin
   varying vec3 vColor;
   varying float vAlpha;
 
@@ -212,7 +217,7 @@ const COMMON_GLSL = /* glsl */`
         }
       }
     } else if (kind == 1) {
-      float ph = position.y + rate * uTime;
+      float ph = position.y + (rate + uRingSpin) * uTime;
       vec3 pL = uR * vec3(position.x * sin(ph), position.z, position.x * cos(ph));
       T = (modelViewMatrix * vec4(pL, 1.0)).xyz;
       vec3 d = T - C;
@@ -244,7 +249,7 @@ const COMMON_GLSL = /* glsl */`
 const STAR_VS = /* glsl */`
   attribute vec3 aSrc;     // where this star starts the formation (group-local)
   attribute vec2 aSA;      // size (world units at the reference distance), alpha
-  uniform float uViewH, uMinS, uDotTo, uMaxPt, uAtten, uRef;
+  uniform float uViewH, uMinS, uDotTo, uMaxPt, uAtten, uRef, uRingSrcSpin;
   varying float vSmall;
   ${COMMON_GLSL}
   void main() {
@@ -254,7 +259,12 @@ const STAR_VS = /* glsl */`
     // the formation: from the source along a gentle curve, easing in; exactly home at q = 1
     float q = clamp((uReveal - aA.w) / 0.55, 0.0, 1.0);
     float e = 1.0 - pow(1.0 - q, 3.0);
-    vec3 S = (modelViewMatrix * vec4(aSrc, 1.0)).xyz;
+    vec3 src = aSrc;
+    if (uRingSrcSpin != 0.0 && int(aA.x + 0.5) == 1) {          // v7: a ring star's source turns with the band
+      float ra = uRingSrcSpin * uTime, cr = cos(ra), sr = sin(ra);
+      src = vec3(src.x * cr + src.z * sr, src.y, src.z * cr - src.x * sr);
+    }
+    vec3 S = (modelViewMatrix * vec4(src, 1.0)).xyz;
     vec3 dv = T - S;
     vec3 P = mix(S, T, e) + vec3(-dv.y, dv.x, 0.0) * (fract(ph * 13.7) - 0.5) * 0.8 * e * (1.0 - e);
     float xb = clamp((q - 0.55) / 0.45, 0.0, 1.0);
@@ -859,7 +869,15 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
     uTermW: { value: look.termW }, uTw: { value: look.tw }, uTwSpeed: { value: look.twSpeed },
     uLimbDark: { value: look.limbDark }, uLight: { value: light },
     uVortex: { value: new THREE.Vector4(...vortex) }, uRings: { value: built.rings ? 1 : 0 },
+    uRingSpin: { value: 0 },
   };
+  // v7: opts.ringSpin, the rings' mean turn: each ring star's own orbit, less the rings' mean orbit, plus ringSpin
+  const ringSpin = opts.ringSpin || 0;
+  if (ringSpin && built.rings) {
+    let n = 0, sum = 0;
+    for (let i = 0; i < N; i++) if (st.a[i * 4] === K_RING) { sum += st.a[i * 4 + 1]; n++; }
+    U.uRingSpin.value = ringSpin - (n ? sum / n : 0);
+  }
   const additive = {
     transparent: true, depthWrite: false, depthTest: true,
     blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
@@ -881,6 +899,7 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
       ...U, uBack: { value: look.back }, uFade: { value: 1 }, uMap: { value: texCache.glow },
       uViewH: { value: 1000 }, uMinS: { value: 2 }, uDotTo: { value: 7 }, uMaxPt: { value: 256 },
       uAtten: { value: opts.atten ?? 0.85 }, uRef: { value: opts.refDistance ?? 1.84 },
+      uRingSrcSpin: { value: ringSpin && built.rings ? ringSpin : 0 },
     },
     vertexShader: STAR_VS, fragmentShader: STAR_FS, ...additive,
   });

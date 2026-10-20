@@ -1020,10 +1020,11 @@ const ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environment = ENV;
 // v7: the cards' own room (founder: the rose gold "tends to blow out the details when the top edge of the phone is
 // tilted down"). The same room as ENV, so the backs look as they did held level, but with its emissive panels capped:
-// tipping the card back used to mirror the panel behind the camera (intensity 43) and the ceiling's (100), and the
-// card went white. That panel is now a stack of softer strips at rising heights, so tilting carries a sheen across
-// the metal instead of a glare, and the room's lamp is a little lower, so tipping it forward is not a flat pale wash.
-const CARD_ENV_P = { cap: 3.2, strips: [[9, 3.4], [24, 3.0], [39, 2.6], [54, 2.2]], stripW: 7.5, stripH: 1.5, main: 720, sigma: 0.06 };
+// tipping the card back used to mirror the panel behind the camera (intensity 43, at 23-39 degrees up) and the
+// ceiling's (100), and the card went white. That panel is now four softer strips at rising heights (degrees up,
+// intensity), so tilting carries a sheen across the metal instead of a glare; the room's lamp is a little lower and a
+// mid-tone table stands under the card, so tipping it forward shows a soft edge sweeping across it, not a flat wash.
+const CARD_ENV_P = { cap: 3.2, strips: [[20, 2.1], [32, 2.0], [44, 1.7], [56, 1.5]], stripW: 7.5, stripH: 1.5, main: 720, sigma: 0.06, table: 0x6a5c58, tableZ: 0.9 };
 let cardEnvRT = null;
 function buildCardEnv(p = CARD_ENV_P) {
   const room = new RoomEnvironment(), panels = [];
@@ -1594,7 +1595,7 @@ backColorTex.needsUpdate = true;
 // one back material, one edge material and one blank face shared by every card (a face is drawn only for the chosen one)
 const backMat = new THREE.MeshPhysicalMaterial({
   color: 0xffffff, map: backColorTex, metalness: 1, roughness: 1, roughnessMap: backRough,
-  bumpMap: backBump, bumpScale: 1.6, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.15,
+  bumpMap: backBump, bumpScale: 1.6, clearcoat: 0.8, clearcoatRoughness: 0.16, envMapIntensity: 1.15,   // v7: clearcoat 0.1 -> 0.16
 });
 const edgeMat = new THREE.MeshPhysicalMaterial({ metalness: 1, roughness: 0.25 });
 edgeMat.color.setStyle(hsl({ h: backColors.metal.h, s: backColors.metal.s, l: Math.min(100, backColors.metal.l + 6) }));
@@ -1602,14 +1603,15 @@ const blankFaceMat = new THREE.MeshStandardMaterial({ color: 0x150e19, roughness
 
 const cardScene = new THREE.Scene();
 cardScene.environment = buildCardEnv();             // v7: the cards' own capped room (see CARD_ENV_P)
-cardScene.environmentIntensity = 0.85;
+cardScene.environmentIntensity = 1.12;   // v7: 0.85 -> 1.12 with the capped room, so the level card is as bright as before
+                                         // (three uses this, not the material's envMapIntensity, for scene.environment)
 const cardCam = new THREE.PerspectiveCamera(FOV, 1, 1.0, 120);     // fixed at the origin, looking down -z; no card comes nearer than ~4
 cardScene.add(cardCam);
 cardScene.add(new THREE.AmbientLight(0xffffff, 0.15));
 const fanRoot = new THREE.Group(); cardScene.add(fanRoot);          // the deck's world: the fan is laid out in here
 // v7: the key's intensity, how far it rides up and down with the tilt, and how much it dims as the tilt carries it
 // toward the angle that would mirror it straight into the camera (the top edge tipped up), where it whited out the fan
-const CARD_KEY = { i: 46, y: 2.2, yDown: 2.2, dim: 0 };
+const CARD_KEY = { i: 46, y: 2.2, yDown: 0.6, dim: 0.6 };   // yDown: its travel when the top edge tips up (was 2.2)
 const cardKey = new THREE.PointLight(0xffe6d8, CARD_KEY.i, 0, 2); fanRoot.add(cardKey);
 const cardRimT = new THREE.Object3D(); fanRoot.add(cardRimT);
 const cardRim = new THREE.DirectionalLight(0x9a7bff, 0.9); cardRim.position.set(-4, 3, -3); cardRim.target = cardRimT; fanRoot.add(cardRim);
