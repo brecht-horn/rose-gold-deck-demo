@@ -1024,7 +1024,7 @@ scene.environment = ENV;
 // ceiling's (100), and the card went white. That panel is now four softer strips at rising heights (degrees up,
 // intensity), so tilting carries a sheen across the metal instead of a glare; the room's lamp is a little lower and a
 // mid-tone table stands under the card, so tipping it forward shows a soft edge sweeping across it, not a flat wash.
-const CARD_ENV_P = { cap: 3.2, strips: [[20, 2.1], [32, 2.0], [44, 1.7], [56, 1.5]], stripW: 7.5, stripH: 1.5, main: 720, sigma: 0.06, table: 0x6a5c58, tableZ: 0.9 };
+const CARD_ENV_P = { cap: 3.2, strips: [[20, 2.1], [32, 2.0], [44, 1.7], [56, 1.5]], stripW: 7.5, stripH: 1.5, main: 720, sigma: 0.04, table: 0x6a5c58, tableZ: 0.9 };
 let cardEnvRT = null;
 function buildCardEnv(p = CARD_ENV_P) {
   const room = new RoomEnvironment(), panels = [];
