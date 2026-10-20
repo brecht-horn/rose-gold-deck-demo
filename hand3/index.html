@@ -1260,7 +1260,6 @@ const MARS_AT = (() => { const x = -0.2 * PALM_W, y = 6.85; return V(x, y, palmH
 function thumbFocusLocal(out) { return out.copy(T.j[1].pos).lerp(T.j[3].pos, 0.25); }
 function ringRestLocal(out) { return out.copy(FR.j[1].pos).lerp(FR.j[2].pos, RING_T); }
 function ringMidLocal(out) { return ringRestLocal(out).lerp(FR.j[4].pos, 0.5); }
-const PALM_C = V(0.1 * PALM_W, 5.4, 0);
 function planetLocal(b, out) {                          // where each beat's planet forms (hand-local)
   if (b === 0) return out.copy(T.j[1].pos).lerp(T.j[3].pos, 0.45);
   if (b === 3) return ringRestLocal(out);
@@ -1834,10 +1833,10 @@ function resize() {
     const pts = b === 0 ? HOME.fistPts : HOME.bodyPts;  // the thumb's beat: the thumbs-up, around the Sun
     let k = 0.5;
     if (BODY_ON && P && pts) {
-      // the fingertips may rise behind the header's line but not its title; the knuckles stay above the fan, so fingers
-      // and palm read as a hand; the side edges may crop the thumb and the hand's outer edge a little (the thumbs-up:
-      // all of it in view). The beat's own finger is inside the planet, so it does not count.
-      const top = b === 0 ? LAY.top + S.headH + 6 : LAY.top + LAY.titleBottom + 8, low = b === 0 || LAY.short ? H - LAY.bottom - 4 : LAY.fanTop - 4;
+      // the fingertips stay under the header; the knuckles stay above the fan, so fingers and palm read as a hand; the
+      // side edges may crop the thumb and the hand's outer edge a little (the thumbs-up: all of it in view). The beat's
+      // own finger is inside the planet, so it does not count.
+      const top = LAY.top + S.headH + 6, low = b === 0 || LAY.short ? H - LAY.bottom - 4 : LAY.fanTop - 4;
       const x0 = b === 0 ? 14 : -0.04 * W, x1 = b === 0 ? W - 14 : 1.04 * W;
       for (const { x, y, g, kind } of pts) {
         if (b > 0 && g === b) continue;
@@ -3070,7 +3069,9 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => resi
 // debug hooks (harmless in production): ?t=seconds into the intro; ?beat=thumb|index|middle|ring|pinky|palm|end
 // (every earlier beat is completed at once, choosing the middle position), ?in=seconds into that beat; ?pick[=position]
 // chooses by itself (and Reveals on the sheet), ?flip turns the card, ?cont moves on, ?auto does all of it for every
-// beat; ?freeze; ?pose=open|one|thumb[&yaw=&pitch=&roll=(degrees)&view=thumb]; ?endyaw=degrees (the thumbs-up's turn)
+// beat; ?freeze; ?pose=open|one|thumb[&yaw=&pitch=&roll=(degrees)&view=thumb]; ?endyaw=degrees (the thumbs-up's turn);
+// ?lean=degrees (the thumb's lean at the end of turn 2); ?handk=0 (the hand stays full size behind the deck), ?bpk=
+// (how its stars shrink with it), ?lb= / ?gb= (its lines' and stars' lift behind the deck)
 if (qs.has('pose') && POSES[qs.get('pose')]) {
   const n = k => (qs.has(k) ? Number(qs.get(k)) * DEG : null);
   const thumbView = qs.get('view') === 'thumb';
