@@ -1835,15 +1835,19 @@ function resize() {
     if (BODY_ON && P && pts) {
       // the fingertips stay under the header; the knuckles stay above the fan, so fingers and palm read as a hand; the
       // side edges may crop the thumb and the hand's outer edge a little (the thumbs-up: all of it in view). The beat's
-      // own finger is inside the planet, so it does not count.
+      // own finger is inside the planet, so it does not count. The cards already chosen (fingers before this beat) stay
+      // whole on screen, under the header and above the fan.
       const top = LAY.top + S.headH + 6, low = b === 0 || LAY.short ? H - LAY.bottom - 4 : LAY.fanTop - 4;
       const x0 = b === 0 ? 14 : -0.04 * W, x1 = b === 0 ? W - 14 : 1.04 * W;
+      const cx0 = 8, cx1 = LAY.short ? LAY.fanL - 8 : W - 8;
       for (const { x, y, g, kind } of pts) {
-        if (b > 0 && g === b) continue;
+        const card = kind === 'card';
+        if (card ? g >= b : b > 0 && g === b) continue;
         const dx = (x - P.x) * S.ppuP, dy = (y - P.y) * S.ppuP;
-        if (b === 0 || g !== 0) { if (dx > 0) k = Math.min(k, (x1 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - x0) / -dx); }
+        if (card) { if (dx > 0) k = Math.min(k, (cx1 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - cx0) / -dx); }
+        else if (b === 0 || g !== 0) { if (dx > 0) k = Math.min(k, (x1 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - x0) / -dx); }
         if (dy > 0) k = Math.min(k, (my - top) / dy);
-        else if (dy < 0 && (b === 0 || (kind === 'knuckle' && g > 0))) k = Math.min(k, (low - my) / -dy);
+        else if (dy < 0 && (b === 0 || card || (kind === 'knuckle' && g > 0))) k = Math.min(k, (low - my) / -dy);
       }
     }
     BODY_K[b] = Math.max(0.2, k);
@@ -2782,7 +2786,7 @@ function floatTarget(k, outP, outQ) {
   const ph = k * 1.7;
   floatE.set(reduceMotion ? 0 : Math.sin(clock * 0.7 + ph) * 0.05, reduceMotion ? 0 : Math.sin(clock * 0.5 + ph) * 0.14, reduceMotion ? 0 : Math.sin(clock * 0.9 + ph) * 0.03);
   outQ.setFromEuler(floatE);
-  return FLOAT_H * z / (depth * CH);
+  return FLOAT_H * handBody.scale.x * z / (depth * CH);   // at the hand's scale (behind the deck it is drawn back)
 }
 function setCardAlpha(c, a) {
   if (Math.abs(c.alpha - a) < 0.002) return;
@@ -3057,6 +3061,12 @@ resize();
   HOME.bodyPts = [];                                  // the open hand's stars, for BODY_K (world, with their group)
   joints.forEach(j => { p.copy(j.pos); handInner.localToWorld(p); HOME.bodyPts.push({ x: p.x, y: p.y, g: j.group, kind: j.kind }); });
   dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) { dustTarget(dd, p); handInner.localToWorld(p); HOME.bodyPts.push({ x: p.x, y: p.y, g: dd.group, kind: 'dust' }); } });
+  // ...and the corners of each finger's small card (group = its finger), which stay above their fingers behind the deck
+  for (let k = 0; k < 6; k++) {
+    cardAnchorLocal(k, p); handInner.localToWorld(p);
+    const hx = FLOAT_H * CW / CH / 2 + 0.012, hy = FLOAT_H / 2 + 0.02;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) HOME.bodyPts.push({ x: p.x + sx * hx, y: p.y + sy * hy, g: k, kind: 'card' });
+  }
   // each beat's subject length, for the dolly in
   FLEN[0] = T.j[1].pos.distanceTo(T.j[3].pos);
   FINGERS.forEach((f, k) => { FLEN[k + 1] = f.j[1].pos.distanceTo(f.j[4].pos) + (k === 2 ? 0.08 : 0); });
