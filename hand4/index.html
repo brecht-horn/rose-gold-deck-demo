@@ -1273,7 +1273,8 @@ ringGroup.visible = false;
 
 /* =====================================================================
    The palm's lines, as constellations: the heart line and the head line cross the palm, the life line curves around
-   the thumb's base. Faint on whole-hand views; on the palm's beat they brighten while the rest of the hand fades.
+   the thumb's base. Faint on whole-hand views; on the palm's beat they brighten, then they alone pour into Mars
+   (v10: the rest of the hand, the palm's own outline included, stays as it is).
    (Hand-local cm, x before the palm's width scale; they sit on the palm's front face.)
    ===================================================================== */
 const PALM_LINES = [
@@ -1313,7 +1314,7 @@ attr(plLGeo, 'aColor', Float32Array.from({ length: plSegs.length * 6 }, (_, i) =
 const palmLineSegs = new THREE.LineSegments(plLGeo, lineMaterial({ occ: true, occAny: 1 }));
 palmLineSegs.frustumCulled = false; palmLineSegs.renderOrder = 4;
 handBody.add(palmLineSegs, palmLineStars);
-// on the palm's beat the lines' stars pour into Mars with the rest of the palm: their resting positions, kept
+// on the palm's beat the lines' stars pour into Mars (v10: they alone): their resting positions, kept
 const PL_REST = [plGeo, plLGeo].map(g => Float32Array.from(g.attributes.position.array));
 let plCollapsed = 0;
 function collapsePalmLines(k, to) {             // k: 0 at rest, 1 at Mars (hand-local 'to')
@@ -2032,7 +2033,7 @@ const TP = (() => {                        // the palm: one continuous dolly fro
   // zoom in on palm occurs. All at the same time. And also at the same time the constellation palm lines become Mars,
   // and the fan of cards appears"): everything starts the moment the beat does, as one move. The header comes in, the
   // camera eases straight in on the palm's hollow, the palm's lines flare and at once start pouring (slowly at first)
-  // into Mars with the rest of the palm; the camera arrives as the last stars land.
+  // into Mars (v10: the lines alone; the hand stays); the camera arrives as the last stars land.
   // v8b (founder, minutes later: "card fan should not ease in until AFTER mars has formed, not while its forming"): the
   // fan deals the moment Mars has formed (the reveal's end), with no overlap and no wait, as on every other beat (TI deals
   // 0.05 s after its planet's reveal ends, TR as it ends); the prompt leads the fan by 0.3 s and the choice opens 1.7 s
