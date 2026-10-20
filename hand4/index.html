@@ -2009,18 +2009,26 @@ const TO = (() => {                        // after a card is read: back out to 
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return { head: w(0, 0.8), cap: s(0.9), plOut: w(0.2, 1.5), hiOff: w(0.3, 1.2), unfade: w(0.5, 1.7), cam: w(0.0, 2.9), float: w(0.05, 2.5), placed: w(1.6, 1.2), end: s(4.0) };
 })();
+// v8: out of the little finger, the palm's beat follows with no rest at the whole hand (it used to sit still there for
+// about 1.3 s): the camera eases out on a sine (still moving in its last tenth, where the cubic had all but stopped)
+// and the palm begins the moment it arrives, so the camera turns straight round into the palm
+const TO4 = { ...TO, camE: E.sine, end: TO.cam[0] + TO.cam[1] };
+const timelineOut = b => (b === 0 ? TO0 : b === 4 ? TO4 : TO);
 const TO0 = (() => {                       // after the thumb: the thumbs-up opens and turns to face us, palm out
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return { head: w(0, 0.8), cap: s(0.9), plOut: w(0.2, 1.5), hiOff: w(0.3, 1.2), unfade: w(0.4, 1.8), cam: w(0.0, 3.6), turn: w(0.1, 3.4), open: w(0.3, 3.0), float: w(0.1, 3.1), placed: w(1.6, 1.2), end: s(4.3) };
 })();
 const TP = (() => {                        // the palm: one continuous dolly from the header straight into Mars (v5)
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  // v8 (founder: "no stop when beginning the undoing. The text appears as the repositioning focuses on the palm, and
+  // zoom in on palm occurs. All at the same time. And also at the same time the constellation palm lines become Mars,
+  // and the fan of cards appears"): everything starts the moment the beat does, as one move. The header comes in, the
+  // camera eases straight in on the palm's hollow, the palm's lines flare and at once start pouring (slowly at first)
+  // into Mars with the rest of the palm, and the fan deals in; the camera arrives as the last stars land
   return {
-    hi: w(0.2, 1.0), push: w(0.2, 1.0), head: w(0.2, 0.9),
-    // the camera never rests: it eases in from the moment the header appears and arrives as Mars forms; the palm's
-    // stars and its lines pour into Mars over the second half of the same move
-    zoom: w(0.2, 5.0), rest: w(1.2, 2.2), fade: w(2.5, 2.7), plA: w(2.6, 1.0), reveal: w(2.6, 3.0),
-    back: w(5.0, 1.4), prompt: s(5.3), deal: s(5.6), end: s(7.3),       // v5b: the fan arrives as Mars forms
+    hi: w(0, 0.5), push: w(0, 0.5), head: w(0, 0.9),
+    zoom: w(0, 3.4), rest: w(0, 1.8), fade: w(0, 3.2), plA: w(0.05, 0.9), reveal: w(0.05, 3.2),
+    deal: s(0.05), prompt: s(0.6), end: s(3.4),
   };
 })();
 const timelineIn = b => (b === 3 ? TR : b === 5 ? TP : TI);
@@ -2134,8 +2142,8 @@ function evalPick() {
 }
 function evalOut(b, t) {                            // the card is read: back out to the whole hand, the card to its finger
   evalHold(b);
-  const O = b === 0 ? TO0 : TO;
-  const cam = segE(t, O.cam);
+  const O = timelineOut(b);
+  const cam = segE(t, O.cam, O.camE || E.inOut);
   if (b === 0) {
     // the thumbs-up opens into the open palm and turns, the short way round (counter-clockwise), to face us
     const eo = segE(t, O.turn);
@@ -2386,7 +2394,7 @@ skipBtn.addEventListener('click', () => {
   else if (phase === 'choose') choose(Math.floor(fan.length / 2));
   else if (phase === 'pick') flipToFace();
   else if (phase === 'read') { PK.revealAt = Math.min(PK.revealAt, clock - 1); continueBeat(); }
-  else if (phase === 'out') tOut = (beat === 0 ? TO0 : TO).end;
+  else if (phase === 'out') tOut = timelineOut(beat).end;
 });
 
 /* ---------- captions ---------- */
@@ -3133,7 +3141,7 @@ function frame(now) {
     evalHold(beat); PK.t += dt; evalPick(); checkPick();
   } else if (phase === 'out') {
     tOut += sdt;
-    const O = beat === 0 ? TO0 : TO;
+    const O = timelineOut(beat);
     if (tOut >= O.end) { tOut = O.end; evalOut(beat, tOut); finishBeat(); } else evalOut(beat, tOut);
   } else {
     evalHome();
@@ -3308,7 +3316,7 @@ function jumpBeat(b, t = 0) {
 }
 window.__seq = {
   get phase() { return phase; }, get beat() { return beat; }, phases: PHASES, beats: BEATS.map(x => x.key),
-  get tA() { return tA; }, get tIn() { return tIn; }, get tOut() { return tOut; }, TA, TI, TR, TP, TO, TO0, st,
+  get tA() { return tA; }, get tIn() { return tIn; }, get tOut() { return tOut; }, TA, TI, TR, TP, TO, TO0, TO4, st,
   cam: () => ({ dist: +camera.position.distanceTo(camLook).toFixed(4), pos: camera.position.toArray().map(v => +v.toFixed(4)) }),
   jumpA(t) { restartQuiet(); setPhase('A'); tA = t; }, jump: jumpBeat, setIn(t) { tIn = t; }, setOut(t) { tOut = t; },
   reveal() { if (phase !== 'await') { restartQuiet(); setPhase('await'); tA = TA.end; } reveal(); }, restart,
