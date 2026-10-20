@@ -669,7 +669,7 @@ const wU = joint(skel, V(-2.35 * PALM_W, 0.1), 5, 'wrist');
 
 // thumb: metacarpal + 2 phalanges, set low on the palm's radial side. v5: its two phalanges a little shorter (the
 // founder: "a tiny bit smaller and rounder"); the metacarpal belongs to the palm (see T.j[0])
-const T_LEN = [4.3, 2.95, 2.42].map(x => x * CM);
+const T_LEN = [4.3, 2.45, 2.0].map(x => x * CM);   // v5b (founder: "smaller and wider, its too long"): phalanges ~17% shorter
 const tBase = new THREE.Group(); tBase.position.copy(V(1.65 * PALM_W, 1.5, 0.52)); tBase.rotation.order = 'ZXY'; skel.add(tBase);
 const tProx = new THREE.Group(); tProx.position.y = T_LEN[0]; tBase.add(tProx);
 const tDist = new THREE.Group(); tDist.position.y = T_LEN[1]; tProx.add(tDist);
@@ -827,8 +827,8 @@ const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06, flat = 0.86, c
 const FT = FINGER_T;
 bone(T.j[0], T.j[1], tBase, 1.18 * FT, 0.9 * FT, 5, 57, false, 0.1);       // (the metacarpal: palm, v5)
 // v5: rounder: a fuller, rounder tip and pad (less taper, a rounder cross-section, more stars on the tip's dome)
-bone(T.j[1], T.j[2], tProx, 0.88 * FT, 0.84 * FT, 0, 50, false, -0.06, 0.9);
-bone(T.j[2], T.j[3], tDist, 0.82 * FT, 0.74 * FT, 0, 56, true, -0.06, 0.93, 0.36);
+bone(T.j[1], T.j[2], tProx, 1.03 * FT, 0.99 * FT, 0, 50, false, -0.06, 0.9);   // v5b: ~17% wider
+bone(T.j[2], T.j[3], tDist, 0.97 * FT, 0.9 * FT, 0, 56, true, -0.06, 0.93, 0.36);   // v5b: wider, rounder tip
 const FCOUNTS = { 1: [39, 29, 27], 2: [44, 31, 30], 3: [39, 29, 27], 4: [31, 22, 22] };
 for (const f of FINGERS) {
   const c = FCOUNTS[f.g], s = f.rs * FT;
@@ -1920,7 +1920,7 @@ const TI = (() => {                        // index, middle, little finger, palm
     hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
     // the finger pours slowly into its planet (about 3 s, eased), its stars arriving as the camera settles
     zoom: w(4.6, 3.1), fade: w(4.7, 2.9), rest: w(4.7, 1.8), plA: w(4.75, 0.9), reveal: w(4.75, 3.0),
-    back: w(8.5, 1.4), prompt: s(8.8), deal: s(9.1), end: s(10.8),
+    back: w(7.3, 1.4), prompt: s(7.5), deal: s(7.8), end: s(9.5),      // v5b: the fan arrives as the planet forms
   };
 })();
 const TR = (() => {                        // the ring finger: the band slides down first, then becomes Saturn's rings
@@ -1933,7 +1933,7 @@ const TR = (() => {                        // the ring finger: the band slides d
     dis: [s(7.0), s(2.7)],                            // ...then comes apart, opening out, as the rings bloom out of it
     // the finger's stars pour into the planet's body
     fade: w(6.9, 2.9), rest: w(6.8, 1.8), plA: w(6.9, 0.9), reveal: w(7.0, 3.0),
-    back: w(10.7, 1.4), prompt: s(11.0), deal: s(11.3), end: s(13.0),
+    back: w(9.5, 1.4), prompt: s(9.7), deal: s(10.0), end: s(11.7),     // v5b: the fan arrives as Saturn forms
   };
 })();
 const TO = (() => {                        // after a card is read: back out to the whole hand
@@ -1951,7 +1951,7 @@ const TP = (() => {                        // the palm: one continuous dolly fro
     // the camera never rests: it eases in from the moment the header appears and arrives as Mars forms; the palm's
     // stars and its lines pour into Mars over the second half of the same move
     zoom: w(0.2, 5.0), rest: w(1.2, 2.2), fade: w(2.5, 2.7), plA: w(2.6, 1.0), reveal: w(2.6, 3.0),
-    back: w(6.4, 1.4), prompt: s(7.6), deal: s(7.9), end: s(9.6),
+    back: w(5.0, 1.4), prompt: s(5.3), deal: s(5.6), end: s(7.3),       // v5b: the fan arrives as Mars forms
   };
 })();
 const timelineIn = b => (b === 3 ? TR : b === 5 ? TP : TI);
@@ -2812,9 +2812,12 @@ function cardKeepOut(p, sc) {
   const hp = H / (2 * TAN * Math.max(0.1, -p.z));             // px per unit at the card's depth
   const cx = W / 2 + p.x * hp, cy = H / 2 - p.y * hp, hw = sc * CW / 2 * hp + 2, hh = sc * CH / 2 * hp + 2;
   let cov = Math.max(Math.max(0, hw - cx, cx + hw - W) / hw, Math.max(0, hh - cy, cy + hh - H) / hh);
-  if (st.head > 0.01) {
+  // as a beat begins, a card where its header is about to appear clears out within half a second, ahead of the text
+  // (the palm's header comes in almost at once), so a card and the header's words never show on top of each other
+  const hk = phase === 'in' ? Math.max(st.head, clamp01(tIn / 0.5)) : st.head;
+  if (hk > 0.01) {
     if (!headBoxes) headBoxes = [...headEl.children].map(n => n.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0).map(r => [r.left, r.top, r.right, r.bottom]);
-    for (const [l, t, r, b] of headBoxes) if (cx + hw > l && cx - hw < r) cov = Math.max(cov, clamp01((Math.min(cy + hh, b + 4) - Math.max(cy - hh, t)) / hh) * st.head);
+    for (const [l, t, r, b] of headBoxes) if (cx + hw > l && cx - hw < r) cov = Math.max(cov, clamp01((Math.min(cy + hh, b + 4) - Math.max(cy - hh, t)) / hh) * hk);
   }
   return clamp01(cov);
 }
