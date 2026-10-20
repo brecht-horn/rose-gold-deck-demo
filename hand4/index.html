@@ -1811,7 +1811,12 @@ function resize() {
   // ---- the thumb close-up: the whole thumbs-up, centred under its header and clear of the sheet ----
   LAY.sheet = measureSheet();
   const sheetLeft = side ? LAY.sheet.left : W;
-  const tTop = LAY.top + SHOT[0].headH + 22, tBot = side ? H - LAY.bottom - 6 : LAY.sheet.top - 14;
+  // v5 follow-up: a short phone (375x667) crops the hand at the screen's edges while the camera is in on the thumb or a
+  // finger, instead of shrinking it to fit. Each close-up is fitted to at least the room (in widths) that a normal-height
+  // phone has; these floors never bind on 375x812, 390x844, 393x852, 414x896 or 430x932, so those are unchanged.
+  const FLOOR_T = portrait ? 0.88 * W : 0, FLOOR_P = portrait ? 0.77 * W : 0, FLOOR_F = portrait ? 1.48 * W : 0;
+  const tTop = LAY.top + SHOT[0].headH + 22, tBot0 = side ? H - LAY.bottom - 6 : LAY.sheet.top - 14;
+  const tBot = Math.max(tBot0, Math.min(tTop + FLOOR_T, H - LAY.bottom - 6));   // the base of the fist may crop behind the sheet
   const lookX = side ? sheetLeft / 2 : W / 2;
   const fitPx = Math.max(40, Math.min((tBot - tTop) / (FIG.up + FIG.down), (sheetLeft - 16 - lookX) / FIG.right, (lookX - 16) / FIG.left));
   framing.dThumb = Math.max(Math.max(1.75 / (2 * TAN), 0.95 / (2 * TAN * aspect)), H / (2 * TAN * fitPx));
@@ -1827,18 +1832,25 @@ function resize() {
     if (short) { const l = Math.min(0.32 * W, 300 + 0.04 * W); return { top, bot: H - LAY.bottom - 6, cx: (l + LAY.fanL) / 2, w: LAY.fanL - l - 8 }; }
     return { top, bot: LAY.fanTop - 14, cx: W / 2, w: W - 32 };
   };
-  let P0 = 1e9;
-  for (let b = 1; b < 6; b++) { const B = bandOf(b); P0 = Math.min(P0, 0.74 * B.w / (2 * RING_OUT), 0.86 * (B.bot - B.top) / (2 * PLANET_EXT_Y.saturn * PLANET_R)); }
-  P0 *= reduceMotion ? 0.85 : 1;
+  let P0 = 1e9, P0F = 1e9;                         // P0F: the same, with the short-phone floor (for the finger dolly only)
+  const satH = h => 0.86 * h / (2 * PLANET_EXT_Y.saturn * PLANET_R);
+  for (let b = 1; b < 6; b++) {
+    const B = bandOf(b), wk = 0.74 * B.w / (2 * RING_OUT);
+    P0 = Math.min(P0, wk, satH(B.bot - B.top)); P0F = Math.min(P0F, wk, satH(Math.max(B.bot - B.top, FLOOR_P)));
+  }
+  P0 *= reduceMotion ? 0.85 : 1; P0F *= reduceMotion ? 0.85 : 1;
   for (let b = 0; b < 6; b++) {
     const S = SHOT[b], B = bandOf(b), kind = PLANET_KIND[b], bh = Math.max(60, B.bot - B.top);
     const ex = PLANET_EXT[kind] * PLANET_R, ey = (PLANET_EXT_Y[kind] || PLANET_EXT[kind]) * PLANET_R;
     const ppu = Math.min(P0 * SIZE_K(kind), 0.94 * B.w / (2 * ex), 0.92 * bh / (2 * ey));
     S.ppuP = ppu; S.dP = dAtPpu(ppu); S.sxP = ndcX(B.cx); S.syP = ndcY((B.top + B.bot) / 2);
-    // the dolly in on the finger: about half the planet's magnification, the whole finger in the band
+    // the dolly in on the finger: about half the planet's magnification (as a normal-height phone would have it), the
+    // whole finger under the header; on a short phone the rest of the hand crops at the edges
+    const ppuRef = Math.min(P0F * SIZE_K(kind), 0.94 * B.w / (2 * ex), 0.92 * Math.max(bh, FLOOR_P) / (2 * ey));
     const fTop = LAY.top + S.headH + 18, fBot = H - LAY.bottom - 10;
-    const ppuF = Math.max(40, Math.min(ppu / 1.9, (fBot - fTop) / (FLEN[b] + 0.22), (W - 32) / (b === 5 ? 0.85 : 0.5)));
-    S.dF = dAtPpu(ppuF); S.sxF = 0; S.syF = ndcY((fTop + fBot) / 2);
+    const ppuF = Math.max(40, Math.min(ppuRef / 1.9, Math.max(fBot - fTop, FLOOR_F) / (FLEN[b] + 0.22), (W - 32) / (b === 5 ? 0.85 : 0.5)));
+    const hF = (FLEN[b] + 0.22) * ppuF;
+    S.dF = dAtPpu(ppuF); S.sxF = 0; S.syF = ndcY(hF <= fBot - fTop ? (fTop + fBot) / 2 : fTop + hF / 2);
   }
   // ---- the lifted card ----
   layoutLift(LAY.lift, W < 480 ? 46 : 44);
