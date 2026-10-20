@@ -481,75 +481,45 @@ function buildSaturn(c) {
 }
 
 /* =====================================================================
-   JUPITER — big and oblate; rows of stars in cream zones and tan/rust belts that drift against each other, the
-   Great Red Spot as an oval swirl of red stars in its hollow, festoons on the equator, a string of white ovals.
+   JUPITER — big and oblate, and calm: rows of stars in cream zones and tan/rust belts that drift gently against each
+   other. No storms (no Great Red Spot, no white ovals, no festoons).
    ===================================================================== */
 function buildJupiter(c) {
   const { st, ln, rnd, PX } = c;
   const R = (a, b) => lerp(a, b, rnd());
-  const ZONE = [1.0, 0.95, 0.84], ZONE2 = [0.97, 0.88, 0.72], TAN = [0.93, 0.66, 0.44], RUST = [0.96, 0.5, 0.3], POLE = [0.8, 0.7, 0.62];
-  // the Great Red Spot sits on 22 S, on the south edge of the South Equatorial Belt
-  const G_LAT = -22 * DEG, G_A = 0.25, G_B = 0.13;
+  const ZONE = [1.0, 0.95, 0.84], ZONE2 = [0.97, 0.88, 0.72], POLE = [0.8, 0.7, 0.62];
   // Rows of stars: zones are bright cream rows of larger stars; belts are dimmer, redder rows of smaller, denser
-  // stars with a faint line of their colour along them. Each row drifts at its own rate (the jets); rows round the
-  // Red Spot part around its hollow.
+  // stars with a faint line of their colour along them. Each row drifts at its own rate (the jets).
   const ZB = (lat, col, alpha, drift, o = {}) => ({ lat, col, alpha, drift, size: 8.6, n: 44, line: 0, ...o });
   const BELT = (lat, col, alpha, drift, line, o = {}) => ({ lat, col, alpha, drift, size: 6.8, n: 64, line, ...o });
   const RUSTB = [0.92, 0.4, 0.22], TANB = [0.9, 0.6, 0.38];
   const ROWS = [
     ZB(-73, POLE, 0.36, 0, { size: 7.4, n: 40 }), ZB(-63, POLE, 0.42, 0.01, { size: 7.8 }), BELT(-55, TANB, 0.42, -0.01, 0.08),
     ZB(-48, ZONE2, 0.6, 0.012), ZB(-41, ZONE2, 0.68, 0.016), BELT(-34.5, TANB, 0.5, -0.014, 0.13),
-    ZB(-28, ZONE, 0.88, 0.02, { hollow: 1 }), ZB(-22, ZONE, 0.9, -0.02, { hollow: 1 }),                       // STrZ
-    BELT(-17, RUSTB, 0.62, 0.024, 0.22, { hollow: 1 }), BELT(-13.5, RUSTB, 0.62, 0.02, 0.22, { hollow: 1 }), BELT(-10, RUSTB, 0.58, 0.03, 0.2),   // SEB
+    ZB(-28, ZONE, 0.88, 0.02), ZB(-22, ZONE, 0.9, -0.02),                                                       // STrZ
+    BELT(-17, RUSTB, 0.62, 0.024, 0.22), BELT(-13.5, RUSTB, 0.62, 0.02, 0.22), BELT(-10, RUSTB, 0.58, 0.03, 0.2),   // SEB
     ZB(-5, ZONE, 0.95, 0.04), ZB(0, ZONE, 0.88, 0.042), ZB(5, ZONE, 0.95, 0.04),                                 // EZ
-    BELT(9.5, RUSTB, 0.62, 0.03, 0.22, { fest: 1.8 }), BELT(13, RUSTB, 0.62, -0.016, 0.22), BELT(16.5, RUSTB, 0.58, -0.016, 0.2),   // NEB
+    BELT(9.5, RUSTB, 0.62, 0.03, 0.22), BELT(13, RUSTB, 0.62, -0.016, 0.22), BELT(16.5, RUSTB, 0.58, -0.016, 0.2),   // NEB
     ZB(21.5, ZONE, 0.85, 0.02), BELT(26.5, TANB, 0.5, -0.02, 0.13), BELT(31, TANB, 0.46, -0.02, 0.11),        // NTrZ, NTB
     ZB(36, ZONE2, 0.68, 0.014), BELT(42, TANB, 0.42, -0.012, 0.09), ZB(48.5, ZONE2, 0.55, 0.01),
     BELT(56, TANB, 0.38, -0.01, 0.07), ZB(64, POLE, 0.42, 0, { size: 7.8 }), ZB(73, POLE, 0.36, 0, { size: 7.4, n: 40 }),
   ];
   for (const row of ROWS) {
-    const lat = row.lat * DEG, hollow = row.hollow || 0;
+    const lat = row.lat * DEG;
     const n = Math.max(10, Math.round(row.n * Math.pow(Math.cos(lat), 0.8)));
     const off = rnd();
     for (let i = 0; i < n; i++) {
       const u = (i + off + (rnd() - 0.5) * 0.4) / n;
-      const b = [(row.fest || 0) * DEG, 11, 0.12, hollow];
-      st.add(K_HEMI, u, lat + (rnd() - 0.5) * 0.014, 0, row.drift, b, mixc(row.col, [1, 1, 1], R(0, 0.06)), PX * row.size * R(0.85, 1.12), row.alpha * R(0.72, 1.0), 0);
+      st.add(K_HEMI, u, lat + (rnd() - 0.5) * 0.014, 0, row.drift, Z4, mixc(row.col, [1, 1, 1], R(0, 0.06)), PX * row.size * R(0.85, 1.12), row.alpha * R(0.72, 1.0), 0);
     }
     if (row.line) {
       const v = [];
-      for (let i = 0; i < 96; i++) v.push({ k: K_SURF, p: [(i / 96) * TAU, lat, 0.003], rate: row.drift, b: [0, 0, 0, hollow], c: row.col, a: row.line });
+      for (let i = 0; i < 96; i++) v.push({ k: K_SURF, p: [(i / 96) * TAU, lat, 0.003], rate: row.drift, c: row.col, a: row.line });
       ln.poly(v, true);
     }
   }
-  // the Red Spot itself: concentric ovals, a spiral twist, the collar swirling fastest
-  const RINGS = [0.16, 0.32, 0.48, 0.64, 0.8, 1.0];
-  RINGS.forEach((s, j) => {
-    const n = Math.round(6 + 26 * s);
-    for (let i = 0; i < n; i++) {
-      const th = (i / n) * TAU + s * 2.6 + rnd() * 0.15;
-      const col = mixc([1.0, 0.58, 0.42], [1.0, 0.4, 0.26], s);
-      st.add(K_VORTEX, s * R(0.96, 1.04), th, 0.004, 0, [0.1 + 0.26 * s, 0, 0, 0], col, PX * (j === 5 ? 9.4 : 8.4), (j === 5 ? 1.0 : 0.86) * R(0.85, 1), 0);
-    }
-  });
-  st.add(K_VORTEX, 0, 0, 0.004, 0, Z4, [1.0, 0.66, 0.52], PX * 11, 1.0, 0);
-  // the string of pearls: small white ovals on 40 S
-  for (let m = 0; m < 6; m++) {
-    const lon0 = -1.35 + m * 0.5 + (rnd() - 0.5) * 0.12, lat0 = -40 * DEG;
-    for (let i = 0; i < 6; i++) {
-      const [lon, lat] = offsetLL(lon0, lat0, 0.042, (i / 6) * TAU);
-      st.add(K_SURF, lon, lat, 0.002, 0.016, Z4, [1, 0.97, 0.92], PX * 7, 0.85, 0);
-    }
-  }
-  // lines: the Red Spot's outline, the equatorial edges, a few meridians
-  {
-    const v = [];
-    for (let i = 0; i < 48; i++) v.push({ k: K_VORTEX, p: [1.16, (i / 48) * TAU, 0.006], b: Z4, c: [1.0, 0.58, 0.46], a: 0.34 });
-    ln.poly(v, true);
-  }
   greatCircles(ln, 3, [0.98, 0.8, 0.64], 0.07, 0.3);
   return {
-    vortex: [0, G_LAT, G_A, G_B],
     extent: 1.0,
     glows: [
       [6.0, 0.2, 0.0, 0, [1.0, 0.8, 0.62], 0],
@@ -617,61 +587,32 @@ function buildVenus(c) {
 }
 
 /* =====================================================================
-   MERCURY — the smallest: silver-grey points, crater rims as tiny rings of stars (Caloris the largest), a bright
-   rayed crater, and a hard day/night terminator (no air to soften it).
+   MERCURY — the smallest: an even scatter of silver-grey points with a hard day/night terminator (no air to soften
+   it). Only a faint texture remains of its craters: a few rims a shade brighter than the ground, and two smoother
+   plains a shade dimmer; no dark floors, no bright rayed crater.
    ===================================================================== */
 function buildMercury(c) {
   const { st, ln, rnd, PX } = c;
   const R = (a, b) => lerp(a, b, rnd());
   // craters: lon, lat (deg), angular radius (rad)
   const CRATERS = [
-    [38, 26, 0.36], [-40, 32, 0.2], [-14, -30, 0.22], [52, -24, 0.17], [-62, -6, 0.16], [8, 4, 0.13],
-    [-24, 58, 0.15], [86, 12, 0.18], [-92, 30, 0.2], [20, -58, 0.16], [120, -30, 0.2], [-130, -20, 0.22],
-    [160, 30, 0.2], [-160, 50, 0.18], [70, 55, 0.14],
+    [38, 26, 0.36], [-40, 32, 0.2], [-14, -30, 0.22], [52, -24, 0.17], [-62, -6, 0.16],
+    [86, 12, 0.18], [-92, 30, 0.2], [120, -30, 0.2], [-130, -20, 0.22], [160, 30, 0.2],
   ].map(([lo, la, r]) => [lo * DEG, la * DEG, r]);
-  const RAYED = [-48 * DEG, -40 * DEG];                      // a young bright rayed crater
   const plains = (lon, lat) => Math.exp(-(angDist(lon, lat, 0.5, 0.95) ** 2) / 0.12) + Math.exp(-(angDist(lon, lat, -2.2, -0.3) ** 2) / 0.2);
-  for (const [lon, lat] of fibSphere(800, rnd, 0.6)) {
-    if (CRATERS.some(([clo, cla, r]) => angDist(lon, lat, clo, cla) < r * 0.8)) continue;    // crater floors stay dark
+  for (const [lon, lat] of fibSphere(960, rnd, 0.6)) {
     const smooth = plains(lon, lat);
-    const g = R(0.8, 0.94);
-    st.add(K_SURF, lon, lat, 0, 0, Z4, [g * 0.98, g, g * 1.03], PX * R(5.8, 7.2), (0.82 - 0.26 * smooth) * R(0.75, 1), 0);
+    const g = R(0.82, 0.94);
+    st.add(K_SURF, lon, lat, 0, 0, Z4, [g * 0.98, g, g * 1.03], PX * R(5.8, 7.2), (0.8 - 0.1 * smooth) * R(0.75, 1), 0);
   }
   for (const [lon0, lat0, r] of CRATERS) {
-    const n = Math.round(8 + r * 62);
+    const n = Math.round(6 + r * 40);
     for (let i = 0; i < n; i++) {
-      const b = (i / n) * TAU + rnd() * 0.1;
-      const [lon, lat] = offsetLL(lon0, lat0, r * R(0.95, 1.05), b);
-      st.add(K_SURF, lon, lat, 0.008, 0, Z4, [0.97, 0.97, 1.0], PX * R(6.2, 7.4), R(0.72, 0.95), 0);
+      const b = (i / n) * TAU + rnd() * 0.3;
+      const [lon, lat] = offsetLL(lon0, lat0, r * R(0.92, 1.08), b);
+      const g = R(0.86, 0.94);
+      st.add(K_SURF, lon, lat, 0.004, 0, Z4, [g * 0.98, g, g * 1.03], PX * R(5.4, 6.4), R(0.24, 0.36), 0);
     }
-    if (r > 0.17) st.add(K_SURF, lon0, lat0, 0.004, 0, Z4, [0.9, 0.9, 0.95], PX * 6.5, 0.75, 0);   // central peak
-    if (r > 0.3) {                                            // Caloris: a second, inner ring
-      for (let i = 0; i < 18; i++) {
-        const [lon, lat] = offsetLL(lon0, lat0, r * 0.6, (i / 18) * TAU + 0.2);
-        st.add(K_SURF, lon, lat, 0.004, 0, Z4, [0.88, 0.88, 0.92], PX * 6, 0.55, 0);
-      }
-    }
-  }
-  // the rayed crater: a bright little rim and rays of stars
-  {
-    const [lon0, lat0] = RAYED;
-    st.add(K_SURF, lon0, lat0, 0.01, 0, Z4, [1, 1, 1], PX * 11, 1.0, 0);
-    for (let i = 0; i < 7; i++) {
-      const [lon, lat] = offsetLL(lon0, lat0, 0.06, (i / 7) * TAU);
-      st.add(K_SURF, lon, lat, 0.008, 0, Z4, [1, 1, 1], PX * 6.8, 0.95, 0);
-    }
-    for (let k = 0; k < 9; k++) {
-      const b = (k / 9) * TAU + rnd() * 0.4, len = R(0.35, 0.75);
-      for (let j = 1; j <= 6; j++) {
-        const u = j / 6;
-        const [lon, lat] = offsetLL(lon0, lat0, 0.06 + len * u, b + (rnd() - 0.5) * 0.05);
-        st.add(K_SURF, lon, lat, 0.006, 0, Z4, [0.96, 0.97, 1.0], PX * (7 - 2 * u), (1 - 0.7 * u) * 0.95, 0);
-      }
-    }
-  }
-  // rims of the three largest craters as faint lines, plus a cartographic wireframe
-  for (const [lon0, lat0, r] of CRATERS.slice(0, 3)) {
-    surfLoop(ln, u => offsetLL(lon0, lat0, r, u * TAU), 28, [0.88, 0.9, 0.98], 0.2, 0.008);
   }
   greatCircles(ln, 3, [0.86, 0.86, 0.94], 0.1, 0.2);
   latCircle(ln, 0, [0.86, 0.86, 0.94], 0.1);
@@ -712,21 +653,19 @@ function buildMars(c) {
 }
 
 /* =====================================================================
-   THE SUN — the largest: a dense warm white-gold disc of granules (bright cells with dark lanes) that shimmer,
-   darker toward the limb, two sunspots, a corona of streamers out to ~2.3 finger radii, and two rose prominence
-   arcs at the limb. It is the light, so it has no night side.
+   THE SUN — the largest: a dense warm white-gold disc of granules (bright cells with dark lanes) that shimmer gently,
+   darker toward the limb, inside a soft, even halo of corona light out to ~2.3 finger radii. No flares, prominences,
+   streamers or sunspots. It is the light, so it has no night side.
    ===================================================================== */
 function buildSun(c) {
   const { st, ln, rnd, PX } = c;
   const R = (a, b) => lerp(a, b, rnd());
   // Granulation, on the face turned to the camera (granules are short-lived, so the pattern needn't turn with the
-  // Sun; the wireframe and the sunspot do): bright cells of clustered stars with dark lanes between, every star
-  // flickering on its own. Facing-only, the whole budget lands where it can be seen.
+  // Sun; the wireframe does): bright cells of clustered stars with dark lanes between, every star flickering on its
+  // own. Facing-only, the whole budget lands where it can be seen.
   const toXYZ = (lon, lat) => [Math.cos(lat) * Math.sin(lon), Math.sin(lat), Math.cos(lat) * Math.cos(lon)];
   const CELLS = fibSphere(600, rnd, 1.1).map(([lo, la]) => toXYZ(lo, la)).filter(v => v[2] > 0.03);
   const cellR = Math.sqrt((4 * Math.PI) / 600) * 0.5;
-  const SPOT = [-0.3, -0.16], SPOT_R = 0.1;                   // a sunspot, low and left of centre (disc units)
-  const dSpot = (x, y) => Math.hypot(x - SPOT[0], y - SPOT[1]);
   for (const cpos of CELLS) {
     const n = 3 + Math.floor(rnd() * 2.2);
     // a tangent frame at the cell
@@ -740,73 +679,28 @@ function buildSun(c) {
         p = [0, 1, 2].map(j => cpos[j] + (t1[j] * Math.cos(a) + t2[j] * Math.sin(a)) * d);
         const l = Math.hypot(p[0], p[1], p[2]); p = p.map(x => x / l);
       }
-      if (p[2] < 0.01 || dSpot(p[0], p[1]) < SPOT_R) continue;
+      if (p[2] < 0.01) continue;
       const hot = i === 0;
       const col = hot ? [1.0, 0.96, 0.84] : mixc([1.0, 0.86, 0.6], [1.0, 0.93, 0.76], rnd());
-      st.add(K_VIEW, p[0], p[1], p[2], 0, [0, 0, 0.12, -1], col, PX * (hot ? R(10.5, 13) : R(8, 10)), (hot ? 1.0 : 0.82) * R(0.8, 1), 0);
+      st.add(K_VIEW, p[0], p[1], p[2], 0, [0, 0, 0.1, -1], col, PX * (hot ? R(10.5, 13) : R(8, 10)), (hot ? 1.0 : 0.82) * R(0.8, 1), 0);
     }
   }
-  // the sunspot: a ring of dim orange penumbra stars round a dark umbra
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * TAU, x = SPOT[0] + Math.cos(a) * SPOT_R * 0.9, y = SPOT[1] + Math.sin(a) * SPOT_R * 0.8;
-    st.add(K_VIEW, x, y, Math.sqrt(Math.max(0, 1 - x * x - y * y)), 0, [0, 0, 0.1, -1], [1.0, 0.6, 0.34], PX * 7, 0.55, 0);
-  }
-  st.add(K_VIEW, SPOT[0], SPOT[1], Math.sqrt(1 - SPOT[0] ** 2 - SPOT[1] ** 2), 0, [0, 0, 0, -1], [0.8, 0.3, 0.2], PX * 7, 0.45, 0);
-  // the corona: streamers (screen-aligned) as soft streaks of light with stars strung along them, longest near the
-  // equator, short plumes toward the poles
-  const NRAYS = 44;
-  for (let k = 0; k < NRAYS; k++) {
-    const eq = k % 4 !== 0;
-    const ang = eq ? (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 1.9 : (Math.PI / 2) * (rnd() < 0.5 ? 1 : -1) + (rnd() - 0.5) * 1.0;
-    const len = eq ? R(0.3, 0.62) : R(0.16, 0.3);
-    const n = Math.round(3 + len * 9);
-    for (let j = 0; j < n; j++) {
-      const u = (j + rnd() * 0.7) / n;
-      const rad = 1.03 + len * u;
-      const a = ang + (rnd() - 0.5) * 0.04 * (1 + u * 2);
-      st.add(K_VIEW, Math.cos(a) * rad, Math.sin(a) * rad, 0, 0.012, [0.02, 0.6, 0, 0], mixc([1.0, 0.9, 0.7], [1.0, 0.76, 0.54], u),
-        PX * lerp(7.5, 4.5, u), (1 - u) ** 1.3 * 0.8, 1);
-    }
-    const v = [];
-    for (let j = 0; j <= 5; j++) {
-      const u = j / 5, rad = 1.01 + len * 1.05 * u;
-      v.push({ k: K_VIEW, p: [Math.cos(ang) * rad, Math.sin(ang) * rad, 0], rate: 0.012, b: [0.02, 0.6, 0, 0], c: [1.0, 0.84, 0.62], a: (eq ? 0.26 : 0.18) * Math.pow(1 - u, 1.2) });
-    }
-    ln.poly(v, false);
-  }
-  // a fine diffuse scatter of corona stars between the streamers
-  for (let i = 0; i < 70; i++) {
-    const a = rnd() * TAU, u = rnd() ** 1.6, rad = 1.04 + 0.48 * u;
-    st.add(K_VIEW, Math.cos(a) * rad, Math.sin(a) * rad, 0, 0.012, [0.02, 0.5, 0, 0], [1.0, 0.82, 0.6], PX * 5, 0.42 * (1 - u), 1);
-  }
-  // prominences: rose arcs of stars standing on the limb
-  for (const [ang, w, h, n] of [[2.55, 0.2, 0.26, 52], [-0.75, 0.13, 0.17, 38]]) {
-    const v = [];
-    for (let s = 0; s < 2; s++) {
-      for (let i = 0; i < n / 2; i++) {
-        const u = (i + rnd() * 0.5) / (n / 2);
-        const a = ang + w * (2 * u - 1) + (rnd() - 0.5) * 0.02;
-        const rad = 0.99 + h * Math.pow(Math.sin(Math.PI * u), 0.8) * (s ? 0.82 : 1) + (rnd() - 0.5) * 0.02;
-        st.add(K_VIEW, Math.cos(a) * rad, Math.sin(a) * rad, 0.02, 0.012, [0, 0, 0.35, 0], mixc([1.0, 0.56, 0.48], [1.0, 0.74, 0.6], rnd() * 0.5),
-          PX * R(6.5, 8.5), R(0.75, 1.0), 1);
-      }
-    }
-    for (let i = 0; i <= 16; i++) {
-      const u = i / 16, a = ang + w * (2 * u - 1), rad = 0.99 + h * Math.pow(Math.sin(Math.PI * u), 0.8);
-      v.push({ k: K_VIEW, p: [Math.cos(a) * rad, Math.sin(a) * rad, 0.02], rate: 0.012, c: [1.0, 0.6, 0.5], a: 0.38 });
-    }
-    ln.poly(v, false);
+  // the corona: a soft, even halo of faint stars round the disc, thinning outward, with no rays or streamers
+  for (let i = 0; i < 240; i++) {
+    const a = ((i + rnd()) / 240) * TAU, u = rnd() ** 1.5, rad = 1.03 + 0.5 * u;
+    st.add(K_VIEW, Math.cos(a) * rad, Math.sin(a) * rad, 0, 0.012, [0.015, 0.5, 0, 0], mixc([1.0, 0.88, 0.66], [1.0, 0.78, 0.56], u),
+      PX * lerp(6, 4.5, u), 0.4 * (1 - u) ** 1.2, 1);
   }
   viewCircle(ln, 1.005, 144, [1.0, 0.8, 0.52], 0.2, 0);
   greatCircles(ln, 3, [1.0, 0.86, 0.62], 0.05, 0.4);
   return {
     extent: 2.3 / 1.5,
     glows: [
-      [8.0, 0.34, 0.0, 0.05, [1.0, 0.72, 0.44], 0],
-      [3.3, 0.3, 0.0, 0.04, [1.0, 0.84, 0.58], 1],
-      [2.1, 0.2, 0.0, 0.03, [1.0, 0.94, 0.8], 1],
+      [8.0, 0.34, 0.0, 0.03, [1.0, 0.72, 0.44], 0],
+      [3.3, 0.3, 0.0, 0.025, [1.0, 0.84, 0.58], 1],
+      [2.1, 0.2, 0.0, 0.02, [1.0, 0.94, 0.8], 1],
     ],
-    look: { oblate: 1, night: 1, nightTint: 0, termW: 1, back: 0.03, tw: 0.42, twSpeed: 2.6, limbDark: 1, occ: 0 },
+    look: { oblate: 1, night: 1, nightTint: 0, termW: 1, back: 0.03, tw: 0.32, twSpeed: 2.0, limbDark: 1, occ: 0 },
   };
 }
 
