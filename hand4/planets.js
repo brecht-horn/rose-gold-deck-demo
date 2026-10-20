@@ -688,68 +688,15 @@ function buildMercury(c) {
 }
 
 /* =====================================================================
-   MARS — rust-red points with darker maria, a white north polar cap, Valles Marineris as a dark rift lined by its
-   canyon walls, Olympus Mons as a faint ring and the three Tharsis volcanoes beside it, a thin rose limb of air.
+   MARS — plain and even: rust-red points with only a gentle random mix toward ochre (no polar caps, no maria, no
+   canyons or volcanoes), lit and shaded like the rest, with a thin rose limb of air.
    ===================================================================== */
 function buildMars(c) {
   const { st, ln, rnd, PX } = c;
   const R = (a, b) => lerp(a, b, rnd());
-  const RUST = [1.0, 0.5, 0.3], OCHRE = [1.0, 0.68, 0.44], DARK = [0.78, 0.32, 0.22];
-  // albedo: dark maria and bright deserts (east longitude, planetocentric), as on Mars
-  const MARIA = [[-30, 45, 14, 0.9], [-40, -25, 14, 0.85], [-87, -27, 7, 1.0], [-50, -15, 8, 0.7], [-25, -10, 9, 0.75],
-    [0, -6, 12, 0.85], [69, 8, 14, 1.0], [-155, -30, 16, 0.8], [145, -20, 16, 0.8], [110, -5, 12, 0.5]];
-  const DESERT = [[-110, 2, 22, 0.8], [-40, 25, 12, 0.5], [25, 20, 18, 0.6], [70, -42, 12, 0.7], [-160, 15, 18, 0.6]];
-  const field = (lon, lat, list) => list.reduce((s, [lo, la, sg, w]) => s + w * Math.exp(-((angDist(lon, lat, lo * DEG, la * DEG) / (sg * DEG)) ** 2)), 0);
-  // Valles Marineris: from Noctis Labyrinthus east to the chaos, lat in deg along lon
-  const vmLat = lonD => -7 - 6 * clamp01((lonD + 100) / 62) + 1.2 * Math.sin((lonD + 100) * 0.12);
-  const vmDist = (lon, lat) => {
-    const lonD = wrapPi(lon) / DEG;
-    if (lonD < -102 || lonD > -36) return 9;
-    return Math.abs(lat / DEG - vmLat(lonD)) * DEG;
-  };
-  const CAP = 71 * DEG, VM_W = 0.085;
-  const capEdge = lon => CAP - 0.04 + 0.05 * Math.sin(lon * 3) + 0.03 * Math.sin(lon * 7 + 1);
-  for (const [lon, lat] of fibSphere(1000, rnd, 0.7)) {
-    if (lat > capEdge(lon)) continue;
-    if (lat < -80 * DEG) continue;
-    if (vmDist(lon, lat) < VM_W * 1.05) continue;           // the canyon floor stays dark
-    const dark = Math.min(1, field(lon, lat, MARIA)), bright = Math.min(1, field(lon, lat, DESERT));
-    let col = mixc(RUST, OCHRE, bright * 0.8);
-    col = mixc(col, DARK, dark * 0.8);
-    st.add(K_SURF, lon, lat, 0, 0, Z4, col, PX * R(6.6, 8), (0.9 - 0.42 * dark + 0.1 * bright) * R(0.8, 1), 0);
-  }
-  // the north polar cap: dense white stars with a ragged edge; a small southern cap
-  for (let i = 0; i < 130; i++) {
-    const lon = rnd() * TAU, edge = capEdge(lon) + (rnd() - 0.5) * 0.03;
-    const lat = lerp(edge, Math.PI / 2, Math.sqrt(rnd()));
-    st.add(K_SURF, lon, lat, 0.006, 0, Z4, [1.0, 0.98, 0.96], PX * R(6.4, 8.2), R(0.85, 1.0), 0);
-  }
-  for (let i = 0; i < 30; i++) {
-    st.add(K_SURF, rnd() * TAU, lerp(-81 * DEG, -89 * DEG, rnd()), 0.004, 0, Z4, [1.0, 0.95, 0.93], PX * 6.4, 0.75, 0);
-  }
-  // Valles Marineris: a dark scar, wider than life so it reads at a glance; its walls are close-set rows of
-  // ordinary rust stars (so the edge is crisp, not bright) and its floor holds a few dim deep-red embers
-  for (let lonD = -101; lonD <= -37; lonD += 3.2) {
-    const lat = vmLat(lonD) * DEG, lon = lonD * DEG;
-    const w = VM_W * (0.85 + 0.15 * Math.sin((lonD + 100) * 0.09)) * (lonD > -94 && lonD < -46 ? 1 : 0.7);
-    for (const s of [-1, 1]) {
-      st.add(K_SURF, lon + (rnd() - 0.5) * 0.03, lat + s * w * R(1.0, 1.25), 0.002, 0, Z4, [1.0, 0.54, 0.32], PX * 6.6, 0.74, 0);
-    }
-    if (rnd() < 0.3) st.add(K_SURF, lon, lat + (rnd() - 0.5) * w, 0.0, 0, Z4, [0.62, 0.16, 0.1], PX * 5.6, 0.4, 0);
-  }
-  // Olympus Mons: a faint ring with its caldera; the three Tharsis volcanoes in a line beside it
-  const OM = [-133.8 * DEG, 18.65 * DEG];
-  for (let i = 0; i < 16; i++) {
-    const [lon, lat] = offsetLL(OM[0], OM[1], 0.085, (i / 16) * TAU);
-    st.add(K_SURF, lon, lat, 0.008, 0, Z4, [1.0, 0.78, 0.64], PX * 6.2, 0.55, 0);
-  }
-  st.add(K_SURF, OM[0], OM[1], 0.01, 0, Z4, [1.0, 0.84, 0.72], PX * 7, 0.7, 0);
-  surfLoop(ln, u => offsetLL(OM[0], OM[1], 0.085, u * TAU), 24, [1.0, 0.72, 0.58], 0.18, 0.008);
-  for (const [lo, la] of [[-120.1, -8.35], [-112.8, 1.48], [-104.5, 11.92]]) {
-    for (let i = 0; i < 6; i++) {
-      const [lon, lat] = offsetLL(lo * DEG, la * DEG, 0.035, (i / 6) * TAU);
-      st.add(K_SURF, lon, lat, 0.006, 0, Z4, [1.0, 0.76, 0.6], PX * 6, 0.6, 0);
-    }
+  const RUST = [1.0, 0.5, 0.3], OCHRE = [1.0, 0.62, 0.4];
+  for (const [lon, lat] of fibSphere(1180, rnd, 0.7)) {
+    st.add(K_SURF, lon, lat, 0, 0, Z4, mixc(RUST, OCHRE, rnd() * 0.45), PX * R(6.6, 8), 0.86 * R(0.8, 1), 0);
   }
   viewCircle(ln, 1.025, 112, [1.0, 0.62, 0.52], 0.14, 1);
   greatCircles(ln, 3, [1.0, 0.7, 0.6], 0.08, 0.15);
