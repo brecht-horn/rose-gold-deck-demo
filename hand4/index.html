@@ -3037,26 +3037,45 @@ function renderCards() {
 const FIRST = { x: 0, y: 0, on: false, fs: 0, w: 0, h: 0 };
 const _f2 = new THREE.Vector3();
 function jointPx(j, out) { _f2.copy(j.pos); handBody.localToWorld(_f2); _f2.project(camera); return out.set((_f2.x * 0.5 + 0.5) * W, (-_f2.y * 0.5 + 0.5) * H, 0); }
+// v8 (founder: "a little space between the index finger and the 'First...' text"): the finger's edge is its stars as
+// drawn this frame (the dust round its bones as well as its joints), not the line through its joints, which sits a
+// finger's half-width inside it
+const FI_DUST = dust.map((d, i) => (d.group === 1 ? i : -1)).filter(i => i >= 0);
+const FI_JOINTS = joints.filter(j => j.group === 1).map(j => j.idx);
+function indexRightPx(y0, y1) {                 // the index finger's rightmost star centre (px) between rows y0 and y1
+  let fx = -1e9;
+  const test = (arr, i) => {
+    _f2.set(arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]); handBody.localToWorld(_f2); _f2.project(camera);
+    const px = (_f2.x * 0.5 + 0.5) * W, py = (-_f2.y * 0.5 + 0.5) * H;
+    if (py > y0 && py < y1 && px > fx) fx = px;
+  };
+  for (const i of FI_JOINTS) test(jPos.array, i);
+  for (const i of FI_DUST) test(dPos.array, i);
+  return fx;
+}
 function updateFirst(dt) {
   const a = clamp01(st.first);
   if (a < 0.002) { if (FIRST.on) { FIRST.on = false; firstEl.style.opacity = '0'; } return; }
   // the open space to the right of the raised index finger: level with its upper half, a gap to the right of it
-  let fx = -1e9;
-  for (const j of [FI.j[2], FI.j[3], FI.j[4]]) fx = Math.max(fx, jointPx(j, vC).x);
   const yPip = jointPx(FI.j[2], vC).y, yTip = jointPx(FI.j[4], vD).y;
   if (!FIRST.on || !FIRST.w) {
     firstEl.style.fontSize = ''; FIRST.fs = parseFloat(getComputedStyle(firstEl).fontSize) || 36;
     FIRST.w = firstEl.offsetWidth; FIRST.h = firstEl.offsetHeight;
   }
-  const gap = Math.max(18, 0.045 * W), railL = 16, railR = W - 16;
-  let x = fx + gap, y = lerp(yPip, yTip, 0.45) - FIRST.h / 2, sc = 1;
-  if (x + FIRST.w > railR) {                                   // too little room: keep the gap, shrink a little, then slide left
-    sc = Math.max(0.72, (railR - x) / FIRST.w);
-    x = Math.max(railL, Math.min(x, railR - FIRST.w * sc));
-  }
-  y = Math.max(LAY.top + 8, Math.min(y, H - LAY.bottom - 8 - FIRST.h * sc));
+  // v8: about 24 px of clear sky between the finger's last stars (their centres, plus their glow) and the text
+  const gap = Math.max(26, 0.068 * W), railL = 16, railR = W - 16;
+  let y = lerp(yPip, yTip, 0.45) - FIRST.h / 2;
+  y = Math.max(LAY.top + 8, Math.min(y, H - LAY.bottom - 8 - FIRST.h));
+  // the finger's right edge level with the text (a margin above and below), and never left of its joints
+  let fx = indexRightPx(y - 16, y + FIRST.h + 16);
+  for (const j of [FI.j[2], FI.j[3], FI.j[4]]) fx = Math.max(fx, jointPx(j, vC).x);
+  let x = fx + gap, sc = 1;
+  if (x + FIRST.w > railR) sc = Math.max(0.6, (railR - x) / FIRST.w);   // too little room: shrink, keeping the gap
   if (!FIRST.on) { FIRST.x = x; FIRST.y = y; FIRST.on = true; }
   else { const k = damp(7, dt); FIRST.x += (x - FIRST.x) * k; FIRST.y += (y - FIRST.y) * k; }   // no jitter from the sway
+  // ...but the follow never lags onto the finger (as the second turn starts it moves toward the text while it fades)
+  FIRST.x = Math.max(FIRST.x, x);
+  if (FIRST.x + FIRST.w * sc > railR) FIRST.x = Math.max(railL, railR - FIRST.w * sc);
   firstEl.style.transform = `translate(${FIRST.x.toFixed(1)}px, ${FIRST.y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
   firstEl.style.transformOrigin = '0 0';
   firstEl.style.opacity = a.toFixed(3);
