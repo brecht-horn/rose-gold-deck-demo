@@ -1850,7 +1850,7 @@ function resize() {
         else if (dy < 0 && (b === 0 || card || (kind === 'knuckle' && g > 0))) k = Math.min(k, (low - my) / -dy);
       }
     }
-    BODY_K[b] = Math.max(0.2, k);
+    BODY_K[b] = Math.max(0.08, k);                      // (a wide, short window: a small hand, its cards clear of the header)
   }
   buildConstellations();
 }
@@ -2498,7 +2498,7 @@ const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new TH
 const RIM_FLOOR = 0.33, RIM_GAIN = 1.0;
 // Behind the deck the camera stays in close on the planet, where the full-size hand is only a scatter of stars at the
 // screen's edges; so the hand (not the planet) draws back around the planet, small enough to be seen whole, the planet
-// standing where its finger was. Per beat (the palm keeps 1: its lines frame Mars). ?handk=0 turns it off.
+// standing where its finger was. Per beat (the palm keeps 1: its lines frame Mars, and the fingers, with their cards, are out of frame above). ?handk=0 turns it off.
 const BODY_K = [1, 1, 1, 1, 1, 1];
 const BODY_ON = qs.get('handk') !== '0';
 const BODY_PTS_K = qs.has('bpk') && Number.isFinite(+qs.get('bpk')) ? +qs.get('bpk') : 0.55;
