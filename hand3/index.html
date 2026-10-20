@@ -174,6 +174,7 @@
   }
   .short #caption p { max-width: none; text-align: left; font-size: clamp(19px, 1.1vw + 11px, 25px); line-height: 1.28; }
   .short #math { text-align: left; font-size: 11px; }
+  .short.thumbcap #caption { left: auto; right: 0; padding-left: 0; padding-right: max(4vw, 16px, env(safe-area-inset-right, 0px)); }
   @media (max-width: 420px) {
     #hint { max-width: 22ch; }
     .rail.bottom .controls button { padding: 9px 12px; }
@@ -1715,7 +1716,13 @@ function layoutLift(o, capBlock) {
   // the title is covered) and its name (and the thumb's arithmetic), clear of the screen's sides so there is empty
   // space around it to tap; on a short landscape screen it takes the fan's column
   let top = LAY.top + LAY.titleBottom + 10, bot, cx, maxW;
-  if (LAY.short) { bot = H - LAY.bottom - 4; cx = (LAY.fanL + LAY.fanR) / 2; maxW = Math.min(LAY.fanR - LAY.fanL, W - cx - 16) * 0.8; }
+  if (LAY.short && o === LAY.liftT) {
+    // the thumb's card on a short landscape screen: the Sun holds the left column, so the card takes the middle and its
+    // name and arithmetic the right column (.thumbcap), and nothing sits on the Sun
+    const capL = W - Math.min(0.28 * W, 300) - Math.max(0.04 * W, 16);
+    const sunR = (1 + SHOT[0].sxP) / 2 * W + PLANET_EXT.sun * PLANET_R * SHOT[0].ppuP;
+    bot = H - LAY.bottom - 4; cx = (sunR + capL) / 2; maxW = Math.max(60, (capL - sunR) * 0.85);
+  } else if (LAY.short) { bot = H - LAY.bottom - 4; cx = (LAY.fanL + LAY.fanR) / 2; maxW = Math.min(LAY.fanR - LAY.fanL, W - cx - 16) * 0.8; }
   else { bot = H - LAY.capBottom - capBlock - 14; cx = W / 2; maxW = W - 96; }
   const px = Math.max(130, Math.min(0.58 * H, bot - top, maxW * CH / CW));
   o.px = px; o.z = CH / (2 * TAN * px / H); o.y = ndcY(bot - px / 2); o.x = ndcX(cx);
@@ -2981,6 +2988,8 @@ function frame(now) {
     covered = r.left < l.right && r.right > l.left && r.top < l.bottom && r.bottom > l.top;
   }
   if (covered !== headEl.classList.contains('covered')) headEl.classList.toggle('covered', covered);
+  const thumbCap = LAY.short && beat === 0 && (phase === 'pick' || phase === 'read' || phase === 'out');
+  if (thumbCap !== document.documentElement.classList.contains('thumbcap')) document.documentElement.classList.toggle('thumbcap', thumbCap);
   // the arithmetic sits under the thumb card's name from the moment the card is turned until we move on
   const mathOn = beat === 0 && (phase === 'read' || phase === 'out') && mathEl.childNodes.length > 0;
   if (mathEl.hidden === mathOn) mathEl.hidden = !mathOn;
