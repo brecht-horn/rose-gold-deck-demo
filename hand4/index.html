@@ -2033,11 +2033,16 @@ const TP = (() => {                        // the palm: one continuous dolly fro
   // zoom in on palm occurs. All at the same time. And also at the same time the constellation palm lines become Mars,
   // and the fan of cards appears"): everything starts the moment the beat does, as one move. The header comes in, the
   // camera eases straight in on the palm's hollow, the palm's lines flare and at once start pouring (slowly at first)
-  // into Mars with the rest of the palm, and the fan deals in; the camera arrives as the last stars land
+  // into Mars with the rest of the palm; the camera arrives as the last stars land.
+  // v8b (founder, minutes later: "card fan should not ease in until AFTER mars has formed, not while its forming"): the
+  // fan deals the moment Mars has formed (the reveal's end), with no overlap and no wait, as on every other beat (TI deals
+  // 0.05 s after its planet's reveal ends, TR as it ends); the prompt leads the fan by 0.3 s and the choice opens 1.7 s
+  // after the deal, the same spacing as TI and TR
+  const reveal = w(0.05, 3.2), formed = reveal[0] + reveal[1];
   return {
     hi: w(0, 0.5), push: w(0, 0.5), head: w(0, 0.9),
-    zoom: w(0, 3.4), rest: w(0, 1.8), fade: w(0, 3.2), plA: w(0.05, 0.9), reveal: w(0.05, 3.2),
-    deal: s(0.05), prompt: s(0.6), end: s(3.4),
+    zoom: w(0, 3.4), rest: w(0, 1.8), fade: w(0, 3.2), plA: w(0.05, 0.9), reveal,
+    deal: formed, prompt: formed - s(0.3), end: formed + s(1.7),
   };
 })();
 const timelineIn = b => (b === 3 ? TR : b === 5 ? TP : TI);
