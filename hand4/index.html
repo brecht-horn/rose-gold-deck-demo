@@ -2224,10 +2224,14 @@ function setPhase(p) {
   replayBtn.classList.toggle('cta', p === 'end');
   setHint();
 }
+let askWanted = false;
 function showAsk(on) {
+  askWanted = on;
   if (on) {
     askWrap.hidden = false;
-    requestAnimationFrame(() => requestAnimationFrame(() => askForm.classList.add('on')));
+    // (v10: only if it is still wanted two frames on: a quick second tap on Skip, or a Back, can close it before then,
+    // and it used to come up anyway and stay over the thumb's card)
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (askWanted) askForm.classList.add('on'); }));
   } else {
     askForm.classList.remove('on');
     setTimeout(() => { if (!askForm.classList.contains('on')) askWrap.hidden = true; }, 700);
@@ -3461,6 +3465,7 @@ window.__seq = {
     return T.j.map(j => { const v = j.pos.clone(); handBody.localToWorld(v); v.project(camera); return [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)]; });
   },
   // what of the hand is drawn right now (opacities), for the "the hand stays hidden" checks
+  get plCollapsed() { return plCollapsed; },     // v10: how far the palm's lines are drawn in toward Mars (0 = at rest)
   vis: () => ({ GA: GA.map(v => +v.toFixed(3)), palmLines: palmLineStars.visible ? +palmLineStars.material.uniforms.uOpacity.value.toFixed(3) : 0, band: ringGroup.visible ? +bandStars.material.uniforms.uOpacity.value.toFixed(3) : 0, placedA: +st.placedA.toFixed(3), planet: PL ? +st.planetA.toFixed(3) : 0 }),
   // Saturn's formation sources (debug): where its ring stars and its body stars pour in from, in the planet's frame
   satSrc() {
