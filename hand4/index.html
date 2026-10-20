@@ -3226,6 +3226,22 @@ window.__seq = {
   },
   // what of the hand is drawn right now (opacities), for the "the hand stays hidden" checks
   vis: () => ({ GA: GA.map(v => +v.toFixed(3)), palmLines: palmLineStars.visible ? +palmLineStars.material.uniforms.uOpacity.value.toFixed(3) : 0, band: ringGroup.visible ? +bandStars.material.uniforms.uOpacity.value.toFixed(3) : 0, placedA: +st.placedA.toFixed(3), planet: PL ? +st.planetA.toFixed(3) : 0 }),
+  // Saturn's formation sources (debug): where its ring stars and its body stars pour in from, in the planet's frame
+  satSrc() {
+    if (!PL || PL.kind !== 'saturn') return null;
+    const pts = PL.obj.group.children.find(o => o.isPoints), g = pts.geometry, A = g.attributes.aA.array, S = g.attributes.aSrc.array;
+    const inv = new THREE.Matrix4().compose(PL.obj.group.position, PL.obj.group.quaternion, new THREE.Vector3(1, 1, 1)).invert();
+    const fin = [FR.j[1], FR.j[2], FR.j[3], FR.j[4]].map(j => j.pos.clone().applyMatrix4(inv)), seg = new THREE.Line3(), q = new THREE.Vector3(), cp = new THREE.Vector3();
+    const dFin = v => { let m = 1e9; for (let i = 0; i < 3; i++) { seg.set(fin[i], fin[i + 1]); seg.closestPointToPoint(v, true, cp); m = Math.min(m, cp.distanceTo(v)); } return m; };
+    const ring = { n: 0, rMin: 1e9, rMax: 0, yMax: 0 }, body = { n: 0, nearFinger: 0, maxD: 0 };
+    for (let i = 0; i < A.length / 4; i++) {
+      q.fromArray(S, i * 3);
+      if (Math.round(A[i * 4]) === 1) { const r = Math.hypot(q.x, q.z); ring.n++; ring.rMin = Math.min(ring.rMin, r); ring.rMax = Math.max(ring.rMax, r); ring.yMax = Math.max(ring.yMax, Math.abs(q.y)); }
+      else { const d = dFin(q); body.n++; body.maxD = Math.max(body.maxD, d); if (d < 1.5 * BONE_RP.r0) body.nearFinger++; }
+    }
+    const k = v => +v.toFixed(4);
+    return { ring: { n: ring.n, rMin: k(ring.rMin), rMax: k(ring.rMax), yMax: k(ring.yMax), bandRi: k(BAND.ri), bandRo: k(BAND_RO * lerp(1, BAND_GROW, 0.25)) }, body: { n: body.n, nearFinger: body.nearFinger, maxD: k(body.maxD), fingerR: k(BONE_RP.r0) } };
+  },
   thumbCheck, get ROT_T() { return { ...ROT_T }; },
   FIG, HOME, FLEN, framing, LAY, SHOT,
   // screen-space [x, y, alpha, kind, group] for every visible hand star, plus the planet's centre (layout tests)
