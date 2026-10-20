@@ -1822,6 +1822,8 @@ function layoutLift(o, capBlock) {
 const SIZE_K = kind => Math.pow(PLANET_SIZE.saturn / PLANET_SIZE[kind], 0.35);   // smaller planets get a little closer, the Sun a little further
 // v8: Venus, Mars and Mercury on screen, as a share of Jupiter's disc (the Sun, Jupiter and Saturn keep SIZE_K)
 const VS_JUPITER = { venus: 0.9, mars: 0.87, mercury: 0.85 };
+// ...fitted under their headers by what they draw (the disc and its soft glow, ~1.2x the body), not PLANET_EXT's looser margin
+const FIT_EXT = { venus: 1.03, mars: 0.75, mercury: 0.55 };
 // the name/birthday sheet's box where it comes to rest, measured even while it is hidden (offsets ignore its
 // rise-in transform), so the thumb close-up and the Sun keep clear of it on every screen (v2 tester: 375x667)
 function measureSheet() {
@@ -1892,7 +1894,7 @@ function resize() {
   P0 *= reduceMotion ? 0.85 : 1; P0F *= reduceMotion ? 0.85 : 1;
   const fitPpu = (b, want) => {
     const B = bandOf(b), kind = PLANET_KIND[b], bh = Math.max(60, B.bot - B.top);
-    const ex = PLANET_EXT[kind] * PLANET_R, ey = (PLANET_EXT_Y[kind] || PLANET_EXT[kind]) * PLANET_R;
+    const e = FIT_EXT[kind] || PLANET_EXT[kind], ex = e * PLANET_R, ey = (PLANET_EXT_Y[kind] || e) * PLANET_R;
     return Math.min(want, 0.94 * B.w / (2 * ex), 0.92 * bh / (2 * ey));
   };
   // v8 (founder: "the sun, jupiter and saturn can remain their current size. The rest need to be almost the same size
