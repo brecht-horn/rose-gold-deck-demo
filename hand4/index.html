@@ -54,6 +54,20 @@
   button:hover { border-color: var(--rose); }
   button:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
   button.cta { border-color: var(--rose); background: rgba(226, 164, 143, 0.12); }
+  /* the highlighted buttons (Reveal, and Replay at the end): a rose-gold border with a sheen that travels
+     round it. The ring is a masked pseudo-element, so the button's own tinted background stays see-through. */
+  @property --sheen { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  button.primary, button.cta { position: relative; border-color: transparent; box-shadow: 0 0 14px rgba(226, 164, 143, 0.16); }
+  button.primary::before, button.cta::before {
+    content: ''; position: absolute; inset: -1px; padding: 1px; border-radius: inherit; pointer-events: none;
+    background: conic-gradient(from var(--sheen), rgba(226, 164, 143, 0.62) 0deg, rgba(226, 164, 143, 0.62) 235deg,
+      #f7cdb8 285deg, #fff6ee 305deg, #f7cdb8 325deg, rgba(226, 164, 143, 0.62) 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: sheen 3.2s linear infinite;
+  }
+  @keyframes sheen { to { --sheen: 360deg; } }
+  @media (prefers-reduced-motion: reduce) { button.primary::before, button.cta::before { animation: none; } }
 
   /* each beat's header: centred near the top of the screen, never following the finger */
   #head, .head-probe {
@@ -2748,17 +2762,8 @@ const ptrF = { x: 0, y: 0 };
 const floatE = new THREE.Euler();
 let sweepT = -1, dealAt = -99;
 // v5: each small card hovers over its finger's bright fingertip star (the thumb's: the thumb-tip star), centred on it;
-// the palm's hovers over the palm's brightest star nearest where Mars formed (a main star of its lines, in the hollow)
-const PALM_CARD = (() => {
-  let best = null, bd = 1e9;
-  for (let i = 0; i < plPos.length; i++) {
-    if (plA[i] < 0.9) continue;                      // the lines' main stars (their ends and the fine dust are dimmer)
-    const d = Math.hypot(plPos[i][0] - MARS_AT.x, plPos[i][1] - MARS_AT.y);
-    if (d < bd) { bd = d; best = plPos[i]; }
-  }
-  return new THREE.Vector3().fromArray(best);
-})();
-function cardAnchorLocal(k, out) { return k === 5 ? out.copy(PALM_CARD) : out.copy(TIPS[k].pos); }
+// the palm's hovers exactly where Mars appeared, the very centre of the palm (the founder's follow-up)
+function cardAnchorLocal(k, out) { return k === 5 ? out.copy(MARS_AT) : out.copy(TIPS[k].pos); }
 function liftPose(flip, outP, outQ, lay) {
   const z = lay.z, par = reduceMotion ? 0.3 : 1, tk = tilt.on ? 1.6 : 1;
   outP.set(lay.x * TAN * aspect * z, lay.y * TAN * z, -z);
