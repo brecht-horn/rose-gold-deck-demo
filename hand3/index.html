@@ -2003,7 +2003,9 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   st.restA = lerp(lerp(lerp(1, 0.55, st.hi), REST_LOW, segE(t, T.rest, E.sine)), REST_BACK, eBack);
   st.planetA = segE(t, T.plA, E.sine);
   st.reveal = segE(t, T.reveal, E.sine);
-  st.placedA = 1 - segE(t, T.placedOff, E.sine);   // the cards already placed step aside as we dolly in (gone before the header)
+  // the cards already chosen stay above their fingers: they dim with the rest of the hand as we dolly in, fade with it
+  // while the planet forms, and come back with it (drawn back around the planet, at its scale) behind the deck
+  st.placedA = lerp(lerp(1, 0.7, st.hi) * (1 - segE(t, T.rest, E.sine)), 1, eBack);
   st.cap = t >= T.prompt ? `choose${b}` : '';
   if (b === 5) {
     // the palm's lines are bright as the camera starts in, pour into Mars with the palm, and are back behind the deck
@@ -2048,7 +2050,7 @@ function evalOut(b, t) {                            // the card is read: back ou
   st.cap = t < O.cap ? `card${b}` : '';
   st.math = b === 0 ? 1 - segE(t, [0, O.cap]) : 0;
   st.floatW = segE(t, O.float, E.inOut);
-  st.placedA = segE(t, O.placed, E.sine);
+  st.placedA = lerp(st.placedA, 1, segE(t, O.placed, E.sine));   // (already up behind the deck: they stay, and grow with the hand)
 }
 
 /* ---------- state machine ----------
