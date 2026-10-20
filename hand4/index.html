@@ -1557,7 +1557,7 @@ const cardRim = new THREE.DirectionalLight(0x9a7bff, 0.9); cardRim.position.set(
 const sweep = new THREE.PointLight(0xfff3ea, 0, 2.2, 2); cardCam.add(sweep);
 
 // 21 deck cards (the 22 Majors minus the thumb card) and the thumb's own card. A deck card is dealt into the fan at
-// a position each beat; once its face has been seen it stays with its finger, small above it, for the rest of the run.
+// a position each beat; once its face has been seen it stays with its finger, small, over its fingertip star, for the rest of the run.
 const DECK_N = 21;
 const cards = [];
 for (let k = 0; k <= DECK_N; k++) {
@@ -1883,7 +1883,7 @@ const TA = (() => {
   o.plA = [c + 0.2 * MA, 0.9 * MA];
   o.reveal = [c + 0.2 * MA, 3.0 * MA];     // the Sun forms over the same span as the collapse
   c += 3.6 * MA;
-  o.back = [c, 1.4 * MA];                  // the hand comes back behind the Sun as the sheet arrives
+  o.back = [c, 1.4 * MA];                  // the sheet arrives (the hand stays hidden until the thumb's card is read)
   o.sheet = c + 0.3 * HA;
   o.end = c + 1.4 * MA;                    // (the intro's clock runs on under the sheet until the hand is back)
   return o;
@@ -2068,7 +2068,7 @@ function evalOut(b, t) {                            // the card is read: back ou
 /* ---------- state machine ----------
    A (the stars form, the hand turns, the thumb and the Sun) -> await (name + birthday) -> pick (the thumb's card
    rises; swipe or tap to turn it) -> read (its name and the arithmetic; tap to continue) -> out (back to the whole
-   hand, the card settles above the thumb); then for each of index, middle, ring, little finger, palm:
+   hand, the card settles over the thumb's tip); then for each of index, middle, ring, little finger, palm:
    in (dolly in, header, planet, deck) -> choose -> pick (tap empty space to put it back) -> read -> out; -> end */
 const PHASES = ['A', 'await', 'in', 'choose', 'pick', 'read', 'out', 'end'];
 let phase = 'A', beat = 0, tA = 0, tIn = 0, tOut = 0, freeze = qs.has('freeze');
