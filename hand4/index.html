@@ -1,0 +1,3212 @@
+<!doctype html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel=icon href="data:,"><style>body{margin:0}[hidden]{display:none!important}</style></head><body><title>Constellation Hand</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500;6..96,700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one full-bleed WebGL sky. Each beat's header (the finger, its theme and planet, its line) sits centred
+     near the top; the narrative line, the prompt and the card's name sit centred above the bottom rail; the
+     name/birthday sheet floats above the rail (right column in landscape). Single dark world by design. */
+  :root {
+    --ink: #f3e6df;
+    --muted: #a08f96;
+    --rose: #e2a48f;
+    --bg: #040306;
+    --bg2: #120c17;
+    --line: rgba(226, 164, 143, 0.38);
+    --panel: rgba(12, 9, 15, 0.82);
+    --display: "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(120% 85% at 50% 40%, var(--bg2), var(--bg) 70%);
+    color: var(--ink);
+    font-family: var(--mono);
+    overflow: hidden;
+  }
+  #stage { position: fixed; inset: 0; touch-action: none; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  /* the vignette is drawn inside WebGL (same gradients as v1's CSS layer), under the cards, so the fan is never darkened */
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .rail {
+    position: fixed; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    pointer-events: none;
+  }
+  .rail.bottom { bottom: 0; padding-block: 0 calc(16px + env(safe-area-inset-bottom, 0px)); align-items: flex-end; }
+  #hint { max-width: 30ch; line-height: 1.6; }
+  #hint.cue { color: var(--ink); animation: cue 2.6s ease-in-out infinite; }
+  @keyframes cue { 50% { opacity: 0.5; } }
+  .controls { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+  button {
+    font: inherit; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
+    background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 999px;
+    padding: 9px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--rose); }
+  button:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+  button.cta { border-color: var(--rose); background: rgba(226, 164, 143, 0.12); }
+
+  /* each beat's header: centred near the top of the screen, never following the finger */
+  #head, .head-probe {
+    position: fixed; left: 0; right: 0; top: calc(18px + env(safe-area-inset-top, 0px));
+    display: grid; justify-items: center; text-align: center; gap: 4px; pointer-events: none; opacity: 0;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .hd-eyebrow { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); text-shadow: 0 0 10px rgba(4, 3, 6, 0.95); }
+  .hd-title {
+    font-family: var(--display); font-weight: 500; font-size: 23px; line-height: 1.15; color: var(--rose);
+    text-shadow: 0 0 16px rgba(4, 3, 6, 0.95), 0 0 2px rgba(4, 3, 6, 0.9);
+  }
+  .hd-title .dot { color: var(--muted); }
+  .hd-line {
+    margin-top: 6px; max-width: 44ch; font-size: 12px; line-height: 1.62; letter-spacing: 0.02em; color: rgba(243, 230, 223, 0.86);
+    text-wrap: pretty; text-shadow: 0 0 12px rgba(4, 3, 6, 0.95), 0 0 2px rgba(4, 3, 6, 0.8);
+  }
+  .hd-line { transition: opacity 0.35s ease; }
+  #head.covered .hd-line { opacity: 0; }          /* the lifted card covers the line (the canvas cannot draw over the page's text) */
+  .wide .hd-line { max-width: 62ch; }
+  .hd-line.verse { max-width: none; }
+  .hd-line.verse span { display: block; }
+  .short .hd-line { max-width: 76ch; }
+  @media (max-width: 420px) { .hd-title { font-size: 21px; } .hd-line { font-size: 11.5px; } }
+
+  /* narrative line, the prompt under the fan, and the card's numeral and name (plus the thumb's arithmetic) */
+  #caption {
+    position: fixed; left: 0; right: 0; bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  #caption p {
+    margin: 0; max-width: 23ch; text-align: center; text-wrap: balance;
+    font-family: var(--display); font-weight: 500; font-size: clamp(22px, 1.4vw + 16px, 31px); line-height: 1.24;
+    color: var(--ink); letter-spacing: 0.005em;
+    text-shadow: 0 0 22px rgba(4, 3, 6, 0.9), 0 0 2px rgba(4, 3, 6, 0.9);
+    opacity: 0; transform: translateY(8px); filter: blur(5px);
+    transition: opacity 1.1s ease, transform 1.1s cubic-bezier(.2, .7, .2, 1), filter 1.1s ease;
+  }
+  #caption p.on { opacity: 1; transform: none; filter: none; }
+  #caption p.intro { max-width: 20ch; }
+  #caption p.card { font-size: clamp(24px, 1.4vw + 18px, 32px); }
+  #caption p.card .num { color: var(--rose); }
+
+  /* name + birthday sheet */
+  #askWrap {
+    position: fixed; left: 0; right: 0; bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    display: flex; justify-content: center; pointer-events: none;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .ask {
+    pointer-events: auto; width: min(360px, 100%); box-sizing: border-box; display: grid; gap: 14px;
+    background: var(--panel); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px 16px;
+    opacity: 0; transform: translateY(12px);
+    transition: opacity 0.9s ease, transform 0.9s cubic-bezier(.2, .7, .2, 1);
+  }
+  .ask.on { opacity: 1; transform: none; }
+  .wide #askWrap {
+    top: 0; bottom: 0; align-items: center; justify-content: flex-end;
+    padding-right: max(7vw, env(safe-area-inset-right, 0px));
+  }
+  /* short landscape: a compact two-column sheet, low on the right, clear of the header */
+  .short #askWrap { top: auto; bottom: calc(50px + env(safe-area-inset-bottom, 0px)); align-items: flex-end; }
+  .short .ask { width: min(500px, 60vw); grid-template-columns: 1fr 1fr; align-items: end; gap: 10px 12px; padding: 12px 14px; }
+  .short .ask-foot { grid-column: 1 / -1; }
+  .short .q { font-size: 18px; }
+  .field { display: grid; gap: 7px; }
+  .q { font-family: var(--display); font-weight: 500; font-size: 22px; line-height: 1.2; color: var(--ink); }
+  .field-label { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .ask input {
+    font: 400 16px/1.25 var(--mono); color: var(--ink); width: 100%; box-sizing: border-box; min-height: 46px; margin: 0;
+    background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(226, 164, 143, 0.26); border-radius: 10px;
+    padding: 11px 12px; -webkit-appearance: none; appearance: none;
+  }
+  .short .ask input { min-height: 40px; padding: 8px 12px; }
+  .ask input:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px rgba(226, 164, 143, 0.15); }
+  .ask input::placeholder { color: rgba(243, 230, 223, 0.36); }
+  .ask input[type="date"] { display: block; }
+  .ask input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+  .ask input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85) sepia(0.4); opacity: 0.6; cursor: pointer; }
+  .ask-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .ask-note { font-size: 10.5px; line-height: 1.55; letter-spacing: 0.03em; color: var(--muted); }
+  .ask-note[data-error] { color: #f0a5a0; }
+  button.primary { border-color: var(--rose); background: rgba(226, 164, 143, 0.14); padding: 12px 20px; flex: 0 0 auto; }
+
+  /* the arithmetic, in mono, under the thumb card's name */
+  #math {
+    text-align: center; font-size: 12px; line-height: 1.8; letter-spacing: 0.02em; color: var(--ink); opacity: 0;
+    text-shadow: 0 0 12px rgba(4, 3, 6, 0.95);
+  }
+  #math:empty { display: none; }
+  #math .part { display: block; }                /* one line per idea; long birth chains wrap only between steps */
+  #math .step { white-space: nowrap; }
+  #math .arrow { color: var(--rose); }
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  #fallback {
+    position: fixed; inset: 0; display: grid; place-items: center; text-align: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    font-size: 13px; line-height: 1.7; color: var(--muted);
+  }
+  @media (min-width: 700px) { #caption p { max-width: 31ch; } #caption p.intro { max-width: 24ch; } }
+  /* a short phone (375x667): a tighter sheet gives the thumb close-up and the Sun the room */
+  @media (max-height: 720px) and (orientation: portrait) {
+    .ask { gap: 10px; padding: 14px 14px 13px; }
+    .field { gap: 5px; }
+    .q { font-size: 20px; }
+    .ask input { min-height: 44px; padding-block: 10px; }
+  }
+  /* short landscape (a phone on its side, a short laptop window): no room under the hand, so the narrative line,
+     the prompt and the card's name take the open column on the left */
+  .short #caption {
+    right: auto; top: 0; bottom: 0; align-items: flex-start; justify-content: center;
+    width: min(28vw, 300px); padding-left: max(4vw, env(safe-area-inset-left, 0px)); padding-right: 0;
+  }
+  .short #caption p { max-width: none; text-align: left; font-size: clamp(19px, 1.1vw + 11px, 25px); line-height: 1.28; }
+  .short #math { text-align: left; font-size: 11px; }
+  .short.thumbcap #caption { left: auto; right: 0; padding-left: 0; padding-right: max(4vw, 16px, env(safe-area-inset-right, 0px)); }
+  @media (max-width: 420px) {
+    #hint { max-width: 22ch; }
+    .rail.bottom .controls button { padding: 9px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #caption p, .ask { transition-duration: 0.5s; transform: none; filter: none; }
+    #hint.cue { animation: none; }
+  }
+</style>
+
+<div id="stage" aria-label="A hand drawn in stars forms out of the night sky. One at a time, from the thumb to the palm, each finger becomes its planet and you choose a card for it, until the whole hand holds six cards."></div>
+<div class="grain" aria-hidden="true"></div>
+
+<div id="head" aria-live="polite"><span class="hd-eyebrow" id="hdEyebrow"></span><span class="hd-title" id="hdTitle"></span><span class="hd-line" id="hdLine"></span></div>
+
+<div id="caption" aria-live="polite"><p></p><div id="math"></div></div>
+
+<div id="askWrap" hidden>
+  <form class="ask" id="ask" novalidate autocomplete="off">
+    <div class="field">
+      <label class="q" for="name">What should we call you?</label>
+      <input id="name" name="name" type="text" placeholder="Brecht" maxlength="40" autocomplete="given-name" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+    </div>
+    <div class="field">
+      <label class="field-label" for="dob">Date of birth</label>
+      <input id="dob" name="dob" type="date" value="1997-03-14" min="1900-01-01" max="2099-12-31">
+    </div>
+    <div class="ask-foot">
+      <span class="ask-note" id="askNote">Leave either blank to use the example: Brecht, 14 March 1997.</span>
+      <button type="submit" class="primary" id="reveal">Reveal</button>
+    </div>
+  </form>
+</div>
+
+<div class="rail bottom">
+  <div id="hint">Move to drift through the stars.</div>
+  <div class="controls">
+    <button id="tilt" type="button" hidden>Tilt</button>
+    <button id="skip" type="button">Skip</button>
+    <button id="replay" type="button">Replay</button>
+  </div>
+</div>
+
+<div id="fallback" hidden>This prototype needs WebGL, which this browser isn't providing.</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.167.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.1/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { makePlanet, planetQuaternion } from './planets.js';
+
+const MAJORS = [
+  ['0', 'The Fool'], ['I', 'The Magician'], ['II', 'The High Priestess'], ['III', 'The Empress'],
+  ['IV', 'The Emperor'], ['V', 'The Hierophant'], ['VI', 'The Lovers'], ['VII', 'The Chariot'],
+  ['VIII', 'Strength'], ['IX', 'The Hermit'], ['X', 'Wheel of Fortune'], ['XI', 'Justice'],
+  ['XII', 'The Hanged Man'], ['XIII', 'Death'], ['XIV', 'Temperance'], ['XV', 'The Devil'],
+  ['XVI', 'The Tower'], ['XVII', 'The Star'], ['XVIII', 'The Moon'], ['XIX', 'The Sun'],
+  ['XX', 'Judgement'], ['XXI', 'The World'],
+];
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const qs = new URLSearchParams(location.search);
+
+/* =====================================================================
+   The thumb rule (locked). Method T birth card + name number, counted
+   through the 22 Majors.
+   ===================================================================== */
+const digitsOf = n => String(n).split('').map(Number);
+function birthCard(y, m, d) {
+  const C = y >= 2000 ? 20 : 19;              // 19 for 1900-1999, 20 for 2000-2099
+  const YY = y % 100;
+  const S = m + d + C + YY;
+  const steps = [`${m} + ${d} + ${C} + ${YY} = ${S}`];
+  let v = S;
+  if (v >= 100) {                              // three digits: first two (as one number) + last digit
+    const a = Math.floor(v / 10), b = v % 10;
+    v = a + b; steps.push(`${a} + ${b} = ${v}`);
+  }
+  while (v > 21) {                             // still above 21: digit sum, repeated
+    const ds = digitsOf(v);
+    v = ds.reduce((s, x) => s + x, 0); steps.push(`${ds.join(' + ')} = ${v}`);
+  }
+  if (v >= 1 && v <= 9) { steps.push(`${v} + 9 = ${v + 9}`); v += 9; }   // single digit: its partner
+  return { S, card: v, steps };
+}
+function nameNumber(raw) {
+  const first = String(raw || '').trim();       // the whole field counts; nothing is split at spaces
+  const letters = first.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z]/g, '');
+  let sum = 0;
+  for (const ch of letters) sum += ch.charCodeAt(0) - 96;
+  return { first, letters, sum };
+}
+function thumbCard(name, date) {
+  const birth = date ? birthCard(date.y, date.m, date.d) : null;
+  const start = birth ? birth.card : 0;        // no birthday: start from The Fool
+  const n = nameNumber(name);
+  const thumb = n.letters ? (start + n.sum) % 22 : start;
+  return { birth, start, name: n, thumb };
+}
+function mathParts(r) {
+  const parts = [];
+  parts.push(r.birth ? r.birth.steps.join(' → ') : 'No birthday, so we start at 0');
+  if (r.name.letters) {
+    parts.push(`${r.name.first} = ${r.name.sum}`);
+    parts.push(`(${r.start} + ${r.name.sum}) mod 22 = ${r.thumb}`);
+  } else {
+    parts.push('No a–z letters in the name, so the thumb is the birth card');
+  }
+  return parts;
+}
+function selfCheck() {
+  const fails = [];
+  const eq = (label, got, want) => { if (got !== want) fails.push(`${label}: got ${got}, want ${want}`); };
+  const a = thumbCard('Brecht', { y: 1997, m: 3, d: 14 });
+  eq('1997-03-14 sum', a.birth.S, 133);
+  eq('1997-03-14 birth card', a.birth.card, 16);
+  eq('16 is The Tower', MAJORS[16][1], 'The Tower');
+  eq('Brecht name number', a.name.sum, 56);
+  eq('Brecht + 1997-03-14 thumb', a.thumb, 6);
+  eq('6 is The Lovers', MAJORS[a.thumb][1], 'The Lovers');
+  const b = birthCard(1950, 2, 21);
+  eq('1950-02-21 sum', b.S, 92);
+  eq('1950-02-21 birth card', b.card, 11);
+  eq('11 is Justice', MAJORS[11][1], 'Justice');
+  const c = birthCard(1999, 12, 31);
+  eq('1999-12-31 sum', c.S, 161);
+  eq('1999-12-31 birth card', c.card, 17);
+  eq('17 is The Star', MAJORS[17][1], 'The Star');
+  eq('1999-01-10 (129 → 12 + 9) birth card', birthCard(1999, 1, 10).card, 21);
+  eq('2001-01-08 (30 → 3, partner) birth card', birthCard(2001, 1, 8).card, 12);
+  eq('accents stripped (Zoë)', nameNumber('Zoë').sum, 46);
+  eq('whole field (Mary Jane = MaryJane)', nameNumber('Mary Jane').sum, nameNumber('MaryJane').sum);
+  eq('whole field (Mary-Jane = MaryJane)', nameNumber('Mary-Jane').sum, nameNumber('MaryJane').sum);
+  eq('NFD drops ø (Ørjan = rjan)', nameNumber('Ørjan').sum, nameNumber('rjan').sum);
+  eq('no birthday starts at The Fool', thumbCard('Brecht', null).thumb, 12);
+  if (fails.length) console.error('[thumb rule] self-check failed:\n' + fails.join('\n'));
+  return fails;
+}
+const thumbCheck = selfCheck();
+
+/* =====================================================================
+   Elements
+   ===================================================================== */
+const stage = document.getElementById('stage');
+const hintEl = document.getElementById('hint');
+const tiltBtn = document.getElementById('tilt');
+const skipBtn = document.getElementById('skip');
+const replayBtn = document.getElementById('replay');
+const captionEl = document.getElementById('caption');
+const captionP = document.querySelector('#caption p');
+const askWrap = document.getElementById('askWrap');
+const askForm = document.getElementById('ask');
+const nameIn = document.getElementById('name');
+const dobIn = document.getElementById('dob');
+const askNote = document.getElementById('askNote');
+const mathEl = document.getElementById('math');
+const headEl = document.getElementById('head');
+const hdEyebrow = document.getElementById('hdEyebrow');
+const hdTitle = document.getElementById('hdTitle');
+const hdLine = document.getElementById('hdLine');
+
+/* =====================================================================
+   Renderer, camera, shared uniforms
+   ===================================================================== */
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+} catch (e) {
+  document.getElementById('fallback').hidden = false;
+  throw e;
+}
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+renderer.setPixelRatio(DPR);
+renderer.setClearColor(0x040306, 1);
+stage.appendChild(renderer.domElement);
+const glc = renderer.getContext();
+const pointRange = glc.getParameter(glc.ALIASED_POINT_SIZE_RANGE);
+const MAX_POINT = Math.min((pointRange && pointRange[1]) || 256, 300 * DPR);
+
+const scene = new THREE.Scene();
+const FOV = 34;
+const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+const camera = new THREE.PerspectiveCamera(FOV, 1, 0.05, 200);
+
+const U = {
+  uTime: { value: 0 },
+  uScale: { value: 800 },
+  uMaxSize: { value: MAX_POINT },
+  uMinSize: { value: 2.0 * DPR },
+  uDotTo: { value: 7.0 * DPR },
+};
+const OCC = { uOcc: { value: new THREE.Vector4(0, 0, -50, 0.001) }, uOccA: { value: 0 } };
+const ONES = [1, 1, 1, 1, 1, 1];
+const GA = [1, 1, 1, 1, 1, 1];        // per-group alpha: 0 thumb, 1 index, 2 middle, 3 ring, 4 pinky, 5 palm
+const GB = [1, 1, 1, 1, 1, 1];        // per-group brightness
+
+/* ---------- glow textures (radial-gradient canvases) ---------- */
+function glowTexture(spikes) {
+  const S = 128, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.06, 'rgba(255,255,255,0.9)');
+  grd.addColorStop(0.18, 'rgba(255,255,255,0.32)');
+  grd.addColorStop(0.42, 'rgba(255,255,255,0.08)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, S, S);
+  if (spikes) {
+    g.globalCompositeOperation = 'lighter';
+    for (const horiz of [true, false]) {
+      const lg = horiz ? g.createLinearGradient(0, 0, S, 0) : g.createLinearGradient(0, 0, 0, S);
+      lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.5, 'rgba(255,255,255,0.6)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = lg;
+      if (horiz) g.fillRect(0, S / 2 - 1, S, 2); else g.fillRect(S / 2 - 1, 0, 2, S);
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter;
+  return t;
+}
+const GLOW = glowTexture(false);
+const FLARE = glowTexture(true);
+
+/* ---------- shaders ---------- */
+const OCC_GLSL = /* glsl */`
+  uniform vec4 uOcc;      // planet centre (view space) + radius
+  uniform float uOccA;    // planet presence 0..1
+  uniform float uOccAny;  // 1 = dim anything inside the disc (hand); 0 = hide only what is behind it (rings)
+  float occl(vec3 p) {
+    if (uOccA <= 0.001) return 1.0;
+    if (uOccAny < 0.5 && p.z >= uOcc.z) return 1.0;
+    vec2 q = p.xy * (uOcc.z / min(p.z, -0.001));
+    float d = length(q - uOcc.xy);
+    float inside = 1.0 - smoothstep(uOcc.w * 0.9, uOcc.w * 1.06, d);
+    return 1.0 - inside * uOccA * (uOccAny > 0.5 ? 0.72 : 1.0);
+  }
+`;
+const PTS_VS = /* glsl */`
+  attribute float aSize;
+  attribute float aAlpha;
+  attribute vec3 aColor;
+  attribute float aPhase;
+  attribute float aGroup;
+  uniform float uTime, uScale, uRef, uAtten, uTwinkle, uOpacity, uMaxSize, uMinSize, uSizeMul, uDotTo;
+  uniform float uGA[6];
+  uniform float uGB[6];
+  varying vec3 vColor;
+  varying float vAlpha;
+  varying float vSmall;
+  ${OCC_GLSL}
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    int g = int(aGroup + 0.5);
+    float gb = uGB[g];
+    float sp = 0.5 + fract(aPhase * 7.31) * 1.6;
+    float tw = 1.0 - uTwinkle * (0.5 + 0.5 * sin(uTime * sp + aPhase * 6.2831));
+    float d = max(0.05, -mv.z);
+    float px = aSize * uSizeMul * uScale / (pow(d, uAtten) * pow(uRef, 1.0 - uAtten)) * (0.7 + 0.3 * gb);
+    float a = aAlpha * uOpacity * uGA[g] * tw * occl(mv.xyz);
+    if (px < uMinSize) { a *= px / uMinSize; px = uMinSize; }
+    vSmall = 1.0 - smoothstep(uMinSize, uDotTo, px);
+    gl_PointSize = min(px, uMaxSize);
+    vAlpha = a;
+    vColor = aColor * gb;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const PTS_FS = /* glsl */`
+  uniform sampler2D uMap;
+  varying vec3 vColor;
+  varying float vAlpha;
+  varying float vSmall;
+  void main() {
+    float r = clamp(1.0 - length(gl_PointCoord - 0.5) * 2.0, 0.0, 1.0);
+    float m = mix(texture2D(uMap, gl_PointCoord).a, r * r * 1.4, vSmall) * vAlpha;
+    if (m < 0.002) discard;
+    gl_FragColor = vec4(vColor * m, 1.0);
+  }
+`;
+const LINE_VS = /* glsl */`
+  attribute float aAlpha;
+  attribute float aGroup;
+  attribute vec3 aColor;
+  uniform float uOpacity;
+  uniform float uGA[6];
+  uniform float uGB[6];
+  varying float vA;
+  varying vec3 vC;
+  ${OCC_GLSL}
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    int g = int(aGroup + 0.5);
+    vA = aAlpha * uOpacity * uGA[g] * occl(mv.xyz);
+    vC = aColor * uGB[g];
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const LINE_FS = /* glsl */`
+  varying float vA;
+  varying vec3 vC;
+  void main() { gl_FragColor = vec4(vC * vA, 1.0); }
+`;
+// v2: stars depth-test (they never write depth) so the solid wedding band hides the dust behind it
+const additive = {
+  transparent: true, depthWrite: false, depthTest: true,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+  blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+};
+function pointsMaterial({ map = GLOW, twinkle = 0, opacity = 1, atten = 1, ref = 5, groups = false, occ = false, occAny = 0 } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: U.uTime, uScale: U.uScale, uMaxSize: U.uMaxSize, uMinSize: U.uMinSize, uDotTo: U.uDotTo,
+      uMap: { value: map }, uTwinkle: { value: twinkle }, uOpacity: { value: opacity },
+      uAtten: { value: atten }, uRef: { value: ref }, uSizeMul: { value: 1 },
+      uGA: { value: groups ? GA : ONES }, uGB: { value: groups ? GB : ONES },
+      uOcc: OCC.uOcc, uOccA: occ ? OCC.uOccA : { value: 0 }, uOccAny: { value: occAny },
+    },
+    vertexShader: PTS_VS, fragmentShader: PTS_FS, ...additive,
+  });
+}
+function lineMaterial({ opacity = 1, groups = false, occ = false, occAny = 0 } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uOpacity: { value: opacity },
+      uGA: { value: groups ? GA : ONES }, uGB: { value: groups ? GB : ONES },
+      uOcc: OCC.uOcc, uOccA: occ ? OCC.uOccA : { value: 0 }, uOccAny: { value: occAny },
+    },
+    vertexShader: LINE_VS, fragmentShader: LINE_FS, ...additive,
+  });
+}
+function attr(geo, name, arr, size) { geo.setAttribute(name, new THREE.BufferAttribute(arr, size)); return geo.attributes[name]; }
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+/* =====================================================================
+   Background: muted gradient sky (WebGL) + three star layers
+   ===================================================================== */
+const bgMat = new THREE.ShaderMaterial({
+  uniforms: { uAspect: { value: 1 }, uPar: { value: new THREE.Vector2() } },
+  vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: /* glsl */`
+    varying vec2 vUv;
+    uniform float uAspect;
+    uniform vec2 uPar;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) - uPar * 0.03;
+      float r = length(p - vec2(0.0, 0.06));
+      vec3 c = mix(vec3(0.060, 0.042, 0.078), vec3(0.011, 0.008, 0.015), smoothstep(0.0, 0.92, r));
+      // v2: lift the centre of the purple-black gradient (~+30% luminance) with a term that is gone before the
+      // corners, so the edges stay as dark as v1 and the vignette reads more, not less
+      c += vec3(0.0182, 0.0127, 0.0236) * (1.0 - smoothstep(0.0, 0.62, r));
+      vec2 a = p - vec2(-0.55, -0.42); c += vec3(0.070, 0.032, 0.030) * exp(-dot(a, a) * 3.0);
+      vec2 b = p - vec2(0.62, 0.46);   c += vec3(0.030, 0.026, 0.070) * exp(-dot(b, b) * 2.4);
+      c += (hash(gl_FragCoord.xy) - 0.5) * (1.6 / 255.0);
+      gl_FragColor = vec4(c, 1.0);
+    }
+  `,
+  depthTest: false, depthWrite: false,
+});
+const bgQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bgMat);
+bgQuad.frustumCulled = false; bgQuad.renderOrder = -100;
+scene.add(bgQuad);
+
+const STAR_TINTS = [[1, 0.95, 0.9], [1, 0.95, 0.9], [0.86, 0.9, 1], [1, 0.84, 0.78], [0.9, 0.86, 1]];
+function starLayer(count, place, sizeR, alphaR, twinkle) {
+  const pos = new Float32Array(count * 3), size = new Float32Array(count), alpha = new Float32Array(count);
+  const color = new Float32Array(count * 3), phase = new Float32Array(count), group = new Float32Array(count).fill(5);
+  for (let i = 0; i < count; i++) {
+    const p = place();
+    pos.set(p, i * 3);
+    const bright = Math.random() < 0.08;
+    size[i] = rand(sizeR[0], sizeR[1]) * (bright ? 1.7 : 1);
+    alpha[i] = rand(alphaR[0], alphaR[1]) * (bright ? 1.4 : 1);
+    color.set(pick(STAR_TINTS), i * 3);
+    phase[i] = Math.random();
+  }
+  const geo = new THREE.BufferGeometry();
+  attr(geo, 'position', pos, 3); attr(geo, 'aSize', size, 1); attr(geo, 'aAlpha', alpha, 1);
+  attr(geo, 'aColor', color, 3); attr(geo, 'aPhase', phase, 1); attr(geo, 'aGroup', group, 1);
+  const pts = new THREE.Points(geo, pointsMaterial({ twinkle: reduceMotion ? twinkle * 0.4 : twinkle, atten: 0, ref: 1 }));
+  pts.frustumCulled = false;
+  return pts;
+}
+function onCap(rMin, rMax, maxDeg) {
+  return () => {
+    const ct = rand(Math.cos(THREE.MathUtils.degToRad(maxDeg)), 1), s = Math.sqrt(1 - ct * ct), ph = rand(0, Math.PI * 2);
+    const r = rand(rMin, rMax);
+    return [s * Math.cos(ph) * r, s * Math.sin(ph) * r * 0.9, -ct * r];
+  };
+}
+const skyFar = new THREE.Group(), skyMid = new THREE.Group(), skyNear = new THREE.Group();
+scene.add(skyFar, skyMid, skyNear);
+skyFar.add(starLayer(reduceMotion ? 200 : 260, onCap(46, 60, 74), [0.0011, 0.0019], [0.25, 0.6], 0.35));
+skyMid.add(starLayer(reduceMotion ? 80 : 105, onCap(16, 26, 64), [0.0016, 0.0029], [0.3, 0.75], 0.55));
+skyNear.add(starLayer(22, () => {
+  for (;;) {
+    const x = rand(-5.5, 5.5), y = rand(-4.2, 4.2), z = rand(-7, -3);
+    if (Math.abs(x) > 1.6 || Math.abs(y) > 1.9) return [x, y, z];
+  }
+}, [0.0035, 0.006], [0.12, 0.28], 0.3));
+
+// a few faint background constellations, anchored near the screen corners so they never cross the hand
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const skyConst = new THREE.Group();
+skyMid.add(skyConst);
+const CONST_ANCHORS = [[-0.74, 0.7, 11], [0.72, -0.6, 23], [0.8, 0.66, 37], [-0.82, -0.5, 51]];
+function buildConstellations() {
+  for (const c of [...skyConst.children]) { skyConst.remove(c); c.geometry.dispose(); c.material.dispose(); }
+  const D = 22, camZ = framing.dAll * 1.2, half = D * TAN, portrait = aspect < 0.8;
+  const segPos = [], starPos = [];
+  for (const [nx, ny, seed] of CONST_ANCHORS) {
+    const r = mulberry32(seed), rr = (a, b) => a + r() * (b - a);
+    let p = new THREE.Vector3(nx * half * aspect, ny * half + 0.06, camZ - D);
+    let ang = Math.atan2(ny, nx * aspect) + Math.PI + rr(-0.5, 0.5);   // start heading back toward the centre...
+    const n = 4 + Math.floor(r() * 3), chain = [p.clone()];
+    const step = (portrait ? 0.62 : 1) * half * 0.2;
+    for (let k = 1; k < n; k++) {
+      ang += rr(-0.8, 0.8);
+      const q = p.clone().add(new THREE.Vector3(Math.cos(ang), Math.sin(ang), rr(-0.15, 0.15)).multiplyScalar(step * rr(0.7, 1.15)));
+      // ...but keep every star in the outer ring of the frame
+      const ex = Math.abs(q.x) / (half * aspect), ey = Math.abs(q.y) / half;
+      if (Math.max(ex, ey) < 0.55) { ang += Math.PI * 0.6; k--; continue; }
+      p = q; chain.push(p);
+    }
+    chain.forEach((c, k) => { starPos.push(c.toArray()); if (k) segPos.push(chain[k - 1].toArray(), c.toArray()); });
+  }
+  const lg = new THREE.BufferGeometry();
+  const lp = new Float32Array(segPos.flat()), cnt = lp.length / 3;
+  attr(lg, 'position', lp, 3);
+  attr(lg, 'aAlpha', new Float32Array(cnt).fill(0.08), 1);
+  attr(lg, 'aGroup', new Float32Array(cnt).fill(5), 1);
+  attr(lg, 'aColor', Float32Array.from({ length: cnt * 3 }, (_, i) => [0.86, 0.72, 0.8][i % 3]), 3);
+  const lines = new THREE.LineSegments(lg, lineMaterial());
+  lines.frustumCulled = false;
+  skyConst.add(lines);
+  let k = 0;
+  skyConst.add(starLayer(starPos.length, () => starPos[k++], [0.0026, 0.0034], [0.55, 0.8], 0.25));
+}
+
+/* =====================================================================
+   The hand: a forward-kinematics skeleton (cm, scaled to scene units)
+   Hand-local frame: wrist at origin, fingers +Y, palm faces +Z, thumb on +X.
+   ===================================================================== */
+const CM = 0.1;
+const V = (x, y, z = 0) => new THREE.Vector3(x * CM, y * CM, z * CM);
+// v2 proportions ("a little more manly"): palm ~9% wider, knuckles spread with it, every phalanx ~17% thicker
+// with a little less taper toward the tips. Finger and thumb LENGTHS are unchanged.
+const PALM_W = 1.09, KNUCKLE_W = 1.1, FINGER_T = 1.17;
+const ZERO = new THREE.Vector3();
+const skel = new THREE.Group();      // not in the scene: matrices are hand-local
+const joints = [];
+function joint(obj, off, group, kind) {
+  const j = { obj, off: off.clone(), group, kind, pos: new THREE.Vector3(), idx: joints.length };
+  joints.push(j);
+  return j;
+}
+const wR = joint(skel, V(2.15 * PALM_W, 0.1), 5, 'wrist');
+const wU = joint(skel, V(-2.35 * PALM_W, 0.1), 5, 'wrist');
+
+// thumb: metacarpal + 2 phalanges, set low on the palm's radial side
+const T_LEN = [4.3, 3.15, 2.65].map(x => x * CM);
+const tBase = new THREE.Group(); tBase.position.copy(V(1.65 * PALM_W, 1.5, 0.52)); tBase.rotation.order = 'ZXY'; skel.add(tBase);
+const tProx = new THREE.Group(); tProx.position.y = T_LEN[0]; tBase.add(tProx);
+const tDist = new THREE.Group(); tDist.position.y = T_LEN[1]; tProx.add(tDist);
+const T = {
+  j: [joint(tBase, ZERO, 0, 'base'), joint(tProx, ZERO, 0, 'knuckle'), joint(tDist, ZERO, 0, 'pip'), joint(tDist, new THREE.Vector3(0, T_LEN[2], 0), 0, 'tip')],
+};
+
+// index, middle, ring, pinky: metacarpal + 3 phalanges. Slender: middle longest, ring a touch shorter, index shorter, pinky clearly shortest.
+const FINGERS = [
+  { g: 1, base: [1.55, 2.3], mcp: [2.42, 9.3], len: [3.42, 2.28, 1.98], rs: 0.95 },
+  { g: 2, base: [0.45, 2.4], mcp: [0.8, 9.72], len: [3.82, 2.55, 2.16], rs: 1.0 },
+  { g: 3, base: [-0.6, 2.3], mcp: [-0.84, 9.34], len: [3.58, 2.38, 2.04], rs: 0.93 },
+  { g: 4, base: [-1.6, 2.1], mcp: [-2.38, 8.4], len: [2.76, 1.86, 1.66], rs: 0.8 },
+];
+for (const f of FINGERS) { f.base[0] *= PALM_W; f.mcp[0] *= KNUCKLE_W; }
+for (const f of FINGERS) {
+  const dx = f.mcp[0] - f.base[0], dy = f.mcp[1] - f.base[1];
+  f.metaLen = Math.hypot(dx, dy) * CM;
+  f.L = f.len.map(x => x * CM);
+  f.meta = new THREE.Group(); f.meta.position.copy(V(f.base[0], f.base[1])); f.meta.rotation.z = -Math.atan2(dx, dy); skel.add(f.meta);
+  f.prox = new THREE.Group(); f.prox.position.y = f.metaLen; f.prox.rotation.order = 'ZXY'; f.meta.add(f.prox);
+  f.mid = new THREE.Group(); f.mid.position.y = f.L[0]; f.prox.add(f.mid);
+  f.dist = new THREE.Group(); f.dist.position.y = f.L[1]; f.mid.add(f.dist);
+  f.j = [
+    joint(f.meta, ZERO, 5, 'base'),
+    joint(f.prox, ZERO, f.g, 'knuckle'),
+    joint(f.mid, ZERO, f.g, 'pip'),
+    joint(f.dist, ZERO, f.g, 'dip'),
+    joint(f.dist, new THREE.Vector3(0, f.L[2], 0), f.g, 'tip'),
+  ];
+}
+const [FI, FM, FR, FP] = FINGERS;
+const ULNAR = joint(skel, V(-3.28 * PALM_W, 5.2), 5, 'base');   // the outer edge of the palm, so the outline closes without x-ray metacarpals
+// A curled finger tucks its last two bones into the palm. Drawn at full strength they stack into a ladder of
+// zigzags with bright fingertips in the middle of the fist, so they recede with each finger's own curl (0 open, 1 fist).
+const CURL = new Float32Array(4), TUCKF = new Float32Array(4);   // TUCKF: CURL, eased off when the palm side faces us
+const TUCK_OPEN = 0.35;
+const JFADE = new Float32Array(joints.length), JFIN = new Int8Array(joints.length).fill(-1);
+FINGERS.forEach((f, k) => { JFIN[f.j[3].idx] = JFIN[f.j[4].idx] = k; JFADE[f.j[3].idx] = 0.5; JFADE[f.j[4].idx] = 0.88; });
+function updateCurl(p) {
+  for (let k = 0; k < 4; k++) CURL[k] = E.sine(clamp01((p[7 + k * 4] - 30 * DEG) / (60 * DEG)));
+}
+const TIPS = [T.j[3], FI.j[4], FM.j[4], FR.j[4], FP.j[4]];
+const PIVOT = V(0.6 * PALM_W, 8.6);            // the hand turns about its own centre, not the wrist
+
+/* ---------- poses (degrees) ----------
+   [thumb spread, thumb palmar abduction, thumb twist, thumb MCP, thumb IP,
+    then index, middle, ring, pinky: spread (toward the thumb +), MCP, PIP, DIP]   */
+const DEG = Math.PI / 180;
+const mkPose = a => Float32Array.from(a, x => x * DEG);
+const POSES = {
+  open:  mkPose([30, 22, -62, 6, 12,    -3, 4, 7, 4,    -2, 5, 8, 5,    -1, 7, 10, 6,     -1, 9, 12, 8]),
+  one:   mkPose([15.5, 32.5, -82.5, 33, 55,   1, -3, 0, 2,    -1, 84, 100, 60,  -3, 86, 100, 60,  -6, 88, 98, 58]),
+  thumb: mkPose([31.5, 15.5, -75, -19.5, -26, 1, 76, 98, 54,  -1, 84, 100, 58,  -3, 86, 100, 58,  -6, 88, 98, 56]),
+};
+const PARAM_GROUP = [0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4];
+const NP = PARAM_GROUP.length;
+
+function applyPose(p) {
+  tBase.rotation.set(p[1], p[2], -p[0]);
+  tProx.rotation.x = p[3];
+  tDist.rotation.x = p[4];
+  for (let k = 0; k < 4; k++) {
+    const f = FINGERS[k], o = 5 + k * 4;
+    f.prox.rotation.set(p[o + 1], 0, -p[o]);
+    f.mid.rotation.x = p[o + 2];
+    f.dist.rotation.x = p[o + 3];
+  }
+  skel.updateMatrixWorld(true);
+  for (const j of joints) j.pos.copy(j.off).applyMatrix4(j.obj.matrixWorld);
+}
+
+/* =====================================================================
+   Hand render objects: joint stars, tip flares, constellation lines, dust
+   ===================================================================== */
+const handRoot = new THREE.Group(); handRoot.rotation.order = 'YXZ'; scene.add(handRoot);
+const handInner = new THREE.Group(); handInner.position.copy(PIVOT).negate(); handRoot.add(handInner);
+// the hand's stars, lines and band (not the planet): behind the deck it can draw back around the planet (see BODY_K)
+const handBody = new THREE.Group(); handInner.add(handBody);
+
+// --- joint stars ---
+// v2: joint stars ~12% larger and ~10% brighter so the silhouette reads at normal screen brightness
+const KIND = { tip: [0.116, 1.08], knuckle: [0.09, 0.95], pip: [0.079, 0.88], dip: [0.07, 0.82], base: [0.05, 0.56], wrist: [0.064, 0.68] };
+const NJ = joints.length;
+const jGeo = new THREE.BufferGeometry();
+const jPos = attr(jGeo, 'position', new Float32Array(NJ * 3), 3);
+const jSize = attr(jGeo, 'aSize', new Float32Array(NJ), 1);
+const jAlpha = attr(jGeo, 'aAlpha', new Float32Array(NJ), 1);
+attr(jGeo, 'aColor', new Float32Array(NJ * 3), 3);
+attr(jGeo, 'aPhase', new Float32Array(NJ).map(() => Math.random()), 1);
+attr(jGeo, 'aGroup', Float32Array.from(joints, j => j.group), 1);
+const jBaseSize = new Float32Array(NJ), jBaseAlpha = new Float32Array(NJ);
+joints.forEach((j, i) => {
+  const [s, a] = KIND[j.kind];
+  jBaseSize[i] = s * rand(0.86, 1.14);
+  jBaseAlpha[i] = a;
+  jGeo.attributes.aColor.array.set(j.kind === 'tip' ? [1, 0.96, 0.92] : j.kind === 'knuckle' ? [1, 0.9, 0.84] : [0.98, 0.87, 0.82], i * 3);
+});
+const jointStars = new THREE.Points(jGeo, pointsMaterial({ twinkle: reduceMotion ? 0.06 : 0.16, atten: 0.72, ref: 5, groups: true, occAny: 1, occ: true }));
+jointStars.frustumCulled = false; jointStars.renderOrder = 3;
+handBody.add(jointStars);
+
+// --- tip flares (soft four-point spikes on the five fingertips) ---
+const fGeo = new THREE.BufferGeometry();
+const fPos = attr(fGeo, 'position', new Float32Array(5 * 3), 3);
+const fAlpha = attr(fGeo, 'aAlpha', new Float32Array(5), 1);
+attr(fGeo, 'aSize', new Float32Array([0.2, 0.17, 0.19, 0.17, 0.15]), 1);
+attr(fGeo, 'aColor', new Float32Array(15).fill(1), 3);
+attr(fGeo, 'aPhase', new Float32Array(5).map(() => Math.random()), 1);
+attr(fGeo, 'aGroup', new Float32Array(TIPS.map(j => j.group)), 1);
+const tipFlares = new THREE.Points(fGeo, pointsMaterial({ map: FLARE, twinkle: reduceMotion ? 0.1 : 0.4, atten: 0.72, ref: 5, groups: true, occAny: 1, occ: true }));
+tipFlares.frustumCulled = false; tipFlares.renderOrder = 4;
+handBody.add(tipFlares);
+
+// --- constellation lines along the bones (wrist outward = draw order) ---
+const SEGS = [];
+const seg2 = (a, b, group, alpha, level) => SEGS.push({ a, b, group, alpha, level });
+// the palm is drawn as an outline (wrist, outer edge, knuckle arc), not as metacarpal bones
+seg2(wU, wR, 5, 0.1, 0);
+seg2(wR, T.j[0], 5, 0.16, 0);
+seg2(wU, ULNAR, 5, 0.14, 0);
+seg2(ULNAR, FP.j[1], 5, 0.14, 1);
+seg2(T.j[0], T.j[1], 0, 0.3, 1);
+seg2(FI.j[1], FM.j[1], 5, 0.18, 2); seg2(FM.j[1], FR.j[1], 5, 0.18, 2); seg2(FR.j[1], FP.j[1], 5, 0.18, 2);
+// while a finger is its planet, the palm lines that meet at its knuckle go with it and one rung bridges its neighbours
+// (v2's ring-finger fix, for every finger): middle FI-FR, ring FM-FP, little finger FR to the palm's outer edge
+seg2(FI.j[1], FR.j[1], 5, 0.18, 2); SEGS[SEGS.length - 1].bridge = 2;
+seg2(FM.j[1], FP.j[1], 5, 0.18, 2); SEGS[SEGS.length - 1].bridge = 3;
+seg2(FR.j[1], ULNAR, 5, 0.14, 1); SEGS[SEGS.length - 1].bridge = 4;
+for (const f of FINGERS) seg2(f.j[1], f.j[2], f.g, 0.32, 2);
+seg2(T.j[1], T.j[2], 0, 0.32, 2);
+for (const f of FINGERS) seg2(f.j[2], f.j[3], f.g, 0.32, 3);
+seg2(T.j[2], T.j[3], 0, 0.32, 3);
+for (const f of FINGERS) seg2(f.j[3], f.j[4], f.g, 0.32, 4);
+// in a fist: the proximal bone (the top of the fist) stays, the tucked middle and distal bones recede
+for (const s of SEGS) { s.fin = s.group >= 1 && s.group <= 4 ? s.group - 1 : -1; s.fade = [0, 0, 0.15, 0.55, 0.9][s.level]; }
+// a palm line that ends at a finger's (or the thumb's) joint goes with that finger into its planet
+for (const s of SEGS) if (s.group === 5 && s.bridge === undefined) s.drop = [s.a.group, s.b.group].filter(g => g <= 4);
+const NS = SEGS.length;
+const lGeo = new THREE.BufferGeometry();
+const lPos = attr(lGeo, 'position', new Float32Array(NS * 6), 3);
+const lAlpha = attr(lGeo, 'aAlpha', new Float32Array(NS * 2), 1);
+attr(lGeo, 'aGroup', Float32Array.from({ length: NS * 2 }, (_, i) => SEGS[i >> 1].group), 1);
+attr(lGeo, 'aColor', Float32Array.from({ length: NS * 6 }, (_, i) => [0.95, 0.72, 0.64][i % 3]), 3);
+const boneLines = new THREE.LineSegments(lGeo, lineMaterial({ groups: true, occAny: 1, occ: true }));
+boneLines.frustumCulled = false; boneLines.renderOrder = 1;
+handBody.add(boneLines);
+
+// --- volumetric dust: capsules around the phalanges, a rounded palm slab, a fading forearm ---
+const BONES = [];
+const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06) => BONES.push({ a, b, frame, r0: r0 * CM, r1: r1 * CM, group, count, tip, t0 });
+// v2: ~30% more dust than v1 (counts), radii x FINGER_T, tip ends a touch fuller (less taper)
+const FT = FINGER_T;
+bone(T.j[0], T.j[1], tBase, 1.18 * FT, 0.9 * FT, 0, 57, false, 0.1);
+bone(T.j[1], T.j[2], tProx, 0.88 * FT, 0.81 * FT, 0, 52, false);
+bone(T.j[2], T.j[3], tDist, 0.78 * FT, 0.63 * FT, 0, 52, true);
+const FCOUNTS = { 1: [39, 29, 27], 2: [44, 31, 30], 3: [39, 29, 27], 4: [31, 22, 22] };
+for (const f of FINGERS) {
+  const c = FCOUNTS[f.g], s = f.rs * FT;
+  bone(f.j[1], f.j[2], f.prox, 0.82 * s, 0.75 * s, f.g, c[0], false, -0.12);
+  bone(f.j[2], f.j[3], f.mid, 0.72 * s, 0.66 * s, f.g, c[1], false);
+  bone(f.j[3], f.j[4], f.dist, 0.63 * s, 0.51 * s, f.g, c[2], true);
+}
+// lengths: each bone ends at the next joint group's offset along local +Y of its frame
+BONES.forEach(b => { b.len = (b.b.obj === b.frame) ? b.b.off.y : b.b.obj.position.y; });
+// a curled finger's distal bone hides in the palm; its dust thins with the curl (see CURL)
+BONES.forEach(b => { b.fin = b.group >= 1 && b.group <= 4 ? b.group - 1 : -1; b.fade = b.fin < 0 ? 0 : b.tip ? 0.5 : b.a.kind === 'pip' ? 0.2 : 0; });
+
+const PALM = [
+  [2.15, 0.25], [2.65, 1.5], [2.95, 3.2], [3.05, 5.2], [3.0, 7.2], [2.95, 8.9],
+  [2.1, 9.55], [0.8, 9.95], [-0.8, 9.6], [-2.05, 8.85], [-2.95, 8.4],
+  [-3.15, 6.8], [-3.2, 4.6], [-2.95, 2.4], [-2.45, 0.25],
+].map(([x, y]) => [x * PALM_W, y]);
+function inPoly(x, y) {
+  let inside = false;
+  for (let i = 0, j = PALM.length - 1; i < PALM.length; j = i++) {
+    const [xi, yi] = PALM[i], [xj, yj] = PALM[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function edgeDist(x, y) {
+  let best = 1e9;
+  for (let i = 0, j = PALM.length - 1; i < PALM.length; j = i++) {
+    const [ax, ay] = PALM[j], [bx, by] = PALM[i];
+    const vx = bx - ax, vy = by - ay, t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
+    best = Math.min(best, Math.hypot(x - ax - vx * t, y - ay - vy * t));
+  }
+  return best;
+}
+const palmHalf = (x, y) => {
+  const e = Math.min(1, edgeDist(x, y) / 1.6);
+  let h = (0.5 + 0.62 * Math.sin(e * Math.PI / 2)) * 1.05;
+  const th = Math.exp(-((x - 2.0 * PALM_W) ** 2 / 1.6 + (y - 3.2) ** 2 / 4.0));        // thenar pad
+  const hy = Math.exp(-((x + 2.2 * PALM_W) ** 2 / 1.4 + (y - 3.6) ** 2 / 5.0));        // hypothenar pad
+  return { front: h + 0.5 * th + 0.25 * hy, back: h * 0.85 };
+};
+
+const dust = [];   // { bone, t, c, s, jit } or { stat: Vector3 }, plus size/alpha/color/group
+const DUST_TINTS = [[0.96, 0.84, 0.8], [0.96, 0.84, 0.8], [0.8, 0.74, 0.98], [1, 0.9, 0.84]];
+function addDust(rec, group, alphaMul = 1) {
+  rec.group = group;
+  const spark = Math.random() < 0.14;
+  rec.size = rand(0.019, 0.031) * (spark ? 1.35 : 1);
+  rec.alpha = rand(0.46, 0.84) * alphaMul * (spark ? 1.5 : 1);
+  rec.color = pick(DUST_TINTS);
+  dust.push(rec);
+}
+BONES.forEach((b, bi) => {
+  for (let k = 0; k < b.count; k++) {
+    let t;
+    if (b.tip && Math.random() < 0.26) t = 1 + Math.random() * (b.r1 / b.len);
+    else t = rand(b.t0, 1.04);
+    const ph = Math.random() * Math.PI * 2;
+    addDust({ bone: bi, t, c: Math.cos(ph), s: Math.sin(ph), jit: rand(0.9, 1.05) }, b.group);
+  }
+});
+{
+  // each static star keeps its surface normal (hand-local) so the dust can be rim-lit like the capsules
+  const add = (x, y, z, a = 1, nx = 0, ny = 0, nz = 1) => { addDust({ stat: V(x, y, z), n: new THREE.Vector3(nx, ny, nz).normalize() }, 5, a); return dust[dust.length - 1]; };
+  let n = 0;
+  while (n < 182) {                                       // front and back faces of the palm
+    const x = rand(-3.3 * PALM_W, 3.2 * PALM_W), y = rand(0.1, 10.0);
+    if (!inPoly(x, y)) continue;
+    const h = palmHalf(x, y), front = Math.random() < 0.55;
+    add(x, y, front ? h.front * rand(0.9, 1.03) : -h.back * rand(0.9, 1.03), front ? 1 : 0.85, 0, 0, front ? 1 : -1);
+    n++;
+  }
+  let per = 0;                                            // rounded rim carries the silhouette
+  const edges = PALM.map((p, i) => { const q = PALM[(i + 1) % PALM.length]; const L = Math.hypot(q[0] - p[0], q[1] - p[1]); per += L; return { p, q, L }; });
+  for (let k = 0; k < 156; k++) {
+    let d = Math.random() * per, e = edges[0];
+    for (const ed of edges) { if (d <= ed.L) { e = ed; break; } d -= ed.L; }
+    const t = d / e.L, x = e.p[0] + (e.q[0] - e.p[0]) * t, y = e.p[1] + (e.q[1] - e.p[1]) * t;
+    if (y > 8.6 && x > -2.6 * PALM_W && x < 2.7 * PALM_W) { k--; continue; }   // the knuckle edge is covered by the fingers
+    const nx = (e.q[1] - e.p[1]) / e.L, ny = -(e.q[0] - e.p[0]) / e.L;   // outward normal (polygon is clockwise in x-right/y-up)
+    const psi = rand(-Math.PI / 2, Math.PI / 2), h = 0.66;
+    add(x + nx * Math.cos(psi) * h * 0.55, y + ny * Math.cos(psi) * h * 0.55, Math.sin(psi) * h * (psi > 0 ? 1.15 : 0.9), 1,
+      nx * Math.cos(psi), ny * Math.cos(psi), Math.sin(psi));
+  }
+  for (let k = 0; k < 66; k++) {                          // forearm, fading into the dark
+    const t = Math.pow(Math.random(), 0.8), ph = Math.random() * Math.PI * 2;
+    add(Math.cos(ph) * (2.3 * PALM_W + 0.3 * t), -0.2 - t * 6.5, Math.sin(ph) * (1.62 + 0.25 * t), Math.pow(1 - t, 2.9), Math.cos(ph), 0, Math.sin(ph)).arm = true;
+  }
+}
+const ND = dust.length;
+const dGeo = new THREE.BufferGeometry();
+const dPos = attr(dGeo, 'position', new Float32Array(ND * 3), 3);
+const dSize = attr(dGeo, 'aSize', Float32Array.from(dust, d => d.size), 1);
+const dAlpha = attr(dGeo, 'aAlpha', Float32Array.from(dust, d => d.alpha), 1);
+attr(dGeo, 'aColor', Float32Array.from({ length: ND * 3 }, (_, i) => dust[(i / 3) | 0].color[i % 3]), 3);
+attr(dGeo, 'aPhase', Float32Array.from(dust, () => Math.random()), 1);
+attr(dGeo, 'aGroup', Float32Array.from(dust, d => d.group), 1);
+const dustPts = new THREE.Points(dGeo, pointsMaterial({ twinkle: reduceMotion ? 0.12 : 0.32, atten: 0.85, ref: 5, groups: true, occAny: 1, occ: true }));
+dustPts.frustumCulled = false; dustPts.renderOrder = 2;
+handBody.add(dustPts);
+
+function dustTarget(d, out, nrm) {
+  if (d.stat) { if (nrm) nrm.copy(d.n); return out.copy(d.stat); }
+  const b = BONES[d.bone], A = b.a.pos, m = b.frame.matrixWorld.elements;
+  let along, r, u = 0;
+  if (d.t > 1) {
+    u = Math.min(1, (d.t - 1) * b.len / b.r1);
+    r = b.r1 * Math.sqrt(Math.max(0, 1 - u * u)); along = b.len + u * b.r1;
+  } else {
+    r = b.r0 + (b.r1 - b.r0) * Math.max(0, d.t); along = d.t * b.len;
+  }
+  r *= d.jit;
+  const cx = d.c * r, cz = d.s * r * 0.86;
+  if (nrm) {                                   // surface normal: radial on the shaft, bending toward the axis over the tip cap
+    const q = Math.sqrt(Math.max(0, 1 - u * u)), nc = d.c * q, ns = d.s * q;
+    nrm.set(m[0] * nc + m[8] * ns + m[4] * u, m[1] * nc + m[9] * ns + m[5] * u, m[2] * nc + m[10] * ns + m[6] * u);
+  }
+  return out.set(
+    A.x + m[4] * along + m[0] * cx + m[8] * cz,
+    A.y + m[5] * along + m[1] * cx + m[9] * cz,
+    A.z + m[6] * along + m[2] * cx + m[10] * cz,
+  );
+}
+
+/* =====================================================================
+   Formation: every hand star starts as a sky star and flies home
+   ===================================================================== */
+const NF = NJ + ND;
+const fStart = new Float32Array(NF * 3), fSwirl = new Float32Array(NF * 3), fDelay = new Float32Array(NF), fDur = new Float32Array(NF);
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3(), tmpD = new THREE.Vector3();
+function prepareFormation() {
+  applyPose(POSES.open);
+  const camZ = framing.dAll * 1.2;
+  for (let i = 0; i < NF; i++) {
+    const target = i < NJ ? joints[i].pos : dustTarget(dust[i - NJ], tmpA);
+    let sx, sy, sz;
+    if (reduceMotion) {
+      sx = target.x + rand(-0.06, 0.06); sy = target.y + rand(-0.06, 0.06); sz = target.z + rand(-0.06, 0.06);
+    } else {
+      const zw = rand(-6.5, 0.8), half = (camZ - zw) * TAN;
+      sx = rand(-1, 1) * half * aspect * 0.98 + PIVOT.x;
+      sy = rand(-1, 1) * half * 0.95 + PIVOT.y;
+      sz = zw;
+    }
+    fStart[i * 3] = sx; fStart[i * 3 + 1] = sy; fStart[i * 3 + 2] = sz;
+    tmpB.set(target.x - sx, target.y - sy, target.z - sz);
+    const dist = tmpB.length();
+    tmpC.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+    tmpB.normalize();
+    tmpC.addScaledVector(tmpB, -tmpC.dot(tmpB)).normalize().multiplyScalar(reduceMotion ? 0 : dist * rand(0.1, 0.28));
+    fSwirl[i * 3] = tmpC.x; fSwirl[i * 3 + 1] = tmpC.y; fSwirl[i * 3 + 2] = tmpC.z;
+    if (i < NJ) { fDelay[i] = rand(0.0, 0.32); fDur[i] = rand(0.52, 0.66); }
+    else { fDelay[i] = rand(0.06, 0.42); fDur[i] = rand(0.46, 0.58); }
+  }
+}
+
+/* =====================================================================
+   Easing helpers
+   ===================================================================== */
+const E = {
+  lin: t => t,
+  sine: t => 0.5 - 0.5 * Math.cos(Math.PI * t),
+  inOut: t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
+  quart: t => (t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2),
+  out: t => 1 - Math.pow(1 - t, 3),
+};
+const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const segE = (t, w, e = E.inOut) => e(clamp01((t - w[0]) / w[1]));
+
+/* =====================================================================
+   PBR: one environment map (shared by the wedding band and the cards) and a small light rig.
+   Only the built-in PBR materials tone-map; the star shaders write their colour as is, exactly as in v1.
+   ===================================================================== */
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.autoClear = false;
+const pmrem = new THREE.PMREMGenerator(renderer);
+const ENV = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = ENV;
+scene.environmentIntensity = 0.95;
+scene.add(camera);
+const camAim = new THREE.Object3D(); camAim.position.set(0, 0, -1); camera.add(camAim);
+// key from the upper right: the thumb's side, where the Sun is
+const bandKey = new THREE.DirectionalLight(0xffeee4, 2.3); bandKey.position.set(0.9, 1.1, 0.6); bandKey.target = camAim; camera.add(bandKey);
+const bandRim = new THREE.DirectionalLight(0x9a7bff, 0.8); bandRim.position.set(-1, 0.5, -0.9); bandRim.target = camAim; camera.add(bandRim);
+scene.add(new THREE.AmbientLight(0xffffff, 0.12));
+
+/* =====================================================================
+   The ring finger's wedding band: one stylised band, gold and light mixed all the way round (a soft gold body that
+   reads as a ring, a faint wireframe, stars along its edges, a gold glow), never a photograph of a ring. Every size
+   comes from the ring finger's own dust capsule, so the band fits the finger. It slides from the fingertip down to
+   where a ring sits, turning as it goes; at the base it frays apart softly, and Saturn (from the planet module) forms
+   out of it, its stars pouring from the band into the rings.
+   ===================================================================== */
+const BONE_RP = BONES.find(b => b.frame === FR.prox);
+const RING_T = 0.3;                                             // a ring sits 30% along the proximal phalanx
+const R_FINGER = lerp(BONE_RP.r0, BONE_RP.r1, RING_T);
+const PLANET_R = BONE_RP.r0;          // the planets' one shared finger-base radius (the ring finger at its base), so their sizes compare
+const BAND = { ri: R_FINGER * 0.9, t: R_FINGER * 0.15, w: R_FINGER * 0.5 };   // a band that fits the finger, not a bangle
+const BAND_PTS = 48, BAND_SEG = 128, DIS_W = 256, DIS_H = 32;
+function bandProfile(v, out) {            // v in [0, 1] around the cross-section, starting and ending on the inner face
+  const a = Math.PI + v * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+  const pc = Math.sign(c) * Math.pow(Math.abs(c), c > 0 ? 0.82 : 0.6);   // domed outside, a flatter comfort-fit inside
+  const ps = Math.sign(s) * Math.pow(Math.abs(s), 0.36);                 // flat sides with softly rounded edges
+  return out.set(BAND.ri + BAND.t / 2 + (BAND.t / 2) * pc, (BAND.w / 2) * ps);
+}
+const bandGeo = new THREE.LatheGeometry(Array.from({ length: BAND_PTS + 1 }, (_, j) => bandProfile(j / BAND_PTS, new THREE.Vector2())), BAND_SEG);
+
+// The band's coming-apart map: smooth value noise around the band (u) and its profile (v), plus a slow sweep from one
+// side, so it frays from there in soft-edged wisps (linearly filtered, never hard cells). Values 0.1..1.
+const DIS_SEED = 0.62;
+const disData = new Uint8Array(DIS_W * DIS_H);
+{
+  const sm = x => x * x * (3 - 2 * x);
+  const noise = (GU, GV) => {                       // value noise that wraps around the band and its profile
+    const g = Array.from({ length: GU * GV }, () => Math.random()), at = (i, j) => g[((j % GV) + GV) % GV * GU + ((i % GU) + GU) % GU];
+    return (u, v) => {
+      const x = u * GU, y = v * GV, i0 = Math.floor(x), j0 = Math.floor(y), fx = sm(x - i0), fy = sm(y - j0);
+      return lerp(lerp(at(i0, j0), at(i0 + 1, j0), fx), lerp(at(i0, j0 + 1), at(i0 + 1, j0 + 1), fx), fy);
+    };
+  };
+  const n1 = noise(14, 4), n2 = noise(46, 8);       // broad wisps, and finer fraying at their edges
+  for (let j = 0; j < DIS_H; j++) for (let i = 0; i < DIS_W; i++) {
+    const u = (i + 0.5) / DIS_W, v = (j + 0.5) / DIS_H;
+    let du = Math.abs(u - DIS_SEED); du = Math.min(du, 1 - du) * 2;   // 0 at the seed, 1 opposite it
+    disData[j * DIS_W + i] = Math.round(255 * (0.1 + 0.9 * clamp01(0.4 * n1(u, v) + 0.22 * n2(u, v) + 0.38 * du)));
+  }
+}
+const disTex = new THREE.DataTexture(disData, DIS_W, DIS_H, THREE.RedFormat, THREE.UnsignedByteType);
+disTex.magFilter = disTex.minFilter = THREE.LinearFilter; disTex.wrapS = THREE.RepeatWrapping; disTex.needsUpdate = true;
+
+// One stylised band, the same mixture all the way round: a soft gold body you read as a ring (its silhouette drawn in
+// light, its thickness, a highlight that slides round as it turns), a faint wireframe over it, starlight in the gold,
+// stars along its edges and a gold glow. Not a reflection of a room: no environment map, no tone mapping.
+const ringGroup = new THREE.Group(); handBody.add(ringGroup);
+const bandU = {
+  uDis: { value: 1 }, uDisMap: { value: disTex }, uTime: U.uTime, uOpacity: { value: 1 },
+  uLight: { value: new THREE.Vector3(0.9, 1.1, 1.6).normalize() },        // the key light, in view space (camera-mounted)
+};
+const BAND_VS = /* glsl */`
+  varying vec3 vN;
+  varying vec3 vV;
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    vN = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vV = mv.xyz;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+const BAND_FS = /* glsl */`
+  uniform float uDis, uTime, uOpacity;
+  uniform sampler2D uDisMap;
+  uniform vec3 uLight;
+  varying vec3 vN;
+  varying vec3 vV;
+  varying vec2 vUv;
+  float gridLine(float x) { return 1.0 - smoothstep(0.0, fwidth(x) * 1.4, abs(fract(x) - 0.5)); }
+  void main() {
+    float th = texture2D(uDisMap, vUv).r, cut = uDis * 1.15;
+    float keep = smoothstep(cut - 0.15, cut, th);                      // it frays softly, never in hard cells
+    if (keep * uOpacity < 0.01) discard;
+    vec3 N = normalize(vN), V = normalize(-vV), L = normalize(uLight);
+    float ndv = clamp(dot(N, V), 0.0, 1.0), fres = pow(1.0 - ndv, 2.2);
+    float dif = clamp(0.5 + 0.5 * dot(N, L), 0.0, 1.0);
+    float spec = pow(max(dot(N, normalize(L + V)), 0.0), 26.0);
+    float sweep = exp(-pow((fract(vUv.x - uTime * 0.09) - 0.5) * 7.0, 2.0));   // a sheen sliding round the band
+    vec3 deep = vec3(0.46, 0.26, 0.17), mid = vec3(0.95, 0.63, 0.46), hi = vec3(1.0, 0.9, 0.78);
+    vec3 col = mix(deep, mid, dif * dif) * 0.6;                        // the soft gold body
+    col += mid * fres * 1.1;                                           // its silhouette, drawn in light
+    col += hi * (spec * 0.8 + sweep * dif * 0.3);                      // the highlight
+    float wire = max(gridLine(vUv.x * 24.0) * 0.5, gridLine(vUv.y * 4.0));   // the faint wireframe (meridians, the four edges)
+    col += hi * wire * 0.26;
+    vec2 cg = vUv * vec2(90.0, 9.0), cf = fract(cg) - 0.5;             // and starlight in the gold
+    float hs = fract(sin(dot(floor(cg), vec2(12.9898, 78.233))) * 43758.5453);
+    float tw = step(0.88, hs) * pow(0.5 + 0.5 * sin(uTime * (1.3 + 2.6 * hs) + hs * 40.0), 4.0);
+    col += vec3(1.0, 0.9, 0.8) * tw * (1.0 - smoothstep(0.05, 0.3, length(cf * vec2(1.0, 0.7)))) * 1.4;
+    float edge = uDis > 0.001 ? 1.0 - smoothstep(0.0, 0.1, abs(th - cut + 0.07)) : 0.0;
+    col += vec3(1.0, 0.72, 0.5) * edge * 0.6;                          // a soft ember where it is coming apart
+    float a = uOpacity * keep * clamp(0.76 + 0.24 * fres + 0.2 * wire + 0.3 * spec, 0.0, 1.0);
+    float dd = clamp(uDis, 0.0, 1.0);                                  // as it comes apart, what is left turns to light
+    col = mix(col, mid * 0.85 + hi * 0.2, dd * 0.55); a *= 1.0 - 0.5 * dd;
+    gl_FragColor = vec4(col, a);
+  }
+`;
+// a depth-only pass first, so only the band's nearest surface is coloured (a see-through band would show its far side
+// at random through the near one); the dust behind still glows through its soft body a little
+const bandDepthMat = new THREE.ShaderMaterial({ uniforms: bandU, vertexShader: BAND_VS, fragmentShader: BAND_FS, transparent: true, colorWrite: false, depthWrite: true });
+const bandMat = new THREE.ShaderMaterial({ uniforms: bandU, vertexShader: BAND_VS, fragmentShader: BAND_FS, transparent: true, depthWrite: false, depthFunc: THREE.LessEqualDepth });
+const bandDepth = new THREE.Mesh(bandGeo, bandDepthMat);
+bandDepth.renderOrder = 4.9; bandDepth.frustumCulled = false;
+const bandMesh = new THREE.Mesh(bandGeo, bandMat);
+bandMesh.renderOrder = 5; bandMesh.frustumCulled = false;
+ringGroup.add(bandDepth, bandMesh);
+
+// the band's light, the same all the way round: stars along its four edges and a sprinkle over its crown, a loose
+// zigzag of constellation lines across it, its two outer edges traced in light, and a few stars just off it
+const bandStarPos = [], bandStarA = [], bandStarS = [], bandSegs = [];
+{
+  const p2 = new THREE.Vector2();
+  const at = (u, v, k = 1.02) => { bandProfile(v, p2); const a = u * Math.PI * 2; return [p2.x * k * Math.sin(a), p2.y * k, p2.x * k * Math.cos(a)]; };
+  const rims = {};
+  for (const [key, v, n] of [['ob', 0.375, 56], ['ot', 0.625, 56], ['ib', 0.125, 28], ['it', 0.875, 28]]) {
+    rims[key] = [];
+    for (let i = 0; i < n; i++) {
+      const u = (i + (key[1] === 't' ? 0.5 : 0)) / n, p = at(u, v);
+      rims[key].push({ p, u });
+      bandStarPos.push(p); bandStarA.push(key[0] === 'o' ? 0.62 : 0.4); bandStarS.push(key[0] === 'o' ? 0.0135 : 0.011);
+    }
+  }
+  for (let k = 0; k < 44; k++) {                                       // a sprinkle of stars over the crown
+    bandStarPos.push(at(Math.random(), rand(0.41, 0.59), 1.035)); bandStarA.push(rand(0.3, 0.6)); bandStarS.push(rand(0.008, 0.012));
+  }
+  const { ob, ot } = rims;
+  const n = ob.length, at3 = i => ob[((i % n) + n) % n], tt3 = i => ot[((i % n) + n) % n];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    bandSegs.push([ob[i].p, ob[j].p, 0.2], [ot[i].p, ot[j].p, 0.2]);             // its two outer edges, traced in light
+    if (i % 3 === 0) bandSegs.push([at3(i).p, tt3(i + 1).p, 0.2], [tt3(i + 1).p, at3(i + 3).p, 0.2]);   // a loose zigzag across
+  }
+  for (let k = 0; k < 6; k++) {                                        // a few stars just off the band, joined to it
+    const u = (k + 0.3) / 6, h = (k % 2 ? -0.5 : 0.65), f = 1.6 + 0.12 * (k % 3);
+    const ro = BAND.ri + BAND.t, a = u * Math.PI * 2, p = [ro * f * Math.sin(a), h * BAND.w * 0.9, ro * f * Math.cos(a)];
+    bandStarPos.push(p); bandStarA.push(0.6); bandStarS.push(0.012);
+    const near = [...ob, ...ot].sort((m, q) => Math.hypot(m.p[0] - p[0], m.p[1] - p[1], m.p[2] - p[2]) - Math.hypot(q.p[0] - p[0], q.p[1] - p[1], q.p[2] - p[2]));
+    bandSegs.push([near[0].p, p, 0.18], [near[3].p, p, 0.12]);
+  }
+}
+const bsGeo = new THREE.BufferGeometry();
+attr(bsGeo, 'position', new Float32Array(bandStarPos.flat()), 3);
+attr(bsGeo, 'aSize', new Float32Array(bandStarS), 1);
+attr(bsGeo, 'aAlpha', new Float32Array(bandStarA), 1);
+attr(bsGeo, 'aColor', Float32Array.from({ length: bandStarPos.length * 3 }, (_, i) => [1, 0.9, 0.82][i % 3]), 3);
+attr(bsGeo, 'aPhase', Float32Array.from(bandStarPos, () => Math.random()), 1);
+attr(bsGeo, 'aGroup', new Float32Array(bandStarPos.length).fill(5), 1);
+const bandStars = new THREE.Points(bsGeo, pointsMaterial({ twinkle: reduceMotion ? 0.1 : 0.35, atten: 0.72, ref: 5 }));
+bandStars.frustumCulled = false; bandStars.renderOrder = 6;
+ringGroup.add(bandStars);
+const blGeo = new THREE.BufferGeometry();
+attr(blGeo, 'position', new Float32Array(bandSegs.flatMap(s => [...s[0], ...s[1]])), 3);
+attr(blGeo, 'aAlpha', Float32Array.from({ length: bandSegs.length * 2 }, (_, i) => bandSegs[i >> 1][2]), 1);
+attr(blGeo, 'aGroup', new Float32Array(bandSegs.length * 2).fill(5), 1);
+attr(blGeo, 'aColor', Float32Array.from({ length: bandSegs.length * 6 }, (_, i) => [1, 0.78, 0.66][i % 3]), 3);
+const bandLines = new THREE.LineSegments(blGeo, lineMaterial());
+bandLines.frustumCulled = false; bandLines.renderOrder = 6;
+ringGroup.add(bandLines);
+// its gold glow: broad, faint sprites along the band's mid-line
+const bgGeo = new THREE.BufferGeometry();
+{
+  const NG = 18, gp = [], p2 = new THREE.Vector2();
+  bandProfile(0.5, p2);
+  for (let k = 0; k < NG; k++) { const a = (k / NG) * Math.PI * 2, r = (BAND.ri + p2.x) / 2; gp.push(r * Math.sin(a), 0, r * Math.cos(a)); }
+  attr(bgGeo, 'position', new Float32Array(gp), 3);
+  attr(bgGeo, 'aSize', new Float32Array(NG).fill(0.075), 1);
+  attr(bgGeo, 'aAlpha', new Float32Array(NG).fill(0.1), 1);
+  attr(bgGeo, 'aColor', Float32Array.from({ length: NG * 3 }, (_, i) => [1, 0.7, 0.48][i % 3]), 3);
+  attr(bgGeo, 'aPhase', Float32Array.from({ length: NG }, () => Math.random()), 1);
+  attr(bgGeo, 'aGroup', new Float32Array(NG).fill(5), 1);
+}
+const bandGlow = new THREE.Points(bgGeo, pointsMaterial({ twinkle: 0.1, atten: 0.72, ref: 5 }));
+bandGlow.frustumCulled = false; bandGlow.renderOrder = 4;
+ringGroup.add(bandGlow);
+
+// the glint: one four-point star that sits where the key light's highlight falls on the band
+const glintGeo = new THREE.BufferGeometry();
+const glintPos = attr(glintGeo, 'position', new Float32Array(3), 3);
+const glintAlpha = attr(glintGeo, 'aAlpha', new Float32Array(1), 1);
+attr(glintGeo, 'aSize', new Float32Array([0.085]), 1);
+attr(glintGeo, 'aColor', new Float32Array([1, 0.95, 0.88]), 3);
+attr(glintGeo, 'aPhase', new Float32Array([0.3]), 1);
+attr(glintGeo, 'aGroup', new Float32Array([5]), 1);
+const glint = new THREE.Points(glintGeo, pointsMaterial({ map: FLARE, atten: 0.72, ref: 5 }));
+glint.material.depthTest = false; glint.frustumCulled = false; glint.renderOrder = 9;
+ringGroup.add(glint);
+ringGroup.visible = false;
+
+/* =====================================================================
+   The palm's lines, as constellations: the heart line and the head line cross the palm, the life line curves around
+   the thumb's base. Faint on whole-hand views; on the palm's beat they brighten while the rest of the hand fades.
+   (Hand-local cm, x before the palm's width scale; they sit on the palm's front face.)
+   ===================================================================== */
+const PALM_LINES = [
+  [[-2.9, 7.3], [-2.05, 7.5], [-1.15, 7.72], [-0.25, 7.98], [0.6, 8.3], [1.32, 8.78]],                  // heart line
+  [[2.8, 6.72], [1.9, 6.42], [0.95, 6.12], [0.0, 5.82], [-0.95, 5.46], [-1.85, 5.0], [-2.45, 4.6]],      // head line
+  // life line: one wide, even arc around the ball of the thumb, then down to the wrist (photo 1), not hooked back into it
+  [[2.72, 6.55], [2.12, 6.2], [1.6, 5.7], [1.2, 5.05], [0.92, 4.3], [0.78, 3.5], [0.76, 2.7], [0.8, 1.9], [0.88, 1.1]],
+];
+const palmPoint = (x, y, lift = 0.08) => { const X = x * PALM_W; return V(X, y, palmHalf(X, y).front + lift); };
+const plPos = [], plA = [], plS = [], plC = [], plSegs = [];
+PALM_LINES.forEach(pts => {
+  const P = pts.map(([x, y]) => palmPoint(x, y));
+  P.forEach((p, k) => {
+    plPos.push(p.toArray()); plA.push(k === 0 || k === P.length - 1 ? 0.7 : 0.95); plS.push((k % 2 ? 0.048 : 0.058) * rand(0.92, 1.08)); plC.push([1, 0.9, 0.84]);
+    if (k) plSegs.push([P[k - 1], p]);
+  });
+  const curve = new THREE.CatmullRomCurve3(P);
+  for (let k = 0; k < 24; k++) {                       // fine dust along each line
+    const q = curve.getPointAt(Math.random());
+    plPos.push([q.x + rand(-0.01, 0.01), q.y + rand(-0.01, 0.01), q.z]); plA.push(rand(0.3, 0.62)); plS.push(rand(0.017, 0.026)); plC.push(pick(DUST_TINTS));
+  }
+});
+const plGeo = new THREE.BufferGeometry();
+attr(plGeo, 'position', new Float32Array(plPos.flat()), 3);
+attr(plGeo, 'aSize', new Float32Array(plS), 1);
+attr(plGeo, 'aAlpha', new Float32Array(plA), 1);
+attr(plGeo, 'aColor', new Float32Array(plC.flat()), 3);
+attr(plGeo, 'aPhase', Float32Array.from(plPos, () => Math.random()), 1);
+attr(plGeo, 'aGroup', new Float32Array(plPos.length).fill(5), 1);
+const palmLineStars = new THREE.Points(plGeo, pointsMaterial({ twinkle: reduceMotion ? 0.08 : 0.25, atten: 0.72, ref: 5, occ: true, occAny: 1 }));
+palmLineStars.frustumCulled = false; palmLineStars.renderOrder = 4;
+const plLGeo = new THREE.BufferGeometry();
+attr(plLGeo, 'position', new Float32Array(plSegs.flatMap(([a, b]) => [...a.toArray(), ...b.toArray()])), 3);
+attr(plLGeo, 'aAlpha', new Float32Array(plSegs.length * 2).fill(0.5), 1);
+attr(plLGeo, 'aGroup', new Float32Array(plSegs.length * 2).fill(5), 1);
+attr(plLGeo, 'aColor', Float32Array.from({ length: plSegs.length * 6 }, (_, i) => [0.98, 0.74, 0.64][i % 3]), 3);
+const palmLineSegs = new THREE.LineSegments(plLGeo, lineMaterial({ occ: true, occAny: 1 }));
+palmLineSegs.frustumCulled = false; palmLineSegs.renderOrder = 4;
+handBody.add(palmLineSegs, palmLineStars);
+// on the palm's beat the lines' stars pour into Mars with the rest of the palm: their resting positions, kept
+const PL_REST = [plGeo, plLGeo].map(g => Float32Array.from(g.attributes.position.array));
+let plCollapsed = 0;
+function collapsePalmLines(k, to) {             // k: 0 at rest, 1 at Mars (hand-local 'to')
+  if (k === plCollapsed) return;
+  plCollapsed = k;
+  [plGeo, plLGeo].forEach((g, gi) => {
+    const a = g.attributes.position.array, r = PL_REST[gi];
+    for (let i = 0; i < a.length; i += 3) { a[i] = r[i] + (to.x - r[i]) * k; a[i + 1] = r[i + 1] + (to.y - r[i + 1]) * k; a[i + 2] = r[i + 2] + (to.z - r[i + 2]) * k; }
+    g.attributes.position.needsUpdate = true;
+  });
+}
+// the palm's lines span (hand-local, for framing the palm's beat): heart and head lines, and Mars in the hollow
+const PALM_FRAME = (() => {
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const pts of PALM_LINES.slice(0, 2)) for (const [x, y] of pts) { x0 = Math.min(x0, x * PALM_W); x1 = Math.max(x1, x * PALM_W); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  return { x0: x0 * CM, x1: x1 * CM, y0: y0 * CM, y1: y1 * CM };
+})();
+
+/* =====================================================================
+   The planets (planets.js), one at a time: each forms where its finger was, the finger's own stars streaming into it
+   ===================================================================== */
+const PLANET_KIND = ['sun', 'jupiter', 'venus', 'saturn', 'mercury', 'mars'];
+const PLANET_SIZE = { sun: 1.5, jupiter: 1.15, venus: 0.8, saturn: 0.95, mercury: 0.45, mars: 0.6 };    // body radius, in PLANET_R
+const PLANET_EXT = { sun: 2.3, jupiter: 1.32, venus: 1.08, saturn: 2.27 * 0.95, mercury: 0.62, mars: 0.82 }; // what is drawn (rings, corona, glow), in PLANET_R
+const PLANET_EXT_Y = { saturn: 1.15 };                                 // Saturn's rings, tilted open toward us, are much shorter than wide
+const R_SAT = PLANET_SIZE.saturn * PLANET_R, RING_OUT = 2.27 * R_SAT;
+// each planet's own suggested tilt (planets.js), which puts its signature features (the Red Spot and the white ovals,
+// Valles Marineris, the Venus "Y") where its spin phase brings them round to face us; Saturn's ring plane, which the
+// band turns into, is the same 25 / -13 degrees as v2's
+const Q_PLANET = {};
+for (const k of PLANET_KIND) Q_PLANET[k] = planetQuaternion(THREE, k);
+// Every planet, Mars included, is framed the same way (the palm's beat dollies straight in on Mars), so none is scaled:
+// on screen Mars reads bigger than Mercury and smaller than Venus, as the planets are.
+const PLANET_GROUP_SCALE = {};
+const groupScale = kind => PLANET_GROUP_SCALE[kind] || 1;
+// Mars sits in the hollow of the palm, between the head line and the heart line, just in front of the palm
+const MARS_AT = (() => { const x = -0.2 * PALM_W, y = 6.85; return V(x, y, palmHalf(x, y).front).add(new THREE.Vector3(0, 0, PLANET_SIZE.mars * PLANET_R * groupScale('mars') * 1.25)); })();
+function thumbFocusLocal(out) { return out.copy(T.j[1].pos).lerp(T.j[3].pos, 0.25); }
+function ringRestLocal(out) { return out.copy(FR.j[1].pos).lerp(FR.j[2].pos, RING_T); }
+function ringMidLocal(out) { return ringRestLocal(out).lerp(FR.j[4].pos, 0.5); }
+function planetLocal(b, out) {                          // where each beat's planet forms (hand-local)
+  if (b === 0) return out.copy(T.j[1].pos).lerp(T.j[3].pos, 0.45);
+  if (b === 3) return ringRestLocal(out);
+  if (b === 5) return out.copy(MARS_AT);
+  const f = FINGERS[b - 1];
+  return out.copy(f.j[1].pos).lerp(f.j[4].pos, 0.3);
+}
+function fingerFocusLocal(b, out) {                     // what the camera dollies in on before the planet forms
+  if (b === 0) return thumbFocusLocal(out);
+  if (b === 3) return ringMidLocal(out);
+  if (b === 5) return out.copy(MARS_AT);              // the palm: straight in on the point where Mars will form
+  const f = FINGERS[b - 1];
+  return out.copy(f.j[1].pos).lerp(f.j[4].pos, 0.5);
+}
+let PL = null;                                          // { beat, kind, obj, q }
+const qBase = new THREE.Quaternion(), qBaseInv = new THREE.Quaternion(), eBase = new THREE.Euler(0, 0, 0, 'YXZ');
+const _pm = new THREE.Matrix4(), _pq = new THREE.Quaternion(), _ps = new THREE.Vector3(1, 1, 1), _pv = new THREE.Vector3(), _p2 = new THREE.Vector2();
+function disposePlanet() { if (PL) { PL.obj.dispose(); PL = null; } OCC.uOccA.value = 0; }
+function planetQuat(kind, out) { return out.copy(qBaseInv).multiply(Q_PLANET[kind]); }   // the same orientation in the world however the hand is turned
+function createPlanet(b) {
+  disposePlanet();
+  const kind = PLANET_KIND[b];
+  const at = planetLocal(b, new THREE.Vector3()), q = planetQuat(kind, new THREE.Quaternion());
+  _pm.compose(at, q, _ps.setScalar(groupScale(kind))).invert();
+  const src = [];
+  const take = (v, every = 1) => { if (Math.random() < every) src.push(v.clone().applyMatrix4(_pm)); };
+  if (b === 5) {
+    // Mars gathers out of the palm's own stars and its lines
+    for (let i = 0; i < plPos.length; i++) take(_pv.fromArray(plPos[i]), 0.6);
+    for (const d of dust) if (d.stat && !d.arm && d.n.z > 0.5) take(d.stat, 0.5);
+  } else {
+    for (const j of joints) if (j.group === b) take(j.pos);
+    for (const d of dust) if (d.group === b) take(dustTarget(d, _pv), 0.85);
+  }
+  if (b === 3) {
+    // the band, as it lies in Saturn's ring plane at the base of the finger: its stars pour out into the rings
+    for (let k = 0; k < 220; k++) { bandProfile(Math.random(), _p2); const a = Math.random() * Math.PI * 2; src.push(new THREE.Vector3(_p2.x * Math.sin(a), _p2.y, _p2.x * Math.cos(a))); }
+  }
+  const obj = makePlanet(THREE, kind, PLANET_R, { sourcePoints: src });
+  obj.group.position.copy(at); obj.group.quaternion.copy(q); obj.group.scale.setScalar(groupScale(kind));
+  obj.setReveal(0); obj.setOpacity(0);
+  handInner.add(obj.group);
+  PL = { beat: b, kind, obj };
+}
+
+/* =====================================================================
+   The vignette, drawn in WebGL with the same two gradients v1 painted as a CSS layer, so the cards (drawn after it)
+   are never darkened by it
+   ===================================================================== */
+const vigMat = new THREE.ShaderMaterial({
+  uniforms: { uRes: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: /* glsl */`void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform vec2 uRes;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main() {
+      vec2 q = gl_FragCoord.xy / uRes; q.y = 1.0 - q.y;               // CSS orientation, y down
+      float d = length(vec2((q.x - 0.5) / 1.18, (q.y - 0.44) / 0.82));
+      vec4 p1 = vec4(vec3(2.0, 1.0, 4.0) / 255.0 * 0.5, 0.5), p2 = vec4(0.0, 0.0, 0.0, 0.9);   // premultiplied stops
+      vec4 rad = d < 0.34 ? vec4(0.0) : d < 0.64 ? mix(vec4(0.0), p1, (d - 0.34) / 0.3) : mix(p1, p2, clamp((d - 0.64) / 0.36, 0.0, 1.0));
+      float lin = q.y < 0.18 ? 0.55 * (1.0 - q.y / 0.18) : q.y < 0.76 ? 0.0 : 0.6 * (q.y - 0.76) / 0.24;
+      vec4 o = vec4(0.0, 0.0, 0.0, lin) + rad * (1.0 - lin);              // the linear layer sits on top, as in CSS
+      o.a = clamp(o.a + (hash(gl_FragCoord.xy) - 0.5) * (1.2 / 255.0), 0.0, 1.0);
+      gl_FragColor = o;
+    }
+  `,
+  transparent: true, depthTest: false, depthWrite: false,
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+});
+const vignette = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), vigMat);
+vignette.frustumCulled = false; vignette.renderOrder = 1000;
+scene.add(vignette);
+
+/* =====================================================================
+   The cards (from the Rose Gold Deck prototype: same geometry, engraved metal back, edge, placeholder faces,
+   the collision-free cylinder fan and the flip spring). They live in their own scene, in the deck's own units and
+   light rig, drawn after the sky and the hand with the depth cleared, so the hand stays behind them.
+   ===================================================================== */
+const CW = 1, CH = 1.72, CR = 0.075;
+function roundedRect(w, h, r) {
+  const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r);
+  s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y);
+  return s;
+}
+const cardShape = roundedRect(CW, CH, CR);
+const faceGeo = new THREE.ShapeGeometry(cardShape, 10);
+{
+  const p = faceGeo.attributes.position, uv = faceGeo.attributes.uv;
+  for (let i = 0; i < p.count; i++) uv.setXY(i, (p.getX(i) + CW / 2) / CW, (p.getY(i) + CH / 2) / CH);
+  uv.needsUpdate = true;
+}
+// the card's rim: only the extrusion's side walls. Its two caps lay 0.5 mm inside the back and the face, close
+// enough at the fan's distance to z-fight with them in blocky tiles on the Mac GPU, and they are never seen anyway.
+const edgeGeo = (() => {
+  const ex = new THREE.ExtrudeGeometry(cardShape, { depth: 0.008, bevelEnabled: false, curveSegments: 10 });
+  ex.translate(0, 0, -0.004);
+  const side = ex.groups.find(g => g.materialIndex === 1) || { start: 0, count: ex.attributes.position.count };
+  const g = new THREE.BufferGeometry();
+  for (const k of ['position', 'normal', 'uv']) {
+    const a = ex.attributes[k];
+    if (a) g.setAttribute(k, new THREE.BufferAttribute(a.array.slice(side.start * a.itemSize, (side.start + side.count) * a.itemSize), a.itemSize));
+  }
+  ex.dispose();
+  return g;
+})();
+const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+function canvas2d(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
+
+function drawBackPattern(g, w, h, line, base) {
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  g.strokeStyle = line; g.fillStyle = line; g.lineCap = 'round';
+  // fine guilloche lattice
+  g.globalAlpha = 0.35; g.lineWidth = 1;
+  for (let k = -h; k < w + h; k += 14) {
+    g.beginPath(); g.moveTo(k, 0); g.lineTo(k - h * 0.58, h); g.stroke();
+    g.beginPath(); g.moveTo(k, 0); g.lineTo(k + h * 0.58, h); g.stroke();
+  }
+  g.globalAlpha = 1;
+  // borders
+  const inset = (m, lw) => { g.lineWidth = lw; g.strokeRect(m, m, w - 2 * m, h - 2 * m); };
+  inset(18, 3); inset(30, 1.5);
+  // central sigil
+  const cx = w / 2, cy = h / 2;
+  g.fillStyle = base; g.beginPath(); g.arc(cx, cy, 168, 0, Math.PI * 2); g.fill();
+  g.fillStyle = line;
+  const ring = (r, lw) => { g.lineWidth = lw; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke(); };
+  ring(166, 3); ring(150, 1.5); ring(112, 2); ring(40, 2);
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2, r = 158;
+    g.beginPath(); g.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, i % 4 === 0 ? 3.2 : 1.6, 0, Math.PI * 2); g.fill();
+  }
+  const star = (pts, ro, ri, rot, lw) => {
+    g.lineWidth = lw; g.beginPath();
+    for (let i = 0; i <= pts * 2; i++) {
+      const a = rot + (i / (pts * 2)) * Math.PI * 2, r = i % 2 ? ri : ro;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+  };
+  star(12, 108, 62, -Math.PI / 2, 2);
+  star(6, 92, 46, -Math.PI / 2, 1.5);
+  // crescent
+  g.beginPath(); g.arc(cx, cy, 26, 0, Math.PI * 2); g.fill();
+  g.fillStyle = base; g.beginPath(); g.arc(cx + 11, cy - 6, 23, 0, Math.PI * 2); g.fill();
+  // corner pips
+  g.fillStyle = line;
+  [[60, 60], [w - 60, 60], [60, h - 60], [w - 60, h - 60]].forEach(([x, y]) => {
+    g.beginPath(); g.moveTo(x, y - 12); g.lineTo(x + 8, y); g.lineTo(x, y + 12); g.lineTo(x - 8, y); g.closePath(); g.fill();
+  });
+}
+const BW = 512, BH = Math.round(512 * CH / CW);
+function backTextures() {
+  const [bc, bg] = canvas2d(BW, BH); drawBackPattern(bg, BW, BH, '#e6e6e6', '#7a7a7a');
+  const [rc, rg] = canvas2d(BW, BH); drawBackPattern(rg, BW, BH, '#5a5a5a', '#2c2c2c');
+  const [cc, cg] = canvas2d(BW, BH);
+  const bump = new THREE.CanvasTexture(bc), rough = new THREE.CanvasTexture(rc), color = new THREE.CanvasTexture(cc);
+  color.colorSpace = THREE.SRGBColorSpace;
+  [bump, rough, color].forEach(t => { t.anisotropy = maxAniso; });
+  return { bump, rough, color, colorCtx: cg };
+}
+function drawGlyph(g, i, cx, cy, s, gold) {
+  g.strokeStyle = gold; g.fillStyle = gold; g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round';
+  const circle = (r, fill) => { g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); fill ? g.fill() : g.stroke(); };
+  const poly = (n, r, rot = -Math.PI / 2, inner = 0) => {
+    g.beginPath();
+    const steps = inner ? n * 2 : n;
+    for (let k = 0; k <= steps; k++) {
+      const a = rot + (k / steps) * Math.PI * 2, rr = inner && k % 2 ? inner : r;
+      const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+      k ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.stroke();
+  };
+  switch (i) {
+    case 0: circle(s); circle(s * 0.08, true); break;
+    case 10: circle(s); circle(s * 0.55); for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.55, cy + Math.sin(a) * s * 0.55); g.lineTo(cx + Math.cos(a) * s, cy + Math.sin(a) * s); g.stroke(); } break;
+    case 16: g.strokeRect(cx - s * 0.28, cy - s * 0.9, s * 0.56, s * 1.8); g.beginPath(); g.moveTo(cx + s * 0.75, cy - s); g.lineTo(cx + s * 0.1, cy - s * 0.15); g.lineTo(cx + s * 0.45, cy - s * 0.1); g.lineTo(cx - s * 0.3, cy + s * 0.8); g.stroke(); break;
+    case 17: poly(8, s, -Math.PI / 2, s * 0.38); circle(s * 0.12, true); break;
+    case 18: g.beginPath(); g.arc(cx, cy, s * 0.8, 0, Math.PI * 2); g.fill(); g.fillStyle = '#160f1a'; g.beginPath(); g.arc(cx + s * 0.35, cy - s * 0.18, s * 0.72, 0, Math.PI * 2); g.fill(); break;
+    case 19: circle(s * 0.45); for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8, r2 = k % 2 ? s * 0.8 : s; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.58, cy + Math.sin(a) * s * 0.58); g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke(); } break;
+    case 21: g.beginPath(); g.ellipse(cx, cy, s * 0.62, s, 0, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.ellipse(cx, cy, s * 0.48, s * 0.86, 0, 0, Math.PI * 2); g.stroke(); break;
+    case 13: g.beginPath(); g.moveTo(cx, cy - s); g.lineTo(cx, cy + s); g.stroke(); g.beginPath(); g.arc(cx, cy - s * 0.35, s * 0.38, Math.PI, 0); g.stroke(); break;
+    default: {
+      const pts = 3 + (i % 6);
+      poly(pts, s, -Math.PI / 2, s * 0.45);
+      circle(s * 0.28);
+    }
+  }
+}
+function faceTexture(i) {
+  const FW = 512, FH = Math.round(512 * CH / CW);
+  const [c, g] = canvas2d(FW, FH);
+  const grd = g.createLinearGradient(0, 0, 0, FH);
+  grd.addColorStop(0, '#1d1421'); grd.addColorStop(1, '#0e0b12');
+  g.fillStyle = grd; g.fillRect(0, 0, FW, FH);
+  for (let k = 0; k < 1400; k++) { g.fillStyle = `rgba(255,230,220,${Math.random() * 0.05})`; g.fillRect(Math.random() * FW, Math.random() * FH, 1, 1); }
+  const gold = '#dcb48f';
+  g.strokeStyle = gold; g.lineWidth = 3; g.strokeRect(20, 20, FW - 40, FH - 40);
+  g.lineWidth = 1; g.strokeRect(32, 32, FW - 64, FH - 64);
+  g.fillStyle = gold; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '500 64px "Bodoni Moda", "Bodoni 72", Didot, Georgia, serif';
+  g.fillText(MAJORS[i][0], FW / 2, 118);
+  g.lineWidth = 1; g.beginPath(); g.moveTo(FW / 2 - 40, 168); g.lineTo(FW / 2 + 40, 168); g.stroke();
+  drawGlyph(g, i, FW / 2, FH / 2 + 10, 120, gold);
+  g.font = '500 22px "IBM Plex Mono", ui-monospace, Menlo, monospace';
+  const name = MAJORS[i][1].toUpperCase();
+  if ('letterSpacing' in g) g.letterSpacing = '6px';
+  g.fillText(name, FW / 2, FH - 112);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso;
+  return t;
+}
+
+// card back colours: the deck prototype's saved choice when there is one (same origin), else this default
+const PRESETS = {
+  blackred:   { name: 'Black + red',        metal: { h: 0, s: 0, l: 9 },     etch: { h: 356, s: 82, l: 44 } },
+  midnight:   { name: 'Midnight navy',      metal: { h: 220, s: 16, l: 36 }, etch: { h: 236, s: 19, l: 58 } },
+  blackti:    { name: 'Black titanium',     metal: { h: 240, s: 4, l: 16 },  etch: { h: 220, s: 6, l: 64 } },
+  desert:     { name: 'Desert titanium',    metal: { h: 30, s: 24, l: 60 },  etch: { h: 24, s: 30, l: 36 } },
+  ember:      { name: 'Obsidian ember',     metal: { h: 20, s: 10, l: 8 },   etch: { h: 20, s: 92, l: 54 } },
+  deepblue:   { name: 'Deep blue',          metal: { h: 222, s: 45, l: 22 }, etch: { h: 210, s: 28, l: 72 } },
+  skynight:   { name: 'Night sky',          metal: { h: 225, s: 28, l: 12 }, etch: { h: 203, s: 60, l: 72 } },
+  starlight:  { name: 'Starlight',          metal: { h: 40, s: 26, l: 80 },  etch: { h: 35, s: 30, l: 50 } },
+  amethyst:   { name: 'Amethyst',           metal: { h: 275, s: 34, l: 15 }, etch: { h: 285, s: 42, l: 72 } },
+  bloodmoon:  { name: 'Blood moon',         metal: { h: 350, s: 55, l: 16 }, etch: { h: 12, s: 62, l: 58 } },
+  emerald:    { name: 'Emerald occult',     metal: { h: 162, s: 45, l: 12 }, etch: { h: 44, s: 62, l: 58 } },
+  oxblood:    { name: 'Oxblood + gold',     metal: { h: 355, s: 45, l: 21 }, etch: { h: 42, s: 66, l: 56 } },
+  plum:       { name: 'Plum noir',          metal: { h: 320, s: 26, l: 14 }, etch: { h: 345, s: 55, l: 74 } },
+  blackgold:  { name: 'Black + gold',       metal: { h: 0, s: 0, l: 9 },     etch: { h: 40, s: 72, l: 55 } },
+  rose:       { name: 'Rose gold',          metal: { h: 14, s: 66, l: 72 },  etch: { h: 16, s: 72, l: 82 } },
+  gunmetal:   { name: 'Gunmetal + silver',  metal: { h: 220, s: 8, l: 26 },  etch: { h: 220, s: 6, l: 80 } },
+};
+const DEFAULT_BACK = 'rose';            // the one constant that picks the card backs (any key of PRESETS)
+function loadBackColors() {
+  const p = PRESETS[DEFAULT_BACK] || PRESETS.rose;
+  return { metal: { ...p.metal }, etch: { ...p.etch }, from: DEFAULT_BACK };
+}
+const backColors = loadBackColors();
+const hsl = c => `hsl(${c.h}, ${c.s}%, ${c.l}%)`;
+const { bump: backBump, rough: backRough, color: backColorTex, colorCtx: backCtx } = backTextures();
+drawBackPattern(backCtx, BW, BH, hsl(backColors.etch), hsl(backColors.metal));
+backColorTex.needsUpdate = true;
+// one back material, one edge material and one blank face shared by every card (a face is drawn only for the chosen one)
+const backMat = new THREE.MeshPhysicalMaterial({
+  color: 0xffffff, map: backColorTex, metalness: 1, roughness: 1, roughnessMap: backRough,
+  bumpMap: backBump, bumpScale: 1.6, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.15,
+});
+const edgeMat = new THREE.MeshPhysicalMaterial({ metalness: 1, roughness: 0.25 });
+edgeMat.color.setStyle(hsl({ h: backColors.metal.h, s: backColors.metal.s, l: Math.min(100, backColors.metal.l + 6) }));
+const blankFaceMat = new THREE.MeshStandardMaterial({ color: 0x150e19, roughness: 0.7, metalness: 0 });
+
+const cardScene = new THREE.Scene();
+cardScene.environment = ENV;
+cardScene.environmentIntensity = 0.85;
+const cardCam = new THREE.PerspectiveCamera(FOV, 1, 1.0, 120);     // fixed at the origin, looking down -z; no card comes nearer than ~4
+cardScene.add(cardCam);
+cardScene.add(new THREE.AmbientLight(0xffffff, 0.15));
+const fanRoot = new THREE.Group(); cardScene.add(fanRoot);          // the deck's world: the fan is laid out in here
+const cardKey = new THREE.PointLight(0xffe6d8, 46, 0, 2); fanRoot.add(cardKey);
+const cardRimT = new THREE.Object3D(); fanRoot.add(cardRimT);
+const cardRim = new THREE.DirectionalLight(0x9a7bff, 0.9); cardRim.position.set(-4, 3, -3); cardRim.target = cardRimT; fanRoot.add(cardRim);
+const sweep = new THREE.PointLight(0xfff3ea, 0, 2.2, 2); cardCam.add(sweep);
+
+// 21 deck cards (the 22 Majors minus the thumb card) and the thumb's own card. A deck card is dealt into the fan at
+// a position each beat; once its face has been seen it stays with its finger, small above it, for the rest of the run.
+const DECK_N = 21;
+const cards = [];
+for (let k = 0; k <= DECK_N; k++) {
+  const grp = new THREE.Group();
+  const front = new THREE.Mesh(faceGeo, blankFaceMat); front.position.z = 0.0045;
+  const back = new THREE.Mesh(faceGeo, backMat); back.rotation.y = Math.PI; back.position.z = -0.0045;
+  const edge = new THREE.Mesh(edgeGeo, edgeMat);
+  grp.add(front, back, edge);
+  grp.visible = false;
+  cardScene.add(grp);
+  cards.push({ id: k, pos: -1, grp, front, back, edge, lift: 0, ret: 0, flip: Math.PI, flipVel: 0, flipTarget: Math.PI, state: 'off', finger: -1, major: -1, alpha: 1 });
+}
+const thumbCardObj = cards[DECK_N];
+let fan = [];                                        // this beat's fan: fan[s] is the card dealt at position s
+
+/* ---------- the sealed deal ----------
+   A stand-in for the server's sealed deal: in the app the order is shuffled and sealed on the server, and the
+   client only ever learns the card at the position the user picked. Here it is made once per run, in the browser,
+   with crypto.getRandomValues (Fisher-Yates with rejection sampling, so every order is equally likely). Never
+   Math.random. Each finger's fan shows the cards still in the sealed order (21, then 20, 19, 18, 17); the user picks
+   a POSITION, and the card at that position in the remaining sealed order is theirs. */
+function uniformInt(n) {
+  const lim = Math.floor(0x100000000 / n) * n, buf = new Uint32Array(1);
+  for (;;) { crypto.getRandomValues(buf); if (buf[0] < lim) return buf[0] % n; }
+}
+function sealDeal(thumbCardIndex) {
+  const order = MAJORS.map((_, i) => i).filter(i => i !== thumbCardIndex);
+  for (let k = order.length - 1; k > 0; k--) { const j = uniformInt(k + 1); [order[k], order[j]] = [order[j], order[k]]; }
+  return Object.freeze(order);
+}
+let sealed = null, pool = null;                      // the sealed order, and what is left of it
+
+/* ---------- the fan (deck geometry) ----------
+   Cards sit tangent to an upright cylinder whose radius steps out by STEP per card, so each card lies on top of
+   the one to its left and no two cards cross where they overlap (re-checked numerically for 21 down to 17 cards,
+   lifted cards included). The pointer tilts the whole fan as one rigid body, which keeps that spacing. */
+const TWIST = 0.24, STEP = 0.03, LIFT_OUT = 0.25;
+const FAN = { fanR: 3.0, maxA: 0.52, Df: 16, L: new THREE.Vector3(0, -0.05, 0) };
+const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), q3 = new THREE.Quaternion(), q4 = new THREE.Quaternion();
+const fanTilt = new THREE.Quaternion();
+const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1);
+function fanTransform(slot, outPos, outQuat, ptr, lift = 0, bob = 0, N = fan.length || DECK_N) {
+  const { fanR, maxA, L } = FAN;
+  const t = N > 1 ? (slot / (N - 1)) * 2 - 1 : 0;
+  const a = t * maxA;
+  const pivotY = 0.15 - fanR;
+  const Rc = Math.sin(maxA) * fanR / TWIST;
+  const reach = fanR + 0.22 * lift;
+  const phi = Math.sin(a) * reach / Rc;
+  const r = Rc + (slot - (N - 1) / 2) * STEP + LIFT_OUT * lift;
+  outPos.set(r * Math.sin(phi), pivotY + Math.cos(a) * reach + bob, r * Math.cos(phi) - Rc);
+  q1.setFromAxisAngle(AY, phi); q2.setFromAxisAngle(AZ, -a); q3.setFromAxisAngle(AY, Math.PI);
+  outQuat.copy(q1).multiply(q2).multiply(q3);
+  fanTilt.setFromAxisAngle(AY, ptr.x * 0.12).multiply(q4.setFromAxisAngle(AX, 0.1 - ptr.y * 0.1));
+  outPos.sub(L).applyQuaternion(fanTilt).add(L);
+  outQuat.premultiply(fanTilt);
+  return a;
+}
+// the fan, then mapped out of the deck's world into the card camera's
+function fanPose(slot, outPos, outQuat, ptr, lift, bob, N) {
+  fanTransform(slot, outPos, outQuat, ptr, lift, bob, N);
+  outPos.applyMatrix4(fanRoot.matrix);
+  outQuat.premultiply(fanRoot.quaternion);
+}
+
+/* =====================================================================
+   The beats: thumb, index, middle, ring, little finger, palm. Copy is placeholder (the thumb's lines are the founder's).
+   ===================================================================== */
+const BEATS = [
+  { key: 'thumb', eyebrow: 'Thumb', title: ['Your Self', 'The Sun'],
+    line: ['Without the thumb, what would the hand be?', 'Without the Sun, there would be no solar system.', 'Just as without the self, there would be no You.'] },
+  { key: 'index', eyebrow: 'Index finger', title: ['Work & Money', 'Jupiter'],
+    line: 'The index finger points the way: ambition, work, and how money moves through you. Represented by the Mount of Jupiter, named for the planet of abundance.',
+    prompt: 'Choose a card for your index finger.' },
+  { key: 'middle', eyebrow: 'Middle finger', title: ['Desire', 'Venus'],
+    line: "The longest finger: what you want, plainly, even what you won't say out loud. Read through Venus, the brightest light in the night sky after the Moon.",
+    prompt: 'Choose a card for your middle finger.' },
+  { key: 'ring', eyebrow: 'Ring finger', title: ['Relationships', 'Saturn'],
+    line: 'The ring finger symbolizes relationships and commitment, read through the position and movements of Saturn.',
+    prompt: 'Choose a card for your ring finger.' },
+  { key: 'pinky', eyebrow: 'Little finger', title: ['Friendships', 'Mercury'],
+    line: 'The little finger keeps your people close: talk, loyalty and the small promises. Given to Mercury, the smallest planet and the messenger of the gods.',
+    prompt: 'Choose a card for your little finger.' },
+  { key: 'palm', eyebrow: 'Palm', title: ['Undoing', 'Mars'],
+    line: "The palm holds everything together, until it doesn't: how you may come apart, and what it will take to close your hand again. The palm's hollow is often called the Plain of Mars.",
+    prompt: 'Choose a card for your palm.' },
+];
+const INTRO_LINE = 'In life, everyone is dealt a hand. Here is yours. Time to choose.';
+function fillHead(root, b) {
+  const B = BEATS[b];
+  root.querySelector('.hd-eyebrow').textContent = B.eyebrow;
+  const dot = document.createElement('span'); dot.className = 'dot'; dot.textContent = '·';
+  root.querySelector('.hd-title').replaceChildren(`${B.title[0]} `, dot, ` ${B.title[1]}`);
+  const line = root.querySelector('.hd-line');
+  const verse = Array.isArray(B.line);
+  line.classList.toggle('verse', verse);
+  if (verse) line.replaceChildren(...B.line.map(s => { const e = document.createElement('span'); e.textContent = s; return e; }));
+  else line.textContent = B.line;
+}
+// a hidden twin of the header, to measure every beat's header on this screen
+const headProbe = headEl.cloneNode(true);
+headProbe.removeAttribute('id'); headProbe.removeAttribute('aria-live'); headProbe.setAttribute('aria-hidden', 'true'); headProbe.className = 'head-probe';
+headProbe.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+headProbe.style.visibility = 'hidden'; headProbe.style.opacity = '0';
+document.body.appendChild(headProbe);
+let headBeat = -1;
+let headBoxes = null;                               // the header's text boxes (px), measured when needed (see cardKeepOut)
+function setHead(b) { if (b !== headBeat) { headBeat = b; fillHead(headEl, b); headBoxes = null; } }
+
+/* =====================================================================
+   Framing and layout (depend on the screen)
+   ===================================================================== */
+let W = 1, H = 1, aspect = 1;
+// extents of the thumb in the THUMB figure around the camera's focus point, in scene units at that depth (measured at boot)
+const FIG = { up: 0.48, down: 0.92, left: 0.25, right: 0.37 };
+// the open hand with its six cards above it, in world units around the pivot (measured at boot)
+const HOME = { x0: -0.8, x1: 0.8, y0: -0.9, y1: 1.25 };
+// each beat's subject for the dolly in: the finger's length, or the palm (measured at boot)
+const FLEN = [0.6, 0.75, 0.82, 0.8, 0.6, 1.0];
+const framing = { dAll: 6, shiftAll: 0.06, dThumb: 2, shiftThumbY: 0.26, shiftThumbX: 0, arcK: 1, dHome: 6, syHome: 0, homeCx: 0, homeCy: 0 };
+// per beat: the dolly in on the finger (F) and the planet shot (P): camera distance and where the subject lands (NDC)
+const SHOT = Array.from({ length: 6 }, () => ({ dF: 3, sxF: 0, syF: 0, dP: 2, sxP: 0, syP: 0, headH: 120, ppuP: 500 }));
+// screen layout in CSS px (rails, fan, the lifted card) and card-camera depths
+const LAY = {
+  top: 18, bottom: 80, capBottom: 78, fanTop: 500, fanBottom: 700, fanL: 16, fanR: 374, floatZ: 7.8,
+  lift: { x: 0, y: -0.2, z: 6, px: 300 }, liftT: { x: 0, y: -0.2, z: 6, px: 300 }, short: false, side: false, portrait: true, titleBottom: 50,
+};
+const FLOAT_H = 0.2, FLOAT_GAP = 0.05;           // the small cards above the fingers (scene units)
+const dAtPpu = p => H / (2 * TAN * p);
+const ndcY = py => 1 - 2 * py / H;
+const ndcX = px => 2 * px / W - 1;
+const _fp = new THREE.Vector3(), _fq = new THREE.Quaternion(), _fc = new THREE.Vector3();
+const FAN_C = new THREE.Vector3(), FAN_U = new THREE.Vector3(), FAN_DIR = new THREE.Vector3();
+function placeFanRoot(Df, nx, ny) {
+  // The deck's camera sat at (0, 0.25, D) looking at the fan; put the card camera exactly there in the fan's
+  // frame (so the fan is seen exactly as in the deck), with the fan's centre on the ray through (nx, ny).
+  const L = FAN.L;
+  FAN_C.set(0, 0.25, Df);
+  FAN_U.copy(FAN_C).sub(L);
+  const dist = FAN_U.length(); FAN_U.normalize();
+  FAN_DIR.set(nx * TAN * aspect, ny * TAN, -1).normalize();
+  fanRoot.quaternion.setFromUnitVectors(FAN_U, _fc.copy(FAN_DIR).negate());
+  fanRoot.position.copy(FAN_DIR).multiplyScalar(dist).sub(_fc.copy(L).applyQuaternion(fanRoot.quaternion));
+  fanRoot.updateMatrix(); fanRoot.updateMatrixWorld(true);
+}
+function fanBBox() {
+  // every card of the fullest fan (21), resting and lifted, at the pointer's extremes: the fan never leaves this box
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  cardCam.updateMatrixWorld();
+  for (const p of [[0, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]) for (let s = 0; s < DECK_N; s++) for (const lift of [0, 1]) {
+    fanPose(s, _fp, _fq, { x: p[0], y: p[1] }, lift, 0, DECK_N);
+    for (const [cx, cy] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
+      _fc.set(cx * CW, cy * CH, 0).applyQuaternion(_fq).add(_fp).project(cardCam);
+      const x = (_fc.x * 0.5 + 0.5) * W, y = (-_fc.y * 0.5 + 0.5) * H;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+  }
+  return { x0, x1, y0, y1 };
+}
+function layoutFan(portrait, short) {
+  FAN.fanR = portrait ? 3.0 : 3.6; FAN.maxA = portrait ? 0.52 : 0.62;     // the deck's own two layouts
+  const capH = W < 480 ? 62 : 40;                                         // the prompt under the fan (two lines on a phone)
+  // a short landscape screen has no height to stack the planet and the fan: the prompt takes the left column,
+  // the planet the middle, the fan the right
+  const bottom = short ? H - LAY.bottom - 8 : H - LAY.capBottom - capH - 10;
+  const reg = short ? [0.58 * W, W - 16] : [16, W - 16];
+  const hBudget = (short ? 0.6 : portrait ? 0.29 : 0.3) * H;
+  let Df = 16, nx = (reg[0] + reg[1]) / W - 1, ny = -0.5;
+  for (let it = 0; it < 4; it++) {
+    placeFanRoot(Df, nx, ny);
+    let b = fanBBox();
+    Df *= Math.max((b.x1 - b.x0) / (reg[1] - reg[0]), (b.y1 - b.y0) / hBudget);
+    placeFanRoot(Df, nx, ny);
+    b = fanBBox();
+    ny += ndcY(bottom) - ndcY(b.y1);
+    nx += ((reg[0] + reg[1]) / 2 - (b.x0 + b.x1) / 2) * 2 / W;
+  }
+  placeFanRoot(Df, nx, ny);
+  const b = fanBBox();
+  FAN.Df = Df; FAN.nx = nx; FAN.ny = ny;
+  LAY.fanTop = b.y0; LAY.fanBottom = b.y1; LAY.fanL = b.x0; LAY.fanR = b.x1;
+}
+function layoutLift(o, capBlock) {
+  // the chosen card, lifted: as large as fits between the beat's title (which stays readable above it; the line under
+  // the title is covered) and its name (and the thumb's arithmetic), clear of the screen's sides so there is empty
+  // space around it to tap; on a short landscape screen it takes the fan's column
+  let top = LAY.top + LAY.titleBottom + 10, bot, cx, maxW;
+  if (LAY.short && o === LAY.liftT) {
+    // the thumb's card on a short landscape screen: the Sun holds the left column, so the card takes the middle and its
+    // name and arithmetic the right column (.thumbcap), and nothing sits on the Sun
+    const capL = W - Math.min(0.28 * W, 300) - Math.max(0.04 * W, 16);
+    const sunR = (1 + SHOT[0].sxP) / 2 * W + PLANET_EXT.sun * PLANET_R * SHOT[0].ppuP;
+    bot = H - LAY.bottom - 4; cx = (sunR + capL) / 2; maxW = Math.max(60, (capL - sunR) * 0.85);
+  } else if (LAY.short) { bot = H - LAY.bottom - 4; cx = (LAY.fanL + LAY.fanR) / 2; maxW = Math.min(LAY.fanR - LAY.fanL, W - cx - 16) * 0.8; }
+  else { bot = H - LAY.capBottom - capBlock - 14; cx = W / 2; maxW = W - 96; }
+  const px = Math.max(130, Math.min(0.58 * H, bot - top, maxW * CH / CW));
+  o.px = px; o.z = CH / (2 * TAN * px / H); o.y = ndcY(bot - px / 2); o.x = ndcX(cx);
+}
+const SIZE_K = kind => Math.pow(PLANET_SIZE.saturn / PLANET_SIZE[kind], 0.35);   // smaller planets get a little closer, the Sun a little further
+// the name/birthday sheet's box where it comes to rest, measured even while it is hidden (offsets ignore its
+// rise-in transform), so the thumb close-up and the Sun keep clear of it on every screen (v2 tester: 375x667)
+function measureSheet() {
+  const was = askWrap.hidden;
+  if (was) { askWrap.style.visibility = 'hidden'; askWrap.hidden = false; }
+  const wr = askWrap.getBoundingClientRect();
+  const r = { left: wr.left + askForm.offsetLeft, top: wr.top + askForm.offsetTop };
+  r.right = r.left + askForm.offsetWidth; r.bottom = r.top + askForm.offsetHeight;
+  if (was) { askWrap.hidden = true; askWrap.style.visibility = ''; }
+  return r;
+}
+function resize() {
+  W = stage.clientWidth || innerWidth; H = stage.clientHeight || innerHeight;
+  headBoxes = null;
+  renderer.setSize(W, H, false);
+  aspect = W / H; camera.aspect = aspect;
+  cardCam.aspect = aspect; cardCam.updateProjectionMatrix();
+  U.uScale.value = (H * DPR) / (2 * TAN);
+  bgMat.uniforms.uAspect.value = aspect;
+  renderer.getDrawingBufferSize(vigMat.uniforms.uRes.value);
+  const portrait = aspect < 0.8;
+  const side = aspect > 1.15;                       // landscape: the sheet sits on the right
+  const short = side && H < 620;                    // a phone on its side, or a short laptop window
+  document.documentElement.classList.toggle('wide', side);
+  document.documentElement.classList.toggle('short', short);
+  Object.assign(LAY, { short, side, portrait });
+  LAY.top = parseFloat(getComputedStyle(headEl).top) || 18;
+  LAY.bottom = H - document.querySelector('.rail.bottom').getBoundingClientRect().top + 8;
+  LAY.capBottom = parseFloat(getComputedStyle(captionEl).bottom) || 78;
+  for (let b = 0; b < 6; b++) { fillHead(headProbe, b); SHOT[b].headH = headProbe.offsetHeight; }
+  LAY.titleBottom = headProbe.querySelector('.hd-title').getBoundingClientRect().bottom - headProbe.getBoundingClientRect().top;
+  // overview, for the stars forming (as v1)
+  const handH = 2.25, handW = 1.42;
+  framing.dAll = Math.max(handH / (2 * TAN) * (portrait ? 1.22 : 1.55), handW / (2 * TAN * aspect) * 1.14);
+  framing.shiftAll = portrait ? 0.1 : 0.12;
+  // ---- the fan ----
+  layoutFan(portrait, short);
+  // ---- the thumb close-up: the whole thumbs-up, centred under its header and clear of the sheet ----
+  LAY.sheet = measureSheet();
+  const sheetLeft = side ? LAY.sheet.left : W;
+  const tTop = LAY.top + SHOT[0].headH + 22, tBot = side ? H - LAY.bottom - 6 : LAY.sheet.top - 14;
+  const lookX = side ? sheetLeft / 2 : W / 2;
+  const fitPx = Math.max(40, Math.min((tBot - tTop) / (FIG.up + FIG.down), (sheetLeft - 16 - lookX) / FIG.right, (lookX - 16) / FIG.left));
+  framing.dThumb = Math.max(Math.max(1.75 / (2 * TAN), 0.95 / (2 * TAN * aspect)), H / (2 * TAN * fitPx));
+  const pxT = H / (2 * TAN * framing.dThumb);
+  framing.shiftThumbX = ndcX(lookX);
+  framing.shiftThumbY = ndcY((tTop + tBot) / 2 - (FIG.down - FIG.up) / 2 * pxT);
+  framing.arcK = portrait ? 0.3 : 1;
+  // ---- the planets: one shared scale (Saturn's rings across about three quarters of a phone, as in v2), so the
+  // planets' sizes compare; each is then fitted between its header and the fan (the Sun: above or beside the sheet)
+  const bandOf = b => {
+    const top = LAY.top + SHOT[b].headH + 16;
+    if (b === 0) return side ? { top, bot: H - LAY.bottom - 6, cx: sheetLeft / 2, w: sheetLeft - 32 } : { top, bot: LAY.sheet.top - 14, cx: W / 2, w: W - 32 };
+    if (short) { const l = Math.min(0.32 * W, 300 + 0.04 * W); return { top, bot: H - LAY.bottom - 6, cx: (l + LAY.fanL) / 2, w: LAY.fanL - l - 8 }; }
+    return { top, bot: LAY.fanTop - 14, cx: W / 2, w: W - 32 };
+  };
+  let P0 = 1e9;
+  for (let b = 1; b < 6; b++) { const B = bandOf(b); P0 = Math.min(P0, 0.74 * B.w / (2 * RING_OUT), 0.86 * (B.bot - B.top) / (2 * PLANET_EXT_Y.saturn * PLANET_R)); }
+  P0 *= reduceMotion ? 0.85 : 1;
+  for (let b = 0; b < 6; b++) {
+    const S = SHOT[b], B = bandOf(b), kind = PLANET_KIND[b], bh = Math.max(60, B.bot - B.top);
+    const ex = PLANET_EXT[kind] * PLANET_R, ey = (PLANET_EXT_Y[kind] || PLANET_EXT[kind]) * PLANET_R;
+    const ppu = Math.min(P0 * SIZE_K(kind), 0.94 * B.w / (2 * ex), 0.92 * bh / (2 * ey));
+    S.ppuP = ppu; S.dP = dAtPpu(ppu); S.sxP = ndcX(B.cx); S.syP = ndcY((B.top + B.bot) / 2);
+    // the dolly in on the finger: about half the planet's magnification, the whole finger in the band
+    const fTop = LAY.top + S.headH + 18, fBot = H - LAY.bottom - 10;
+    const ppuF = Math.max(40, Math.min(ppu / 1.9, (fBot - fTop) / (FLEN[b] + 0.22), (W - 32) / (b === 5 ? 0.85 : 0.5)));
+    S.dF = dAtPpu(ppuF); S.sxF = 0; S.syF = ndcY((fTop + fBot) / 2);
+  }
+  // ---- the lifted card ----
+  layoutLift(LAY.lift, W < 480 ? 46 : 44);
+  layoutLift(LAY.liftT, (W < 480 ? 46 : 44) + 10 + (mathEl.offsetHeight || 66));
+  LAY.floatZ = LAY.lift.z * 1.3;
+  // ---- home: the whole hand, palm to us, with room above for the cards ----
+  const hTop = LAY.top + 6, hBot = H - LAY.bottom - 6;
+  let dH = 5, cx = 0, cy = 0.2;
+  for (let it = 0; it < 4; it++) {                  // fit what the camera will see from there (perspective included)
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const [x, y, z, hx, hy] of HOME.pts || []) {
+      const k = dH / Math.max(0.5, dH - z);
+      x0 = Math.min(x0, cx + (x - hx - cx) * k); x1 = Math.max(x1, cx + (x + hx - cx) * k);
+      y0 = Math.min(y0, cy + (y - hy - cy) * k); y1 = Math.max(y1, cy + (y + hy - cy) * k);
+    }
+    if (x0 > x1) break;
+    Object.assign(HOME, { x0, x1, y0, y1 });
+    cx = (x0 + x1) / 2; cy = (y0 + y1) / 2;
+    dH = dAtPpu(Math.max(40, Math.min((hBot - hTop) / (y1 - y0), (W - 32) / (x1 - x0))));
+  }
+  framing.dHome = dH; framing.homeCx = cx; framing.homeCy = cy;
+  framing.syHome = ndcY((hTop + hBot) / 2);
+  // ---- the palm: from home, one dolly straight in on the point where Mars forms (never a pull-back). Part way in,
+  // the heart and head lines are framed around that point (Mars lands where the planet shot will hold it); then the
+  // camera carries on in to the planet shot as the palm's stars collapse into Mars
+  {
+    const S = SHOT[5], ppuHome = H / (2 * TAN * dH), ppuP = S.ppuP;
+    const left = MARS_AT.x - PALM_FRAME.x0, right = PALM_FRAME.x1 - MARS_AT.x, up = PALM_FRAME.y1 - MARS_AT.y;
+    const myPx = (1 - S.syP) / 2 * H, mxPx = (1 + S.sxP) / 2 * W, top = LAY.top + S.headH + 12;
+    const ppuLines = Math.min((Math.min(mxPx, W - mxPx) - 14) / (Math.max(left, right) + 0.02), (myPx - top) / (up + 0.03));
+    const ppuF = Math.min(ppuP * 0.82, Math.max(ppuHome * 1.3, ppuLines));
+    S.dF = dAtPpu(ppuF); S.sxF = S.sxP; S.syF = S.syP;
+  }
+  // ---- behind the deck: how far the open hand draws back around each finger's planet to be seen whole (BODY_K) ----
+  for (let b = 0; b <= 4; b++) {
+    const S = SHOT[b], mx = (1 + S.sxP) / 2 * W, my = (1 - S.syP) / 2 * H, P = b === 0 ? HOME.sunP : HOME.P && HOME.P[b];
+    const pts = b === 0 ? HOME.fistPts : HOME.bodyPts;  // the thumb's beat: the thumbs-up, around the Sun
+    let k = 0.5;
+    if (BODY_ON && P && pts) {
+      // the fingertips stay under the header; the knuckles stay above the fan, so fingers and palm read as a hand; the
+      // side edges may crop the thumb and the hand's outer edge a little (the thumbs-up: all of it in view). The beat's
+      // own finger is inside the planet, so it does not count. The cards already chosen (fingers before this beat) stay
+      // whole on screen, under the header and above the fan.
+      const top = LAY.top + S.headH + 6, low = b === 0 || LAY.short ? H - LAY.bottom - 4 : LAY.fanTop - 4;
+      const x0 = b === 0 ? 14 : -0.04 * W, x1 = b === 0 ? W - 14 : 1.04 * W;
+      const cx0 = 8, cx1 = LAY.short ? LAY.fanL - 8 : W - 8;
+      for (const { x, y, g, kind } of pts) {
+        const card = kind === 'card';
+        if (card ? g >= b : b > 0 && g === b) continue;
+        const dx = (x - P.x) * S.ppuP, dy = (y - P.y) * S.ppuP;
+        if (card) { if (dx > 0) k = Math.min(k, (cx1 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - cx0) / -dx); }
+        else if (b === 0 || g !== 0) { if (dx > 0) k = Math.min(k, (x1 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - x0) / -dx); }
+        if (dy > 0) k = Math.min(k, (my - top) / dy);
+        else if (dy < 0 && (b === 0 || card || (kind === 'knuckle' && g > 0))) k = Math.min(k, (low - my) / -dy);
+      }
+    }
+    BODY_K[b] = Math.max(0.08, k);                      // (a wide, short window: a small hand, its cards clear of the header)
+  }
+  buildConstellations();
+}
+
+/* =====================================================================
+   The sequence
+   ===================================================================== */
+const MA = reduceMotion ? 0.6 : 1;        // motion durations, intro
+const HA = reduceMotion ? 0.8 : 1;        // holds, intro
+const MB = reduceMotion ? 0.75 : 1;       // the finger beats
+const TA = (() => {
+  const o = {}; let c = 0;
+  o.stars = [0, 1.2 * MA];
+  c = 1.5 * HA;                            // stars twinkle ~1.5 s
+  o.form = [c, 2.5 * MA];                  // stars fly home ~2.5 s...
+  o.cap = [c + 0.35 * MA, 0];              // ...and the intro line arrives as they come together into a hand
+  c += 2.5 * MA;
+  o.lines = [c - 0.3 * MA, 1.0 * MA]; c += 0.7 * MA;
+  c += 2.2 * HA;                           // hold: the open right hand, palm to us, thumb on the right
+  o.cap[1] = c - 0.5 * HA;                 // the line leaves before the hand turns
+  o.turn = [c, 2.9 * MA]; c += 2.9 * MA;   // a slow clockwise turn to the back of the hand, into ONE
+  c += 0.45 * HA;
+  o.zoom = [c, 3.0 * MA]; c += 3.0 * MA;   // turn 2: counter-clockwise, back the way it came, into the thumbs-up, palm side to us (photo 2)
+  o.push = [c - 0.15 * MA, 2.6 * MA];      // then the camera pushes in on the thumb, three-quarter, and stops there (photo 3)
+  c = o.push[0] + o.push[1];
+  o.hi = [o.push[0] + o.push[1] * 0.45, 1.0 * MA];
+  o.head = [o.push[0] + o.push[1] * 0.62, 0.9 * MA];
+  c += 3.2 * HA;                           // the header and the three lines, read on the thumb
+  o.pzoom = [c, 3.1 * MA];                 // the camera dollies in on the Sun as it forms...
+  o.fade = [c + 0.15 * MA, 2.9 * MA];      // ...while the thumb's stars stream slowly into it, arriving as the camera settles
+  o.rest = [c + 0.15 * MA, 1.8 * MA];      // the rest of the hand fades away
+  o.plA = [c + 0.2 * MA, 0.9 * MA];
+  o.reveal = [c + 0.2 * MA, 3.0 * MA];     // the Sun forms over the same span as the collapse
+  c += 3.6 * MA;
+  o.back = [c, 1.4 * MA];                  // the hand comes back behind the Sun as the sheet arrives
+  o.sheet = c + 0.3 * HA;
+  o.end = c + 1.4 * MA;                    // (the intro's clock runs on under the sheet until the hand is back)
+  return o;
+})();
+const TI = (() => {                        // index, middle, little finger, palm: from the whole hand to the deck
+  const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  return {
+    hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
+    // the finger pours slowly into its planet (about 3 s, eased), its stars arriving as the camera settles
+    zoom: w(4.6, 3.1), fade: w(4.7, 2.9), rest: w(4.7, 1.8), plA: w(4.75, 0.9), reveal: w(4.75, 3.0),
+    back: w(8.5, 1.4), prompt: s(8.8), deal: s(9.1), end: s(10.8),
+  };
+})();
+const TR = (() => {                        // the ring finger: the band slides down first, then comes apart into Saturn
+  const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  return {
+    hi: w(0.3, 1.0), push: w(0.3, 2.6), head: w(1.0, 0.9),
+    bandIn: w(1.9, 0.7), slide: w(1.9, 4.4),          // the band slides slowly from the fingertip down to the base
+    zoom: w(6.0, 3.2),                                // the camera dollies in on the ring
+    dis: [s(6.3), s(2.8)],                            // the band comes apart
+    tilt: w(6.4, 2.7),                                // ...and turns into Saturn's ring plane
+    fade: w(6.4, 2.9), rest: w(6.4, 1.8), plA: w(6.45, 0.9), reveal: w(6.5, 3.0),
+    back: w(10.3, 1.4), prompt: s(10.6), deal: s(10.9), end: s(12.6),
+  };
+})();
+const TO = (() => {                        // after a card is read: back out to the whole hand
+  const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  return { head: w(0, 0.8), cap: s(0.9), plOut: w(0.2, 1.5), hiOff: w(0.3, 1.2), unfade: w(0.5, 1.7), cam: w(0.0, 2.9), float: w(0.05, 2.5), placed: w(1.6, 1.2), end: s(4.0) };
+})();
+const TO0 = (() => {                       // after the thumb: the thumbs-up opens and turns to face us, palm out
+  const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  return { head: w(0, 0.8), cap: s(0.9), plOut: w(0.2, 1.5), hiOff: w(0.3, 1.2), unfade: w(0.4, 1.8), cam: w(0.0, 3.6), turn: w(0.1, 3.4), open: w(0.3, 3.0), float: w(0.1, 3.1), placed: w(1.6, 1.2), end: s(4.3) };
+})();
+const timelineIn = b => (b === 3 ? TR : TI);
+const D_DIS = TR.dis[1];
+const STAG_ONE = [0.28, 0, 0.02, 0.08, 0.14];      // thumb folds last
+const STAG_THUMB = [0.22, 0, 0.04, 0.06, 0.08];    // index curls, then the thumb comes out
+const STAG_OPEN = [0.1, 0, 0.06, 0.12, 0.18];      // the hand unfurls index to pinky
+const REST_LOW = 0.06, REST_BACK = 0.92;           // the rest of the hand while a planet forms, and once the deck is up
+
+const st = {
+  pose: new Float32Array(NP), yaw: 0, pitch: -0.04, roll: 0,
+  starsIn: 0, formT: -1, lines: 0, dolly: 1, arcX: 0,
+  wThumb: 0, wHome: 0, wFinger: 0, wPlanet: 0, fist: 0,
+  head: 0, cap: '', math: 0,
+  hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0,
+  bandIn: 0, slide: 0, disT: -1e4, tiltW: 0,
+  placedA: 1, floatW: 0, backW: 0, bodyK: 1,
+};
+function blendPose(out, a, b, w, stag) {
+  for (let k = 0; k < NP; k++) {
+    const g = PARAM_GROUP[k], e = E.inOut(clamp01((w - stag[g]) / 0.7));
+    out[k] = a[k] + (b[k] - a[k]) * e;
+  }
+}
+// The thumbs-up, from the founder's photos of his own right hand: the palm side of the fist turned about 35 degrees
+// from facing us, curled fingers stacked down the left, the thumb up on the right, the wrist at the lower right.
+// Turn 2 reaches it from the back of the hand (yaw -pi) by turning counter-clockwise, the way turn 1 came.
+const END_YAW = -0.19 * Math.PI;
+// photo 2: at the end of the turn the thumb stands nearly straight up (its tip curls back on its own); ?lean=deg to try others
+const ROLL_LEAN = (qs.has('lean') && Number.isFinite(+qs.get('lean')) ? +qs.get('lean') : 3) * DEG;
+// roll: solved at load so the thumb's first bone stands straight up (photo 3); roll2 = roll - ROLL_LEAN (photo 2)
+let ROT_T = { yaw: END_YAW, pitch: -0.06, roll: 0.86, roll2: 0.64 };
+function evalHome() {                               // the whole open hand, palm to us: between beats, and the end
+  st.starsIn = 1; st.formT = 1e4; st.lines = 1;
+  st.pose.set(POSES.open); st.yaw = 0; st.pitch = -0.04; st.roll = 0; st.dolly = 1; st.arcX = 0;
+  st.wThumb = 0; st.wHome = 1; st.wFinger = 0; st.wPlanet = 0; st.fist = 0;
+  st.head = 0; st.cap = ''; st.math = 0;
+  st.hi = 0; st.fingerA = 1; st.collapse = 0; st.restA = 1; st.planetA = 0; st.reveal = 0; st.palmHi = 0;
+  st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
+  st.placedA = 1; st.floatW = 0; st.backW = 0; st.bodyK = 1;
+}
+function evalA(t) {                                 // the intro and the thumb, up to the sheet
+  st.starsIn = segE(t, TA.stars, E.sine);
+  st.formT = t - TA.form[0];
+  st.lines = clamp01((t - TA.lines[0]) / TA.lines[1]);
+  const wTurn = (t - TA.turn[0]) / TA.turn[1], wZoom = (t - TA.zoom[0]) / TA.zoom[1], wPush = (t - TA.push[0]) / TA.push[1];
+  if (wZoom > 0) blendPose(st.pose, POSES.one, POSES.thumb, wZoom, STAG_THUMB);
+  else blendPose(st.pose, POSES.open, POSES.one, wTurn, STAG_ONE);
+  // both turns on a sine ease: at most ~1.6x their average speed (a cubic peaks at 3x and whips through the middle)
+  const eT = E.sine(clamp01(wTurn)), eZ = E.sine(clamp01(wZoom)), eP = E.inOut(clamp01(wPush));
+  // a right hand: first clockwise (seen from above) to its back, yaw 0 -> -pi; then counter-clockwise, yaw rising
+  // from -pi to END_YAW, into the thumbs-up with its palm side to us; the last of the roll lands as the camera pushes in
+  st.yaw = lerp(lerp(0, -Math.PI, eT), ROT_T.yaw, eZ);
+  st.roll = lerp(0, ROT_T.roll2, eZ) + (ROT_T.roll - ROT_T.roll2) * eP;
+  st.pitch = lerp(-0.04, ROT_T.pitch, eZ) - Math.sin(Math.PI * eT) * (reduceMotion ? 0.03 : 0.1) - Math.sin(Math.PI * eZ) * (reduceMotion ? 0.02 : 0.06);
+  st.dolly = lerp(1.2, 1.0, segE(t, [0, TA.turn[0] + TA.turn[1]], E.sine));
+  st.arcX = -Math.sin(Math.PI * eT) * (reduceMotion ? 0.05 : 0.28);
+  st.wThumb = E.quart(clamp01(wPush)); st.fist = st.wThumb;
+  st.wHome = 0; st.wFinger = 0;
+  st.wPlanet = segE(t, TA.pzoom);
+  st.head = segE(t, TA.head, E.sine);
+  st.cap = t >= TA.cap[0] && t < TA.cap[1] ? 'intro' : '';
+  st.math = 0;
+  st.hi = segE(t, TA.hi);
+  st.fingerA = 1 - segE(t, TA.fade, E.sine);
+  st.collapse = segE(t, TA.fade, E.sine);         // one gentle ease (no double cubic): the stars pour in, not snap
+  st.backW = segE(t, TA.back, E.sine);
+  st.bodyK = lerp(1, BODY_K[0], st.backW);            // the thumbs-up comes back drawn in around the Sun
+  st.restA = lerp(lerp(1, REST_LOW, segE(t, TA.rest, E.sine)), REST_BACK, st.backW);
+  st.planetA = segE(t, TA.plA, E.sine);
+  st.reveal = segE(t, TA.reveal, E.sine);
+  st.palmHi = 0; st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
+  st.placedA = 0; st.floatW = 0;
+}
+function evalIn(b, t) {                             // a finger (or the palm): dolly in, header, planet, deck
+  evalHome();
+  const T = timelineIn(b);
+  st.hi = segE(t, T.hi);
+  st.wFinger = segE(t, T.push);
+  st.head = segE(t, T.head, E.sine);
+  st.wPlanet = segE(t, T.zoom);
+  st.fingerA = 1 - segE(t, T.fade, E.sine);
+  const fadeE = segE(t, T.fade, E.sine);
+  st.collapse = b === 5 && t >= T.back[0] ? 0 : fadeE;   // the palm's stars are back in place (unseen) as the deck comes
+  const eBack = segE(t, T.back, E.sine);
+  st.backW = eBack;
+  st.bodyK = lerp(1, BODY_K[b], eBack);               // behind the deck the whole hand draws back around the planet
+  st.restA = lerp(lerp(lerp(1, 0.55, st.hi), REST_LOW, segE(t, T.rest, E.sine)), REST_BACK, eBack);
+  st.planetA = segE(t, T.plA, E.sine);
+  st.reveal = segE(t, T.reveal, E.sine);
+  // the cards already chosen stay above their fingers: they dim with the rest of the hand as we dolly in, fade with it
+  // while the planet forms, and come back with it (drawn back around the planet, at its scale) behind the deck
+  st.placedA = lerp(lerp(1, 0.7, st.hi) * (1 - segE(t, T.rest, E.sine)), 1, eBack);
+  st.cap = t >= T.prompt ? `choose${b}` : '';
+  if (b === 5) {
+    // the palm's lines are bright as the camera starts in, pour into Mars with the palm, and are back behind the deck
+    st.palmHi = lerp(st.hi * (1 - fadeE), 0.7, eBack);
+    st.fingerA = lerp(st.fingerA, 0.6, eBack);          // the palm returns softly around Mars
+  }
+  if (b === 3) {
+    st.bandIn = segE(t, T.bandIn, E.out);
+    st.slide = segE(t, T.slide, E.inOut);
+    st.disT = t - T.dis[0];
+    st.tiltW = segE(t, T.tilt, E.inOut);
+  }
+}
+function evalHold(b) { if (b === 0) evalA(TA.end); else evalIn(b, timelineIn(b).end); }
+function evalPick() {
+  st.cap = PK.revealed ? `card${beat}` : '';
+  st.math = beat === 0 && PK.revealed ? clamp01((clock - PK.revealAt - 0.35) / 0.8) : 0;
+}
+function evalOut(b, t) {                            // the card is read: back out to the whole hand, the card to its finger
+  evalHold(b);
+  const O = b === 0 ? TO0 : TO;
+  const cam = segE(t, O.cam);
+  if (b === 0) {
+    // the thumbs-up opens into the open palm and turns, the short way round (counter-clockwise), to face us
+    const eo = segE(t, O.turn);
+    blendPose(st.pose, POSES.thumb, POSES.open, (t - O.open[0]) / O.open[1], STAG_OPEN);
+    st.yaw = lerp(ROT_T.yaw, 0, eo); st.roll = lerp(ROT_T.roll, 0, eo); st.pitch = lerp(ROT_T.pitch, -0.04, eo);
+    st.fist = 1 - segE(t, O.open);
+    st.wHome = cam; st.wPlanet = 1 - cam;
+  } else {
+    st.wFinger = 0; st.wPlanet = 1 - cam;
+  }
+  st.planetA *= 1 - segE(t, O.plOut, E.sine);
+  const un = segE(t, O.unfade, E.sine);
+  st.fingerA = lerp(st.fingerA, 1, un);
+  st.collapse *= 1 - segE(t, O.unfade, E.inOut);
+  st.restA = lerp(st.restA, 1, un);
+  st.backW *= 1 - cam;
+  st.bodyK = lerp(st.bodyK, 1, cam);
+  st.hi *= 1 - segE(t, O.hiOff); st.palmHi *= 1 - segE(t, O.hiOff);
+  st.head *= 1 - segE(t, O.head, E.sine);
+  st.cap = t < O.cap ? `card${b}` : '';
+  st.math = b === 0 ? 1 - segE(t, [0, O.cap]) : 0;
+  st.floatW = segE(t, O.float, E.inOut);
+  st.placedA = lerp(st.placedA, 1, segE(t, O.placed, E.sine));   // (already up behind the deck: they stay, and grow with the hand)
+}
+
+/* ---------- state machine ----------
+   A (the stars form, the hand turns, the thumb and the Sun) -> await (name + birthday) -> pick (the thumb's card
+   rises; swipe or tap to turn it) -> read (its name and the arithmetic; tap to continue) -> out (back to the whole
+   hand, the card settles above the thumb); then for each of index, middle, ring, little finger, palm:
+   in (dolly in, header, planet, deck) -> choose -> pick (tap empty space to put it back) -> read -> out; -> end */
+const PHASES = ['A', 'await', 'in', 'choose', 'pick', 'read', 'out', 'end'];
+let phase = 'A', beat = 0, tA = 0, tIn = 0, tOut = 0, freeze = qs.has('freeze');
+const AUTO = qs.has('auto');
+let debugPose = null;
+let result = null;
+const PK = {
+  slot: -1, card: -1, obj: null, t: 0, revealed: false, revealAt: 0, hovered: -1, faceReady: false,
+  autoPickAt: -1, autoFlipAt: -1, autoContAt: -1, autoRevealAt: -1,
+  fromP: new THREE.Vector3(), fromQ: new THREE.Quaternion(),
+};
+function resetPickState() {
+  Object.assign(PK, { slot: -1, card: -1, obj: null, t: 0, revealed: false, revealAt: 0, hovered: -1, faceReady: false, autoPickAt: -1, autoFlipAt: -1, autoContAt: -1, autoRevealAt: -1 });
+}
+function setPhase(p) {
+  phase = p;
+  if (p !== 'choose') el.style.cursor = '';
+  skipBtn.hidden = p === 'end';
+  replayBtn.hidden = p !== 'end';
+  replayBtn.classList.toggle('cta', p === 'end');
+  setHint();
+}
+function showAsk(on) {
+  if (on) {
+    askWrap.hidden = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => askForm.classList.add('on')));
+  } else {
+    askForm.classList.remove('on');
+    setTimeout(() => { if (!askForm.classList.contains('on')) askWrap.hidden = true; }, 700);
+  }
+}
+function enterAwait() {
+  setPhase('await'); showAsk(true);
+  if (qs.has('pick') || qs.has('flip') || AUTO) PK.autoRevealAt = clock + 1.0;
+}
+function readInputs() {
+  const name = nameIn.value.trim() || 'Brecht';
+  let date = { y: 1997, m: 3, d: 14 };
+  const v = dobIn.value;
+  if (v) {
+    const [y, m, d] = v.split('-').map(Number);       // never new Date(str): that is UTC midnight
+    if (!(y >= 1900 && y <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return { error: 'Pick a date between 1900 and 2099.' };
+    date = { y, m, d };
+  }
+  return { name, date };
+}
+function computeThumb(inp) {
+  result = thumbCard(inp.name, inp.date);
+  sealed = sealDeal(result.thumb);             // the fingers' and the palm's fans: the other 21 Majors, sealed once for this run
+  pool = [...sealed];
+  mathEl.replaceChildren();
+  // screen readers hear spoken joins ("then", a full stop per line); the eye gets the rose arrow and the line breaks
+  const sr = t => { const e = document.createElement('span'); e.className = 'sr'; e.textContent = t; return e; };
+  mathParts(result).forEach(p => {
+    const line = document.createElement('span'); line.className = 'part';
+    p.split(' → ').forEach((s, i) => {
+      if (i) { const a = document.createElement('span'); a.className = 'arrow'; a.textContent = ' →'; a.setAttribute('aria-hidden', 'true'); line.append(a, sr(' then'), ' '); }
+      const step = document.createElement('span'); step.className = 'step'; step.textContent = s; line.append(step);
+    });
+    line.append(sr('. '));
+    mathEl.append(line);
+  });
+}
+function reveal() {
+  const inp = readInputs();
+  if (inp.error) { askNote.textContent = inp.error; askNote.setAttribute('data-error', ''); return; }
+  askNote.removeAttribute('data-error');
+  askNote.textContent = 'Leave either blank to use the example: Brecht, 14 March 1997.';
+  computeThumb(inp);
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  showAsk(false);
+  beat = 0;
+  // the thumb's card, measured with its arithmetic under it, rises face down from below
+  mathEl.hidden = false;
+  layoutLift(LAY.liftT, (W < 480 ? 46 : 44) + 10 + (mathEl.offsetHeight || 66));
+  mathEl.hidden = true;
+  holdCard(thumbCardObj, result.thumb, -1);
+  setPhase('pick');
+  if (qs.has('flip') || AUTO) PK.autoFlipAt = clock + 1.6;
+}
+askForm.addEventListener('submit', ev => { ev.preventDefault(); if (phase === 'await') reveal(); });
+function buzz(ms) {                // haptics only after the person has touched the page (Chrome logs an error otherwise)
+  try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(ms); } catch (e) {}
+}
+function enterIn(b) {
+  beat = b; tIn = 0; setHead(b);
+  setPhase('in');
+}
+function enterChoose() {
+  setPhase('choose');
+  PK.hovered = -1;
+  if (qs.has('pick') || AUTO) PK.autoPickAt = clock + 1.0;
+}
+function holdCard(c, major, slot) {
+  PK.slot = slot; PK.card = major; PK.obj = c; PK.t = 0; PK.revealed = false; PK.hovered = -1; PK.autoFlipAt = -1;
+  c.state = 'held'; c.grp.visible = true;
+  c.flipTarget = Math.round(c.flip / (2 * Math.PI)) * 2 * Math.PI + Math.PI; c.flipVel = 0;
+  if (c === thumbCardObj) {
+    // from just below the screen, tipped back, face down
+    const lay = LAY.liftT;
+    c.flip = c.flipTarget = Math.PI;
+    liftPose(Math.PI, c.grp.position, c.grp.quaternion, lay);
+    c.grp.position.y -= TAN * lay.z * (1 + lay.y) + CH * 0.7;
+    c.grp.quaternion.multiply(q4.setFromAxisAngle(AX, 0.55));
+    c.grp.scale.setScalar(1);
+  }
+  prepareFace(c, major);
+}
+function choose(slot) {
+  if (phase !== 'choose' || !pool || !(slot >= 0 && slot < fan.length) || fan[slot].state !== 'fan') return;
+  holdCard(fan[slot], pool[slot], slot);
+  setPhase('pick');
+  buzz(8);
+  if (qs.has('flip') || AUTO) PK.autoFlipAt = clock + 1.0;
+}
+function returnToDeck() {
+  // only before its face is seen: the card goes back to its place in the fan, and any other can be chosen
+  if (phase !== 'pick' || PK.revealed || beat === 0 || !PK.obj) return;
+  const c = PK.obj;
+  c.state = 'fan'; c.ret = 1; c.lift = 0.6;
+  c.flip = c.flipTarget = Math.PI; c.flipVel = 0;
+  resetFace(c);
+  resetPickState();
+  setPhase('choose');
+  buzz(6);
+}
+async function prepareFace(c, i) {
+  if (c === PK.obj) PK.faceReady = false;
+  try {
+    await Promise.race([
+      Promise.all([document.fonts.load('500 64px "Bodoni Moda"'), document.fonts.load('500 22px "IBM Plex Mono"')]),
+      new Promise(r => setTimeout(r, 1500)),
+    ]);
+  } catch (e) { /* system faces */ }
+  const held = c === PK.obj && PK.card === i;
+  if (!held && !(c.state === 'placed' && c.major === i)) return;
+  resetFace(c);
+  c.front.material = new THREE.MeshStandardMaterial({ map: faceTexture(i), roughness: 0.6, metalness: 0, transparent: c.state === 'placed' });
+  if (c.state === 'placed' && c.alpha >= 0) c.front.material.opacity = c.alpha;   // setCardAlpha only writes on a change
+  c.faceMajor = i;
+  if (held) PK.faceReady = true;
+}
+function resetFace(c) {
+  if (c.front.material !== blankFaceMat) { if (c.front.material.map) c.front.material.map.dispose(); c.front.material.dispose(); c.front.material = blankFaceMat; }
+  c.faceMajor = -1;
+}
+function flipToFace() {
+  if (phase !== 'pick' || PK.revealed || !PK.obj) return;
+  const c = PK.obj;
+  if (Math.cos(c.flipTarget) < 0.5) c.flipTarget = Math.round(c.flip / Math.PI) * Math.PI + Math.PI;
+}
+function revealCard() {
+  PK.revealed = true; PK.revealAt = clock;
+  const [num, title] = MAJORS[PK.card];
+  CAPS.card = [num, title];                     // the numeral and the name, nothing more
+  PK.obj.major = PK.card;
+  if (beat > 0) pool.splice(PK.slot, 1);        // the pick is final: that card leaves the sealed order
+  sweepT = 0;
+  setPhase('read');
+  buzz(12);
+  if (qs.has('cont') || AUTO) PK.autoContAt = clock + 1.4;
+}
+function continueBeat() {
+  if (phase !== 'read' || clock - PK.revealAt < 0.45) return;
+  const c = PK.obj;
+  PK.fromP.copy(c.grp.position); PK.fromQ.copy(c.grp.quaternion);
+  for (const o of fan) if (o !== c && o.state === 'fan') { o.state = 'leaving'; o.leaveAt = clock; }
+  tOut = 0; setPhase('out');
+}
+function ownMaterials(c) {                      // a placed card fades on its own, so it gets its own back and edge
+  if (c.back.material === backMat) { c.back.material = backMat.clone(); c.back.material.transparent = true; }
+  if (c.edge.material === edgeMat) { c.edge.material = edgeMat.clone(); c.edge.material.transparent = true; }
+  // the face was compiled opaque while it was held (three bakes OPAQUE into the shader, forcing alpha to 1), so it
+  // needs recompiling, or a placed card's face never fades and sits solid behind the next beat's header
+  if (c.front.material !== blankFaceMat && !c.front.material.transparent) { c.front.material.transparent = true; c.front.material.needsUpdate = true; }
+}
+function finishBeat() {
+  const c = PK.obj;
+  if (c) { c.state = 'placed'; c.finger = beat; c.major = PK.card; ownMaterials(c); }
+  for (const o of fan) if (o.state !== 'placed') { o.state = 'off'; o.grp.visible = false; o.pos = -1; }
+  fan = [];
+  resetPickState();
+  if (beat >= 5) { setPhase('end'); disposePlanet(); }
+  else enterIn(beat + 1);
+}
+function checkPick() {
+  const c = PK.obj;
+  if (!c) return;
+  if (PK.autoFlipAt > 0 && clock >= PK.autoFlipAt) { PK.autoFlipAt = -1; flipToFace(); }
+  if (phase === 'pick' && !PK.revealed && PK.faceReady && Math.cos(c.flipTarget) > 0.5 && !(drag && drag.flipping)
+    && Math.abs(c.flip - c.flipTarget) < 0.09 && Math.abs(c.flipVel) < 1.6) revealCard();
+  if (phase === 'read' && PK.autoContAt > 0 && clock >= PK.autoContAt) { PK.autoContAt = -1; continueBeat(); }
+}
+function resetCard(c) {
+  c.grp.visible = false; c.state = 'off'; c.pos = -1; c.finger = -1; c.major = -1; c.lift = 0; c.ret = 0; c.alpha = 1;
+  c.flip = c.flipTarget = Math.PI; c.flipVel = 0; c.grp.scale.setScalar(1);
+  resetFace(c);
+  if (c.back.material !== backMat) { c.back.material.dispose(); c.back.material = backMat; }
+  if (c.edge.material !== edgeMat) { c.edge.material.dispose(); c.edge.material = edgeMat; }
+}
+function restartQuiet() {
+  tA = 0; tIn = 0; tOut = 0; beat = 0; result = null; sealed = null; pool = null;
+  showAsk(false);
+  setCaption('');
+  disposePlanet();
+  for (const c of cards) resetCard(c);
+  fan = []; resetPickState();
+  mathEl.replaceChildren(); mathEl.hidden = true;
+  setHead(0);
+  prepareFormation();
+}
+function restart() { restartQuiet(); setPhase('A'); }
+replayBtn.addEventListener('click', restart);
+skipBtn.addEventListener('click', () => {
+  if (phase === 'A') tA = TA.end;
+  else if (phase === 'await') reveal();
+  else if (phase === 'in') tIn = timelineIn(beat).end;
+  else if (phase === 'choose') choose(Math.floor(fan.length / 2));
+  else if (phase === 'pick') flipToFace();
+  else if (phase === 'read') { PK.revealAt = Math.min(PK.revealAt, clock - 1); continueBeat(); }
+  else if (phase === 'out') tOut = (beat === 0 ? TO0 : TO).end;
+});
+
+/* ---------- captions ---------- */
+const CAPS = { intro: INTRO_LINE, card: ['', ''] };
+let capShown = '', capTimer = 0;
+function setCaption(key) {
+  if (key === capShown) return;
+  const wasOn = !!capShown;
+  capShown = key;
+  captionP.classList.remove('on');
+  clearTimeout(capTimer);
+  capTimer = setTimeout(() => {
+    captionP.className = key.startsWith('card') ? 'card' : key === 'intro' ? 'intro' : '';
+    if (key.startsWith('card')) {
+      const n = document.createElement('span'); n.className = 'num'; n.textContent = CAPS.card[0];
+      captionP.replaceChildren(n, ` · ${CAPS.card[1]}`);
+    } else if (key.startsWith('choose')) captionP.textContent = BEATS[+key.slice(6)].prompt;
+    else captionP.textContent = CAPS[key] || '';
+    if (key) requestAnimationFrame(() => captionP.classList.add('on'));
+  }, wasOn ? 800 : 0);
+}
+
+/* =====================================================================
+   Pointer and device tilt (ported from the deck)
+   ===================================================================== */
+const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
+function setHint(msg) {
+  hintEl.classList.remove('cue');
+  if (msg) { hintEl.textContent = msg; return; }
+  if (phase === 'choose') hintEl.textContent = coarse ? 'Slide along the fan, then let go on a card.' : 'Hover to lift a card. Click to choose it.';
+  else if (phase === 'pick' && !PK.revealed) { hintEl.textContent = 'Swipe to turn it over.'; hintEl.classList.add('cue'); }
+  else if (phase === 'read') { hintEl.textContent = 'Tap to continue.'; hintEl.classList.add('cue'); }
+  else hintEl.textContent = tilt.on ? 'Tilt your phone to drift through the stars.' : coarse ? 'Drag to drift through the stars.' : 'Move the mouse to drift through the stars.';
+}
+
+// ---------- device tilt ----------
+const tilt = { on: false, neutral: null, got: false };
+const coarse = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (typeof DeviceOrientationEvent !== 'undefined' && coarse) tiltBtn.hidden = false;
+function screenAngle() {
+  const a = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+  return ((a % 360) + 360) % 360;
+}
+function onOrient(e) {
+  if (e.beta == null || e.gamma == null) return;
+  tilt.got = true;
+  let x = e.gamma, y = e.beta;
+  const a = screenAngle();
+  if (a === 90) { x = e.beta; y = -e.gamma; }
+  else if (a === 270) { x = -e.beta; y = e.gamma; }
+  else if (a === 180) { x = -e.gamma; y = -e.beta; }
+  if (!tilt.neutral) tilt.neutral = { x, y };
+  const range = 22;
+  pointer.tx = Math.max(-1, Math.min(1, (x - tilt.neutral.x) / range));
+  pointer.ty = Math.max(-1, Math.min(1, -(y - tilt.neutral.y) / range));
+}
+tiltBtn.addEventListener('click', async () => {
+  if (tilt.on) { tilt.neutral = null; setHint('Recentered. Hold the phone the way you like and tilt from there.'); setTimeout(() => setHint(), 2200); return; }
+  try {
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') { setHint('Tilt was not allowed. You can still drag your finger to drift through the stars.'); return; }
+    }
+    addEventListener('deviceorientation', onOrient);
+    tilt.on = true; tilt.neutral = null; tilt.got = false;
+    tiltBtn.textContent = 'Recenter';
+    setHint();
+    setTimeout(() => {
+      if (!tilt.got) {
+        tilt.on = false; removeEventListener('deviceorientation', onOrient);
+        tiltBtn.textContent = 'Tilt';
+        setHint('No tilt data reached this page. Inside a preview, motion sensors are blocked; open the direct link on your phone.');
+      }
+    }, 1800);
+  } catch (e) {
+    setHint('Tilt is not available here. Open the direct link on your phone, or drag your finger to drift through the stars.');
+  }
+});
+
+
+// ---------- choosing, turning, putting back and moving on ----------
+const el = renderer.domElement;
+const ray = new THREE.Raycaster(), ndcV = new THREE.Vector2();
+// Hit-testing uses the fan at rest (same tilt, nothing lifted), so sliding along it meets every card in turn: a lifted
+// card covers its neighbours on screen, and testing against it would make a scrub skip the cards it covers.
+const proxyMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });       // never drawn; ray tests only
+const restProxies = Array.from({ length: DECK_N }, (_, s) => { const m = new THREE.Mesh(faceGeo, proxyMat); m.userData.slot = s; return m; });
+function setRay(clientX, clientY) {
+  const r = el.getBoundingClientRect();
+  ndcV.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndcV, cardCam);
+}
+function slotAt(clientX, clientY) {
+  setRay(clientX, clientY);
+  const ptr = { x: pointer.x * (reduceMotion ? 0.3 : 1), y: pointer.y * (reduceMotion ? 0.3 : 1) };
+  const live = [];
+  for (const c of fan) {
+    if (c.state !== 'fan' || !c.grp.visible) continue;
+    const m = restProxies[c.pos];
+    fanPose(c.pos, m.position, m.quaternion, ptr, 0, 0);
+    m.updateMatrixWorld(true);
+    live.push(m);
+  }
+  const hits = ray.intersectObjects(live, false);
+  if (hits.length) return hits[0].object.userData.slot;
+  // the raised top of the lifted card stands above the resting fan: still that card
+  const hc = PK.hovered >= 0 ? fan[PK.hovered] : null;
+  if (hc && hc.state === 'fan') { hc.grp.updateMatrixWorld(true); if (ray.intersectObjects(hc.grp.children, false).length) return PK.hovered; }
+  return -1;
+}
+function liftRect(lay) {
+  const h = lay.px, w = h * CW / CH, cy = (1 - lay.y) / 2 * H, cx = (1 + lay.x) / 2 * W;
+  return { left: cx - w / 2, right: cx + w / 2, top: cy - h / 2, bottom: cy + h / 2 };
+}
+function onHeldCard(clientX, clientY) {      // is this point on the card being held up?
+  if (!PK.obj) return false;
+  const r = liftRect(beat === 0 ? LAY.liftT : LAY.lift), pad = 10;
+  if (clientX > r.left - pad && clientX < r.right + pad && clientY > r.top - pad && clientY < r.bottom + pad) return true;
+  setRay(clientX, clientY);
+  PK.obj.grp.updateMatrixWorld(true);
+  return ray.intersectObjects(PK.obj.grp.children, false).length > 0;
+}
+let drag = null;
+el.addEventListener('pointermove', ev => {
+  const r = el.getBoundingClientRect();
+  // a finger held on the fan, or turning the card, does not also steer the parallax (the fan would swim under it)
+  const holding = drag && ev.pointerType !== 'mouse' && (phase === 'choose' || phase === 'pick');
+  if (!tilt.on && !holding && !(drag && drag.flipping)) {
+    pointer.tx = ((ev.clientX - r.left) / r.width) * 2 - 1;
+    pointer.ty = -(((ev.clientY - r.top) / r.height) * 2 - 1);
+  }
+  if (phase === 'choose' && (drag || ev.pointerType === 'mouse')) {
+    PK.hovered = slotAt(ev.clientX, ev.clientY);         // touch: scrub along the fan; mouse: hover
+    el.style.cursor = PK.hovered >= 0 ? 'pointer' : '';
+  } else if (phase === 'read' || (phase === 'pick' && ev.pointerType === 'mouse')) el.style.cursor = 'pointer';
+  if (drag) {
+    const dx = ev.clientX - drag.x;
+    drag.moved = Math.max(drag.moved, Math.hypot(dx, ev.clientY - drag.y));
+    if (drag.flipping && PK.obj) {
+      const c = PK.obj, now = performance.now();
+      c.flip = drag.startFlip + dx * 0.0085;
+      drag.vel = (c.flip - drag.lastFlip) / Math.max(1, now - drag.lastT) * 1000;
+      drag.lastFlip = c.flip; drag.lastT = now;
+    }
+  }
+});
+el.addEventListener('pointerdown', ev => {
+  try { el.setPointerCapture(ev.pointerId); } catch (e) {}
+  drag = { x: ev.clientX, y: ev.clientY, t: performance.now(), moved: 0, flipping: false, vel: 0, onCard: false };
+  if (phase === 'choose') PK.hovered = slotAt(ev.clientX, ev.clientY);
+  else if (phase === 'pick' && !PK.revealed && PK.obj) {
+    const c = PK.obj;
+    drag.onCard = onHeldCard(ev.clientX, ev.clientY);
+    drag.flipping = true; drag.startFlip = c.flip; drag.lastFlip = c.flip; drag.lastT = performance.now();
+    c.flipVel = 0;
+  }
+});
+el.addEventListener('pointerup', ev => {
+  if (!drag) return;
+  const upDx = ev.clientX - drag.x;
+  drag.moved = Math.max(drag.moved, Math.hypot(upDx, ev.clientY - drag.y));
+  const tap = drag.moved < 8 && performance.now() - drag.t < 450;
+  if (phase === 'choose') {
+    // touch: letting go on a card chooses it (a plain tap too); mouse: a click
+    const s = slotAt(ev.clientX, ev.clientY);
+    if (s >= 0 && (ev.pointerType !== 'mouse' || tap)) choose(s);
+    else if (ev.pointerType !== 'mouse') PK.hovered = -1;
+  } else if (drag.flipping && phase === 'pick' && PK.obj) {
+    const c = PK.obj;
+    if (tap) {
+      c.flip = drag.startFlip;
+      // a tap on the card turns it; a tap on the empty space around it puts it back in the deck (the thumb's card has no deck)
+      if (drag.onCard || beat === 0) c.flipTarget = Math.round(c.flip / Math.PI) * Math.PI + Math.PI;
+      else returnToDeck();
+    } else {
+      if (drag.moved >= 8 && Math.abs(c.flip - drag.startFlip) < 0.01) c.flip = drag.startFlip + upDx * 0.0085;
+      const projected = c.flip + drag.vel * 0.18;                                   // the flick carries it over
+      c.flipTarget = Math.round(projected / Math.PI) * Math.PI;
+      c.flipVel = drag.vel;
+    }
+  } else if (phase === 'read' && tap) continueBeat();
+  drag = null;
+});
+el.addEventListener('pointercancel', () => { drag = null; if (phase === 'choose') PK.hovered = -1; });
+el.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse' && phase === 'choose' && !drag) PK.hovered = -1; });
+addEventListener('keydown', ev => {
+  const tag = ev.target && ev.target.tagName;
+  if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'TEXTAREA') return;
+  if (phase === 'choose') {
+    if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+      const N = fan.length;
+      PK.hovered = PK.hovered < 0 ? Math.floor(N / 2) : Math.max(0, Math.min(N - 1, PK.hovered + (ev.key === 'ArrowRight' ? 1 : -1)));
+      ev.preventDefault();
+    } else if ((ev.key === 'Enter' || ev.key === ' ') && PK.hovered >= 0) { choose(PK.hovered); ev.preventDefault(); }
+  } else if (phase === 'pick' && !PK.revealed) {
+    if (['Enter', ' ', 'ArrowLeft', 'ArrowRight'].includes(ev.key)) { flipToFace(); ev.preventDefault(); }
+    else if (ev.key === 'Escape' || ev.key === 'Backspace') { returnToDeck(); ev.preventDefault(); }
+  } else if (phase === 'read' && (ev.key === 'Enter' || ev.key === ' ')) { continueBeat(); ev.preventDefault(); }
+});
+
+
+/* =====================================================================
+   Per-frame update
+   ===================================================================== */
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3(), shotP = new THREE.Vector3(), shotL = new THREE.Vector3();
+const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), vD = new THREE.Vector3();
+const lA = new THREE.Vector3(), lB = new THREE.Vector3();
+const qPath = new THREE.Quaternion(), qDist = new THREE.Quaternion(), qMid = new THREE.Quaternion(), qProx = new THREE.Quaternion();
+const qWob = new THREE.Quaternion(), qSpinQ = new THREE.Quaternion(), wobAxis = new THREE.Vector3(), qSatL = new THREE.Quaternion();
+const AXY = new THREE.Vector3(0, 1, 0);
+const VIEW_T = new THREE.Vector3(0.08, 0.06, 1).normalize();
+const idlePose = new Float32Array(NP);
+const camLocal = new THREE.Vector3(), nrmV = new THREE.Vector3(), palmN = new THREE.Vector3(), PCL = new THREE.Vector3();
+const RIM_FLOOR = 0.33, RIM_GAIN = 1.0;
+// Behind the deck the camera stays in close on the planet, where the full-size hand is only a scatter of stars at the
+// screen's edges; so the hand (not the planet) draws back around the planet, small enough to be seen whole, the planet
+// standing where its finger was. Per beat (the palm keeps 1: its lines frame Mars, and the fingers, with their cards, are out of frame above). ?handk=0 turns it off.
+const BODY_K = [1, 1, 1, 1, 1, 1];
+const BODY_ON = qs.get('handk') !== '0';
+const BODY_PTS_K = qs.has('bpk') && Number.isFinite(+qs.get('bpk')) ? +qs.get('bpk') : 0.55;
+function updateBody() {
+  const k = st.bodyK, sm = Math.pow(k, BODY_PTS_K);          // its stars shrink with it, a little less than it does
+  handBody.scale.setScalar(k);
+  for (const o of [jointStars, tipFlares, dustPts, palmLineStars]) o.material.uniforms.uSizeMul.value = sm;
+  if (k < 0.9999) { planetLocal(beat, handBody.position).multiplyScalar(1 - k); } else handBody.position.set(0, 0, 0);
+  handBody.updateMatrixWorld(true);
+}
+const BACK_LINES = qs.has('lb') && Number.isFinite(+qs.get('lb')) ? +qs.get('lb') : 1.35;   // the hand's lines, brighter behind the deck
+const BACK_GB = qs.has('gb') && Number.isFinite(+qs.get('gb')) ? +qs.get('gb') : 0;
+let SX = 0, SY = 0, spinA = 0, collapseK = 0;
+function planetShotLocal(b, out) { return planetLocal(b, out); }
+const beatGroup = () => (phase === 'end' ? -1 : beat);
+
+function blendShot(w, d, nx, ny) {     // the camera straight in front of shotL at distance d, lens shifted so shotL lands at (nx, ny)
+  if (w <= 0) return;
+  shotP.copy(shotL); shotP.z += d; shotP.y += d * 0.02;
+  camPos.lerp(shotP, w); camLook.lerp(shotL, w);
+  SX = lerp(SX, nx, w); SY = lerp(SY, ny, w);
+}
+function updateCamera(par) {
+  // overview, while the stars form
+  camPos.set(st.arcX, 0.06, framing.dAll * st.dolly);
+  camLook.set(0, 0, 0);
+  SY = framing.shiftAll; SX = 0;
+  // the thumb close-up, tracking the live thumb
+  if (st.wThumb > 0) {
+    handInner.localToWorld(thumbFocusLocal(vA));
+    vB.copy(vA).addScaledVector(VIEW_T, framing.dThumb);
+    camPos.lerp(vB, st.wThumb); camLook.lerp(vA, st.wThumb);
+    SY = lerp(SY, framing.shiftThumbY, st.wThumb); SX = lerp(SX, framing.shiftThumbX, st.wThumb);
+  }
+  // home: the whole open hand and its cards
+  if (st.wHome > 0) { shotL.set(framing.homeCx, framing.homeCy, 0); blendShot(st.wHome, framing.dHome, 0, framing.syHome); }
+  // the beat: dolly in on the finger, then on its planet (the camera holds there until the card has been read)
+  const S = SHOT[Math.max(0, Math.min(5, beat))];
+  if (st.wFinger > 0) { handInner.localToWorld(fingerFocusLocal(beat, shotL)); blendShot(st.wFinger, S.dF, S.sxF, S.syF); }
+  if (st.wPlanet > 0) { handInner.localToWorld(planetShotLocal(beat, shotL)); blendShot(st.wPlanet, S.dP, S.sxP, S.syP); }
+  const k = Math.min(1, camPos.distanceTo(camLook) / framing.dAll);
+  camPos.x += pointer.x * 0.24 * par * k;
+  camPos.y += pointer.y * 0.15 * par * k;
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  camera.projectionMatrix.elements[8] = -SX;
+  camera.projectionMatrix.elements[9] = -SY;
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+}
+
+function updateHandPoints() {
+  // seen from the palm side (the thumbs-up, photo 2) the curled fingers' middle bones and tucked tips are the front of
+  // the fist, so their fade eases off; seen from the back they recede as before
+  palmN.set(0, 0, 1).transformDirection(handInner.matrixWorld);
+  vD.copy(camera.position).sub(handRoot.position).normalize();
+  const tuckK = 1 - TUCK_OPEN * clamp01((palmN.dot(vD) - 0.15) / 0.5);
+  for (let k = 0; k < 4; k++) TUCKF[k] = CURL[k] * tuckK;
+  const FD = TA.form[1];
+  const ft = st.formT / FD;
+  const forming = ft < 1.6;
+  // the beat's finger streams into its planet: its stars draw in toward the planet's centre as they fade
+  const cg = beatGroup();
+  const cl = cg >= 0 && st.collapse > 0.001 ? clamp01(st.collapse) * 0.94 : 0;
+  collapseK = cl;
+  if (cl > 0) planetLocal(beat, PCL);
+  const jp = jPos.array, ja = jAlpha.array, js = jSize.array;
+  for (let i = 0; i < NJ; i++) {
+    const tg = joints[i].pos;
+    let x = tg.x, y = tg.y, z = tg.z, a = jBaseAlpha[i] * (JFIN[i] < 0 ? 1 : 1 - JFADE[i] * TUCKF[JFIN[i]]), s = jBaseSize[i];
+    if (forming) {
+      const p = clamp01((ft - fDelay[i]) / fDur[i]), e = E.inOut(p), sw = Math.sin(Math.PI * e);
+      x = lerp(fStart[i * 3], tg.x, e) + fSwirl[i * 3] * sw;
+      y = lerp(fStart[i * 3 + 1], tg.y, e) + fSwirl[i * 3 + 1] * sw;
+      z = lerp(fStart[i * 3 + 2], tg.z, e) + fSwirl[i * 3 + 2] * sw;
+      const arrived = ft - (fDelay[i] + fDur[i]);
+      const flash = arrived > 0 ? Math.exp(-arrived * FD * 3.2) : 0;
+      a *= lerp(0.42, 1, E.sine(p)) * st.starsIn * (1 + 0.7 * flash);
+      s *= lerp(0.55, 1, p) * (1 + 0.9 * flash);
+    }
+    if (cl > 0 && joints[i].group === cg) { x += (PCL.x - x) * cl; y += (PCL.y - y) * cl; z += (PCL.z - z) * cl; }
+    jp[i * 3] = x; jp[i * 3 + 1] = y; jp[i * 3 + 2] = z;
+    ja[i] = a; js[i] = s;
+  }
+  jPos.needsUpdate = true; jAlpha.needsUpdate = true; jSize.needsUpdate = true;
+
+  // tip flares only after the hand has formed
+  const fp = fPos.array, fa = fAlpha.array, flareOn = clamp01((ft - 0.85) / 0.4);
+  TIPS.forEach((j, k) => {
+    fp[k * 3] = jp[j.idx * 3]; fp[k * 3 + 1] = jp[j.idx * 3 + 1]; fp[k * 3 + 2] = jp[j.idx * 3 + 2];
+    fa[k] = 0.44 * flareOn * (k ? 1 - CURL[k - 1] : 1);          // a fingertip tucked into the fist does not flare
+  });
+  fPos.needsUpdate = true; fAlpha.needsUpdate = true;
+
+  // rim light: dust on the silhouette (surface turned edge-on to the camera) glows, dust facing the camera recedes,
+  // so every phalanx reads as a tube and the palm as a rounded slab from any angle
+  camLocal.copy(camera.position); handBody.worldToLocal(camLocal);
+  const dp = dPos.array, da = dAlpha.array;
+  for (let i = 0; i < ND; i++) {
+    const d = dust[i], tg = dustTarget(d, vC, nrmV), fi = NJ + i;
+    const vx = camLocal.x - tg.x, vy = camLocal.y - tg.y, vz = camLocal.z - tg.z;
+    const rim = 1 - Math.abs(nrmV.x * vx + nrmV.y * vy + nrmV.z * vz) / (Math.hypot(vx, vy, vz) || 1);
+    const b = d.stat ? null : BONES[d.bone];
+    const lit = (RIM_FLOOR + RIM_GAIN * rim * Math.sqrt(rim)) * (b && b.fin >= 0 ? 1 - b.fade * TUCKF[b.fin] : 1);
+    if (forming) {
+      const p = clamp01((ft - fDelay[fi]) / fDur[fi]), e = E.inOut(p), sw = Math.sin(Math.PI * e);
+      dp[i * 3] = lerp(fStart[fi * 3], tg.x, e) + fSwirl[fi * 3] * sw;
+      dp[i * 3 + 1] = lerp(fStart[fi * 3 + 1], tg.y, e) + fSwirl[fi * 3 + 1] * sw;
+      dp[i * 3 + 2] = lerp(fStart[fi * 3 + 2], tg.z, e) + fSwirl[fi * 3 + 2] * sw;
+      da[i] = d.alpha * lerp(0.5, lit, p) * st.starsIn;
+    } else {
+      let x = tg.x, y = tg.y, z = tg.z;
+      if (cl > 0 && d.group === cg && !d.arm) { const c2 = cl * (0.85 + 0.15 * d.alpha); x += (PCL.x - x) * c2; y += (PCL.y - y) * c2; z += (PCL.z - z) * c2; }
+      dp[i * 3] = x; dp[i * 3 + 1] = y; dp[i * 3 + 2] = z;
+      da[i] = d.alpha * lit;
+    }
+  }
+  dPos.needsUpdate = true; dAlpha.needsUpdate = true;
+}
+
+function updateLines() {
+  const lp = lPos.array, la = lAlpha.array, p = st.lines, cg = beatGroup(), cl = collapseK;
+  const gone = cg >= 0 && cg <= 4 ? clamp01(1 - st.fingerA) : 0;      // how far the beat's finger has gone into its planet
+  // the palm scaffolding (wrist, metacarpals, knuckle rungs) only reads while the hand is open and faces us;
+  // in a fist or side-on it turns into an x-ray ladder, so it fades with the curl and the edge-on angle
+  let curl = 0;
+  for (let k = 0; k < 4; k++) curl += clamp01(st.pose[6 + k * 4] / (85 * DEG)) / 4;
+  palmN.set(0, 0, 1).transformDirection(handInner.matrixWorld);
+  vD.copy(camera.position).sub(handRoot.position).normalize();
+  const structK = (1 - 0.9 * curl) * (0.3 + 0.7 * Math.abs(palmN.dot(vD)));
+  for (let k = 0; k < NS; k++) {
+    const s = SEGS[k];
+    let A = s.a.pos, B = s.b.pos;
+    if (cl > 0 && s.group === cg) { if (s.a.group === cg) A = lA.copy(A).lerp(PCL, cl); if (s.b.group === cg) B = lB.copy(B).lerp(PCL, cl); }
+    const local = clamp01((p - s.level * 0.16) / 0.36), e = E.out(local);
+    let a = s.alpha * (s.group === 5 ? structK : s.fin >= 0 ? 1 - s.fade * TUCKF[s.fin] : 1) * Math.min(1, local * 3);
+    if (s.bridge !== undefined) a *= s.bridge === cg ? gone : 0;
+    else if (s.drop && s.drop.includes(cg)) a *= 1 - gone;
+    if (s.group !== cg) a *= 1 + (BACK_LINES - 1) * st.backW;
+    lp[k * 6] = A.x; lp[k * 6 + 1] = A.y; lp[k * 6 + 2] = A.z;
+    lp[k * 6 + 3] = A.x + (B.x - A.x) * e; lp[k * 6 + 4] = A.y + (B.y - A.y) * e; lp[k * 6 + 5] = A.z + (B.z - A.z) * e;
+    la[k * 2] = a; la[k * 2 + 1] = a * (0.5 + 0.5 * e);
+  }
+  lPos.needsUpdate = true; lAlpha.needsUpdate = true;
+  // the palm's lines: faint whenever the open palm faces us, bright on the palm's beat
+  const face = clamp01((palmN.dot(vD) - 0.2) / 0.4);
+  const pa = lerp(0.26 * st.restA, 1, st.palmHi) * face * (1 - curl) * clamp01(p * 1.5 - 0.5);
+  palmLineStars.material.uniforms.uOpacity.value = pa;
+  palmLineSegs.material.uniforms.uOpacity.value = pa * 0.85;
+  palmLineStars.visible = palmLineSegs.visible = pa > 0.002;
+  collapsePalmLines(cg === 5 ? cl : 0, PCL);
+}
+
+// the band's path: from just above the fingertip, down the finger's own joints, to where a ring sits
+const ringPath = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+const mvRing = new THREE.Matrix4(), nmRing = new THREE.Matrix3();
+const gN = new THREE.Vector3(), gP = new THREE.Vector3(), gH = new THREE.Vector3(), gL = new THREE.Vector3();
+function updateBand(dt) {
+  const disL = st.disT / D_DIS, disP = disL > 0 && disL < 1 ? E.sine(disL) : disL;   // eased, like every collapse
+  const bandVis = st.bandIn > 0.001 && disP < 1;
+  ringGroup.visible = bandVis;
+  if (!bandVis) return;
+  const tip = FR.j[4].pos, dip = FR.j[3].pos, pip = FR.j[2].pos;
+  ringPath[0].copy(tip).sub(dip).normalize().multiplyScalar(0.07).add(tip);
+  ringPath[1].copy(tip); ringPath[2].copy(dip); ringPath[3].copy(pip); ringRestLocal(ringPath[4]);
+  const lens = [0, 0, 0, 0]; let total = 0;
+  for (let k = 0; k < 4; k++) { lens[k] = ringPath[k].distanceTo(ringPath[k + 1]); total += lens[k]; }
+  const sd = st.slide * total;
+  let d = sd, k = 0;
+  while (k < 3 && d > lens[k]) { d -= lens[k]; k++; }
+  const f = lens[k] ? Math.min(1, d / lens[k]) : 0;
+  vA.copy(ringPath[k]).lerp(ringPath[k + 1], f);
+  // the band lies square to whichever bone it is on, easing across each joint
+  FR.dist.getWorldQuaternion(qDist); FR.mid.getWorldQuaternion(qMid); FR.prox.getWorldQuaternion(qProx);
+  const j1 = lens[0] + lens[1], j2 = j1 + lens[2], bl = 0.035;
+  if (sd < j1 - bl) qPath.copy(qDist);
+  else if (sd < j1 + bl) qPath.copy(qDist).slerp(qMid, E.sine((sd - (j1 - bl)) / (2 * bl)));
+  else if (sd < j2 - bl) qPath.copy(qMid);
+  else if (sd < j2 + bl) qPath.copy(qMid).slerp(qProx, E.sine((sd - (j2 - bl)) / (2 * bl)));
+  else qPath.copy(qProx);
+  // it turns around the finger as it goes, a loose band's slight wobble precessing with it; both settle at the base
+  const spinSpeed = (reduceMotion ? 0.6 : 1.7) * lerp(1, 0.2, clamp01(st.tiltW + Math.max(0, disP)));
+  spinA += dt * spinSpeed;
+  const wob = (reduceMotion ? 2.5 : 7.5) * DEG * (1 - 0.75 * st.slide) * (1 - clamp01(disP * 2));
+  wobAxis.set(Math.cos(spinA * 0.9), 0, Math.sin(spinA * 0.9));
+  qWob.setFromAxisAngle(wobAxis, wob);
+  qSpinQ.setFromAxisAngle(AXY, spinA);
+  ringGroup.position.copy(vA);
+  // at the base it turns into Saturn's ring plane, so its light pours straight into the rings
+  ringGroup.quaternion.copy(qPath).multiply(qWob).slerp(planetQuat('saturn', qSatL), st.tiltW).multiply(qSpinQ);
+  const sc = lerp(0.82, 1, E.out(st.bandIn));
+  for (const o of [bandDepth, bandMesh, bandStars, bandLines, bandGlow]) o.scale.setScalar(sc);
+  bandU.uDis.value = st.disT > 0 ? Math.min(1.001, disP) : 1 - st.bandIn;     // assembles at the tip, comes apart at the base
+  const lightA = E.out(st.bandIn) * (1 - clamp01(disP * 1.1));        // its light lasts a little longer than its body
+  bandStars.material.uniforms.uOpacity.value = lightA;
+  bandLines.material.uniforms.uOpacity.value = lightA;
+  bandGlow.material.uniforms.uOpacity.value = lightA * (1 - 0.5 * clamp01(st.tiltW));
+  handInner.updateMatrixWorld(true);
+  // the glint: the point on the metal's crown where the key light's reflection lands
+  mvRing.multiplyMatrices(camera.matrixWorldInverse, ringGroup.matrixWorld);
+  nmRing.getNormalMatrix(mvRing);
+  gL.copy(bandKey.position).sub(camAim.position).normalize();
+  let best = 0, bi = 0, bt = 0;
+  const ro = BAND.ri + BAND.t;
+  for (let i = 0; i < 72; i++) {
+    for (const th of [-0.5, 0, 0.5]) {
+      const ph = (i / 72) * Math.PI * 2, ct = Math.cos(th);
+      gP.set(ro * Math.sin(ph), Math.sin(th) * BAND.w * 0.4, ro * Math.cos(ph)).applyMatrix4(mvRing);
+      gN.set(Math.sin(ph) * ct, Math.sin(th), Math.cos(ph) * ct).applyMatrix3(nmRing).normalize();
+      gH.copy(gP).negate().normalize().add(gL).normalize();
+      const s = gN.z > 0 ? Math.pow(Math.max(0, gN.dot(gH)), 70) : 0;
+      if (s > best) { best = s; bi = i; bt = th; }
+    }
+  }
+  const ph = (bi / 72) * Math.PI * 2;
+  glintPos.array.set([ro * 1.02 * Math.sin(ph), Math.sin(bt) * BAND.w * 0.4, ro * 1.02 * Math.cos(ph)]);
+  glintAlpha.array[0] = 0.9 * best * (0.8 + 0.2 * Math.sin(clock * 7.0)) * E.out(st.bandIn) * (1 - clamp01(disP * 3));
+  glintPos.needsUpdate = true; glintAlpha.needsUpdate = true;
+}
+
+function updatePlanet(dt) {
+  if (PL && (PL.beat !== beat || phase === 'end')) disposePlanet();
+  if (!PL && phase !== 'end' && st.planetA > 0.001) createPlanet(beat);
+  if (!PL) { OCC.uOccA.value = 0; return; }
+  const g = PL.obj.group;
+  planetLocal(PL.beat, g.position);
+  planetQuat(PL.kind, g.quaternion);
+  PL.obj.setReveal(st.reveal);
+  PL.obj.setOpacity(st.planetA);
+  PL.obj.update(dt, clock, camera);
+  if (st.planetA > 0.001) {
+    // the hand's stars behind the planet's disc dim, so it reads as a body in front of the hand
+    vD.copy(g.position); handInner.localToWorld(vD); vD.applyMatrix4(camera.matrixWorldInverse);
+    OCC.uOcc.value.set(vD.x, vD.y, vD.z, PL.obj.radius * g.scale.x);
+    OCC.uOccA.value = st.planetA * clamp01(st.reveal * 1.6 - 0.3);
+  } else OCC.uOccA.value = 0;
+}
+
+function updateGroups() {
+  const fist = 1 - 0.42 * st.fist;          // on the thumb close-up the curled fingers recede so the thumb leads
+  const cg = beatGroup();
+  for (let g = 0; g < 6; g++) { GA[g] = st.restA * (g === 0 ? 1 : g === 5 ? lerp(1, fist, 0.6) : fist); GB[g] = 1 + BACK_GB * st.backW; }
+  if (cg >= 0) {
+    GA[cg] = st.fingerA * lerp(1, 1.2, st.hi) * (cg === 0 ? 1 : cg === 5 ? lerp(1, fist, 0.6) : fist);
+    GB[cg] = 1 + st.hi * (0.5 + 0.12 * Math.sin(clock * 3.1));
+  }
+  GB[0] += 0.2 * st.wThumb * (1 - st.wPlanet);
+}
+
+// ---------- cards ----------
+const tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpN = new THREE.Vector3(), tmpW = new THREE.Vector3();
+const ptrF = { x: 0, y: 0 };
+const floatE = new THREE.Euler();
+let sweepT = -1, dealAt = -99;
+const BONE_TD = BONES.find(b => b.frame === tDist);
+const TIP_R = [BONE_TD.r1, ...FINGERS.map(f => BONES.find(b => b.frame === f.dist).r1)];
+const PALM_CARD = (() => { const x = 0.1 * PALM_W, y = 4.4; return V(x, y, palmHalf(x, y).front + 0.5); })();
+const _ca = new THREE.Vector3();
+function cardAnchorLocal(k, out) {           // the centre of finger k's small card: beyond its tip, along the finger (the palm: over its centre)
+  if (k === 5) return out.copy(PALM_CARD);
+  const tip = TIPS[k].pos, prev = (k === 0 ? T.j[2] : FINGERS[k - 1].j[3]).pos;
+  _ca.copy(tip).sub(prev); _ca.z = 0; _ca.normalize();          // along the finger as seen from the front, at the tip's depth
+  return out.copy(tip).addScaledVector(_ca, TIP_R[k] * 1.15 + FLOAT_GAP + FLOAT_H / 2);
+}
+function liftPose(flip, outP, outQ, lay) {
+  const z = lay.z, par = reduceMotion ? 0.3 : 1, tk = tilt.on ? 1.6 : 1;
+  outP.set(lay.x * TAN * aspect * z, lay.y * TAN * z, -z);
+  q1.setFromAxisAngle(AY, flip);
+  q3.setFromAxisAngle(AX, -pointer.y * 0.18 * par * tk);
+  q2.setFromAxisAngle(AY, pointer.x * 0.22 * par * tk);
+  return outQ.copy(q2).multiply(q3).multiply(q1);
+}
+function floatTarget(k, outP, outQ) {
+  // finger k's small card, found on screen through the hand's camera, then placed at a fixed depth in the card
+  // camera's space at the size the hand's camera would show it
+  cardAnchorLocal(k, tmpW);
+  if (!reduceMotion) tmpW.y += Math.sin(clock * 1.1 + k * 1.3) * 0.011;
+  handBody.localToWorld(tmpW);
+  tmpN.copy(tmpW).applyMatrix4(camera.matrixWorldInverse);
+  const depth = Math.max(0.1, -tmpN.z);
+  tmpN.copy(tmpW).project(camera);
+  const z = LAY.floatZ * (1 + k * 0.012);
+  outP.set(tmpN.x * TAN * aspect * z, tmpN.y * TAN * z, -z);
+  const ph = k * 1.7;
+  floatE.set(reduceMotion ? 0 : Math.sin(clock * 0.7 + ph) * 0.05, reduceMotion ? 0 : Math.sin(clock * 0.5 + ph) * 0.14, reduceMotion ? 0 : Math.sin(clock * 0.9 + ph) * 0.03);
+  outQ.setFromEuler(floatE);
+  return FLOAT_H * handBody.scale.x * z / (depth * CH);   // at the hand's scale (behind the deck it is drawn back)
+}
+function setCardAlpha(c, a) {
+  if (Math.abs(c.alpha - a) < 0.002) return;
+  c.alpha = a;
+  for (const m of [c.front.material, c.back.material, c.edge.material]) if (m !== blankFaceMat && m !== backMat && m !== edgeMat) m.opacity = a;
+}
+function cardKeepOut(p, sc) {
+  // 0..1: how far a small card at p (card camera) has gone under the beat's header text (half under: 1, times the
+  // header's opacity) or out past the screen's edge (half out: 1). As the camera dollies in on a finger, a neighbour's
+  // card that rises into the header or leaves the frame fades there, instead of sitting on the text or cut off by the edge
+  const hp = H / (2 * TAN * Math.max(0.1, -p.z));             // px per unit at the card's depth
+  const cx = W / 2 + p.x * hp, cy = H / 2 - p.y * hp, hw = sc * CW / 2 * hp + 2, hh = sc * CH / 2 * hp + 2;
+  let cov = Math.max(Math.max(0, hw - cx, cx + hw - W) / hw, Math.max(0, hh - cy, cy + hh - H) / hh);
+  if (st.head > 0.01) {
+    if (!headBoxes) headBoxes = [...headEl.children].map(n => n.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0).map(r => [r.left, r.top, r.right, r.bottom]);
+    for (const [l, t, r, b] of headBoxes) if (cx + hw > l && cx - hw < r) cov = Math.max(cov, clamp01((Math.min(cy + hh, b + 4) - Math.max(cy - hh, t)) / hh) * st.head);
+  }
+  return clamp01(cov);
+}
+function updatePlaced(c) {
+  const a0 = clamp01(st.placedA);
+  if (a0 <= 0.003) { c.grp.visible = false; return false; }
+  const sc = floatTarget(c.finger, tmpP, tmpQ);
+  const a = a0 * (1 - E.sine(cardKeepOut(tmpP, sc)));
+  if (a <= 0.003) { c.grp.visible = false; return false; }
+  c.grp.visible = true;
+  c.grp.position.copy(tmpP); c.grp.quaternion.copy(tmpQ); c.grp.scale.setScalar(sc);
+  setCardAlpha(c, a);
+  return true;
+}
+function updatePicked(c, dt) {
+  c.grp.visible = true;
+  const lay = beat === 0 ? LAY.liftT : LAY.lift;
+  if (phase === 'pick' || phase === 'read') {
+    if (!drag || !drag.flipping) {                // the deck's flip spring
+      const k = 90, dd = 2 * Math.sqrt(k) * 0.82;
+      c.flipVel += ((c.flipTarget - c.flip) * k - c.flipVel * dd) * dt;
+      c.flip += c.flipVel * dt;
+    }
+    liftPose(c.flip, tmpP, tmpQ, lay);
+    const rise = beat === 0 && PK.t < 2.5;         // the thumb's card rises from below, slower
+    c.grp.position.lerp(tmpP, damp(rise ? 3.6 : reduceMotion ? 12 : 8, dt));
+    c.grp.quaternion.slerp(tmpQ, damp(rise ? 4 : 10, dt));
+    c.grp.scale.setScalar(1);
+  } else {
+    const sc = floatTarget(beat, tmpP, tmpQ), w = st.floatW;
+    // it shrinks ahead of the move, so the big card never sweeps across the screen on its way to the finger
+    c.grp.position.lerpVectors(PK.fromP, tmpP, w);
+    c.grp.position.y += Math.sin(Math.PI * w) * (reduceMotion ? 0 : 0.08);
+    c.grp.quaternion.slerpQuaternions(PK.fromQ, tmpQ, w);
+    c.grp.scale.setScalar(lerp(1, sc, E.out(clamp01(w * 1.35))));
+  }
+}
+function deal() {
+  // the cards left in the sealed order, dealt up into the fan from below the screen
+  fan = cards.filter(c => c.id < DECK_N && c.state !== 'placed').slice(0, pool.length);
+  fan.forEach((c, s) => {
+    c.pos = s; c.state = 'fan'; c.grp.visible = true; c.lift = 0; c.ret = 0; c.grp.scale.setScalar(1);
+    c.flip = c.flipTarget = Math.PI; c.flipVel = 0; resetFace(c);
+    fanPose(s, c.grp.position, c.grp.quaternion, ptrF, 0, 0);
+    tmpN.set(0, reduceMotion ? -0.5 : -4.2, 0.6).applyQuaternion(fanRoot.quaternion);
+    c.grp.position.add(tmpN);
+  });
+  dealAt = clock;
+}
+function snapFan() {                               // debug jumps: put every card in the fan at once
+  if (!fan.length && pool && beat >= 1) deal();
+  for (const c of fan) {
+    if (c.state !== 'fan') continue;
+    c.grp.visible = true; c.lift = 0; c.ret = 0; c.grp.scale.setScalar(1);
+    fanPose(c.pos, c.grp.position, c.grp.quaternion, { x: 0, y: 0 }, 0, 0);
+  }
+  dealAt = -99;
+}
+function updateCards(dt, par) {
+  ptrF.x = pointer.x * par; ptrF.y = pointer.y * par;
+  cardKey.position.set(ptrF.x * 3.2, 1.4 + ptrF.y * 2.2, 3.2);          // the deck's key light follows the pointer
+  const deckUp = beat >= 1 && pool && ((phase === 'in' && tIn >= timelineIn(beat).deal) || phase === 'choose' || phase === 'pick' || phase === 'read');
+  if (deckUp && !fan.length) deal();
+  const held = phase === 'pick' || phase === 'read' || phase === 'out';
+  let any = false;
+  for (const c of cards) {
+    if (c.state === 'placed') { if (updatePlaced(c)) any = true; continue; }
+    if (held && c === PK.obj) { updatePicked(c, dt); any = true; continue; }
+    if (c.state === 'leaving') {
+      // the rest of the fan withdraws together, down and out of frame, as one rigid body: no card moves relative to
+      // another, so none can pass through another on the way out
+      const k = clamp01((clock - c.leaveAt) / (reduceMotion ? 0.5 : 1.0));
+      const bob = reduceMotion ? 0 : Math.sin(clock * 0.9 + c.pos * 0.5) * 0.03;
+      fanPose(c.pos, tmpP, tmpQ, ptrF, 0, bob);
+      tmpN.set(0, (reduceMotion ? -1.6 : -6.5) * E.inOut(k), 0).applyQuaternion(fanRoot.quaternion);
+      c.grp.position.copy(tmpP.add(tmpN)); c.grp.quaternion.copy(tmpQ);
+      if (k >= 1) { c.grp.visible = false; c.state = 'off'; }
+      if (c.grp.visible) any = true;
+      continue;
+    }
+    if (c.state !== 'fan') continue;
+    any = true;
+    const s = c.pos;
+    if (clock - dealAt < s * 0.035 * MB) continue;
+    c.lift += ((s === PK.hovered && phase === 'choose' ? 1 : 0) - c.lift) * damp(10, dt);
+    c.ret = Math.max(0, c.ret - dt * 1.5);
+    const bob = reduceMotion ? 0 : Math.sin(clock * 0.9 + s * 0.5) * 0.03;
+    fanPose(s, tmpP, tmpQ, ptrF, c.lift, bob);
+    c.grp.position.lerp(tmpP, damp(7, dt));
+    c.grp.quaternion.slerp(tmpQ, damp(8, dt));
+  }
+  // a light sweeps across the card as it lands face up (deck)
+  if (sweepT >= 0) {
+    sweepT += dt;
+    const lay = beat === 0 ? LAY.liftT : LAY.lift;
+    const p = Math.min(1, sweepT / 0.55), z = lay.z;
+    sweep.position.set(lay.x * TAN * aspect * z - 1.1 + 2.2 * p, lay.y * TAN * z + 0.6 - 1.2 * p, -z + 0.55);
+    sweep.intensity = Math.sin(p * Math.PI) * 6;
+    if (p >= 1) { sweepT = -1; sweep.intensity = 0; }
+  }
+  return any;
+}
+// A card on its way up out of the fan, on its way back into it, and the chosen one are drawn after the rest, each in its
+// own pass with the depth cleared, so it shows on top as it moves instead of cutting through the neighbours it passes
+// (the deck's lift moves it outward through their layers; at rest and fully lifted the fan is clash-free either way).
+const topCards = [];
+const topRank = c => (c === PK.obj ? 1e3 : c.ret > 0.02 ? 200 + c.ret : c.pos === PK.hovered ? 100 + c.lift : c.lift);
+function renderCards() {
+  topCards.length = 0;
+  const held = phase === 'pick' || phase === 'read' || phase === 'out';
+  for (const c of cards) {
+    if (!c.grp.visible) continue;
+    if ((held && c === PK.obj) || (c.state === 'fan' && (c.lift > 0.1 || c.ret > 0.02))) topCards.push(c);
+  }
+  topCards.sort((a, b) => topRank(a) - topRank(b));
+  for (const c of topCards) c.grp.visible = false;
+  renderer.clearDepth(); renderer.render(cardScene, cardCam);
+  if (!topCards.length) return;
+  const shown = cards.filter(c => c.grp.visible);
+  for (const c of shown) c.grp.visible = false;
+  for (const c of topCards) {
+    c.grp.visible = true;
+    renderer.clearDepth(); renderer.render(cardScene, cardCam);
+    c.grp.visible = false;
+  }
+  for (const c of shown) c.grp.visible = true;
+  for (const c of topCards) c.grp.visible = true;
+}
+
+/* ---------- loop ---------- */
+let last = performance.now(), clock = 0, frames = 0;
+const holdSeq = qs.has('hold');
+window.__frames = 0;
+function damp(k, dt) { return 1 - Math.exp(-k * dt); }
+const pickWanted = () => { const raw = qs.get('pick'); const n = raw === null || raw === '' ? NaN : Number(raw); return Number.isInteger(n) && n >= 0 && n < fan.length ? n : Math.floor(fan.length / 2); };
+
+function frame(now) {
+  const rdt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = freeze ? 0 : rdt;
+  const sdt = holdSeq ? 0 : dt;                  // ?hold: the sequence's clocks stop, everything else lives (for screenshots)
+  clock += rdt; U.uTime.value = clock;
+  const par = reduceMotion ? 0.3 : 1;
+  pointer.x += (pointer.tx - pointer.x) * damp(5, rdt);
+  pointer.y += (pointer.ty - pointer.y) * damp(5, rdt);
+
+  if (debugPose) {
+    Object.assign(st, debugPose.st);
+    st.pose.set(debugPose.pose);
+  } else if (phase === 'A') {
+    tA += sdt;
+    if (tA >= TA.sheet) { evalA(Math.min(tA, TA.end)); enterAwait(); } else evalA(tA);
+  } else if (phase === 'await') {
+    tA = Math.min(TA.end, tA + sdt);
+    evalA(tA);
+    if (PK.autoRevealAt > 0 && clock >= PK.autoRevealAt) { PK.autoRevealAt = -1; reveal(); }
+  } else if (phase === 'in') {
+    tIn += sdt;
+    const T = timelineIn(beat);
+    if (tIn >= T.end) { tIn = T.end; evalIn(beat, tIn); enterChoose(); } else evalIn(beat, tIn);
+  } else if (phase === 'choose') {
+    evalHold(beat);
+    if (PK.autoPickAt > 0 && clock >= PK.autoPickAt) { PK.autoPickAt = -1; choose(pickWanted()); }
+  } else if (phase === 'pick' || phase === 'read') {
+    evalHold(beat); PK.t += dt; evalPick(); checkPick();
+  } else if (phase === 'out') {
+    tOut += sdt;
+    const O = beat === 0 ? TO0 : TO;
+    if (tOut >= O.end) { tOut = O.end; evalOut(beat, tOut); finishBeat(); } else evalOut(beat, tOut);
+  } else {
+    evalHome();
+  }
+
+  // gentle idle life in the fingers once the hand exists
+  const life = clamp01(st.formT / TA.form[1] - 0.9) * (reduceMotion ? 0.35 : 1);
+  for (let k = 0; k < NP; k++) idlePose[k] = st.pose[k];
+  for (let f = 0; f < 4; f++) idlePose[6 + f * 4] += Math.sin(clock * 0.7 + f * 1.3) * 1.3 * DEG * life;
+  idlePose[3] += Math.sin(clock * 0.55 + 2.0) * 1.2 * DEG * life;
+  applyPose(idlePose);
+  updateCurl(idlePose);
+
+  handRoot.rotation.set(st.pitch - pointer.y * 0.08 * par, st.yaw + pointer.x * 0.13 * par, st.roll);
+  handRoot.position.set(0, Math.sin(clock * 0.6) * 0.014 * life, 0);
+  handRoot.updateMatrixWorld(true);
+  updateBody();
+  eBase.set(st.pitch, st.yaw, st.roll, 'YXZ'); qBase.setFromEuler(eBase); qBaseInv.copy(qBase).invert();
+
+  updateCamera(par);
+  updateGroups();
+  updateHandPoints();
+  updateLines();
+  updateBand(dt);
+  updatePlanet(dt);
+
+  skyNear.position.set(pointer.x * 0.22 * par, pointer.y * 0.14 * par, 0);
+  skyMid.position.set(pointer.x * 0.06 * par, pointer.y * 0.04 * par, 0);
+  skyFar.rotation.z = clock * 0.0025;
+  bgMat.uniforms.uPar.value.set(pointer.x * par, pointer.y * par);
+  const skyA = 0.25 + 0.75 * st.starsIn;
+  for (const lay of [skyFar, skyMid, skyNear, skyConst]) for (const c of lay.children) if (c.material && c.material.uniforms) c.material.uniforms.uOpacity.value = skyA;
+
+  const cardsOn = updateCards(dt, par);
+  setCaption(st.cap);
+  headEl.style.opacity = st.head.toFixed(3);
+  // the lifted card covers the line under the title (the page's text would otherwise sit on top of the card)
+  let covered = false;
+  if ((phase === 'pick' || phase === 'read') && PK.obj) {
+    const r = liftRect(beat === 0 ? LAY.liftT : LAY.lift), l = hdLine.getBoundingClientRect();
+    covered = r.left < l.right && r.right > l.left && r.top < l.bottom && r.bottom > l.top;
+  }
+  if (covered !== headEl.classList.contains('covered')) headEl.classList.toggle('covered', covered);
+  const thumbCap = LAY.short && beat === 0 && (phase === 'pick' || phase === 'read' || phase === 'out');
+  if (thumbCap !== document.documentElement.classList.contains('thumbcap')) document.documentElement.classList.toggle('thumbcap', thumbCap);
+  // the arithmetic sits under the thumb card's name from the moment the card is turned until we move on
+  const mathOn = beat === 0 && (phase === 'read' || phase === 'out') && mathEl.childNodes.length > 0;
+  if (mathEl.hidden === mathOn) mathEl.hidden = !mathOn;
+  mathEl.style.opacity = st.math.toFixed(3);
+
+  renderer.clear();
+  renderer.render(scene, camera);
+  if (cardsOn) renderCards();
+  window.__frames = ++frames;
+  requestAnimationFrame(frame);
+}
+
+/* ---------- boot ---------- */
+addEventListener('resize', resize);
+resize();
+{
+  // aim THUMB so the thumb's first bone stands straight up on screen at the end yaw (the roll turns the hand in its
+  // own plane before the yaw, so the roll that does it depends on the yaw): scan for it
+  applyPose(POSES.thumb);
+  const d = vA.copy(T.j[2].pos).sub(T.j[1].pos).normalize();
+  const ey = qs.has('endyaw') ? Number(qs.get('endyaw')) * DEG : END_YAW;
+  const yawT = Number.isFinite(ey) ? ey : END_YAW, eu = new THREE.Euler(0, 0, 0, 'YXZ'), w = new THREE.Vector3();
+  let rollT = 0, best = 1e9;
+  for (let r = -Math.PI; r < Math.PI; r += 0.25 * DEG) {
+    w.copy(d).applyEuler(eu.set(-0.06, yawT, r));
+    if (w.y > 0 && Math.abs(w.x) < best) { best = Math.abs(w.x); rollT = r; }
+  }
+  ROT_T = { yaw: yawT, pitch: -0.06, roll: rollT, roll2: rollT - ROLL_LEAN };
+  // measure the thumbs-up as the close-up camera sees it, so resize() can fit it to any screen
+  handRoot.rotation.set(ROT_T.pitch, ROT_T.yaw, ROT_T.roll); handRoot.position.set(0, 0, 0);
+  handRoot.updateMatrixWorld(true);
+  const focus = handInner.localToWorld(thumbFocusLocal(new THREE.Vector3())), d0 = 3;
+  camera.position.copy(focus).addScaledVector(VIEW_T, d0); camera.lookAt(focus); camera.updateMatrixWorld();
+  const p = new THREE.Vector3(), q = new THREE.Vector3(), ext = { up: 0, down: 0, left: 0, right: 0 };
+  const take = v => {
+    p.copy(v); handInner.localToWorld(p); p.applyMatrix4(camera.matrixWorldInverse);
+    const u = p.x / -p.z * d0, w = p.y / -p.z * d0;
+    ext.up = Math.max(ext.up, w); ext.down = Math.max(ext.down, -w); ext.left = Math.max(ext.left, -u); ext.right = Math.max(ext.right, u);
+  };
+  // photo 3: the close-up frames the thumb (its two bones and where it leaves the palm), not the whole fist; the
+  // curled index finger is left to show at the lower left
+  [T.j[1], T.j[2], T.j[3]].forEach(j => take(j.pos));
+  HOME.fistPts = [];
+  { const g = (v, gr, kind) => { const w = handInner.localToWorld(v.clone()); HOME.fistPts.push({ x: w.x, y: w.y, g: gr, kind }); };
+    joints.forEach(j => g(j.pos, j.group, j.kind)); dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) g(dustTarget(dd, q), dd.group, 'dust'); });
+    HOME.sunP = handInner.localToWorld(planetLocal(0, new THREE.Vector3())); }
+  dust.forEach(dd => { if (!dd.stat && dd.group === 0 && (BONES[dd.bone].a !== T.j[0] || dd.t > 0.45)) take(dustTarget(dd, q)); });
+  for (const k in ext) FIG[k] = ext[k] * 1.06;
+  // the open hand, palm to us, with its six small cards, as the home shot sees it (world units around the pivot)
+  applyPose(POSES.open);
+  handRoot.rotation.set(-0.04, 0, 0); handRoot.updateMatrixWorld(true);
+  // (kept as points with their depth: what reaches toward the camera, like the open thumb, looks bigger)
+  HOME.pts = [];
+  const grab = (v, hx = 0, hy = 0) => { p.copy(v); handInner.localToWorld(p); HOME.pts.push([p.x, p.y, p.z, hx, hy]); };
+  joints.forEach(j => grab(j.pos));
+  dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) grab(dustTarget(dd, q)); });
+  for (let k = 0; k < 6; k++) grab(cardAnchorLocal(k, new THREE.Vector3()), FLOAT_H * CW / CH / 2 + 0.012, FLOAT_H / 2 + 0.02);
+  HOME.P = Array.from({ length: 6 }, (_, b) => handInner.localToWorld(planetLocal(b, new THREE.Vector3())));
+  HOME.bodyPts = [];                                  // the open hand's stars, for BODY_K (world, with their group)
+  joints.forEach(j => { p.copy(j.pos); handInner.localToWorld(p); HOME.bodyPts.push({ x: p.x, y: p.y, g: j.group, kind: j.kind }); });
+  dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) { dustTarget(dd, p); handInner.localToWorld(p); HOME.bodyPts.push({ x: p.x, y: p.y, g: dd.group, kind: 'dust' }); } });
+  // ...and the corners of each finger's small card (group = its finger), which stay above their fingers behind the deck
+  for (let k = 0; k < 6; k++) {
+    cardAnchorLocal(k, p); handInner.localToWorld(p);
+    const hx = FLOAT_H * CW / CH / 2 + 0.012, hy = FLOAT_H / 2 + 0.02;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) HOME.bodyPts.push({ x: p.x + sx * hx, y: p.y + sy * hy, g: k, kind: 'card' });
+  }
+  // each beat's subject length, for the dolly in
+  FLEN[0] = T.j[1].pos.distanceTo(T.j[3].pos);
+  FINGERS.forEach((f, k) => { FLEN[k + 1] = f.j[1].pos.distanceTo(f.j[4].pos) + (k === 2 ? 0.08 : 0); });
+  FLEN[5] = 0.95;
+  resize();
+}
+prepareFormation();
+setHead(0);
+setPhase('A');
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => resize());
+
+// debug hooks (harmless in production): ?t=seconds into the intro; ?beat=thumb|index|middle|ring|pinky|palm|end
+// (every earlier beat is completed at once, choosing the middle position), ?in=seconds into that beat; ?pick[=position]
+// chooses by itself (and Reveals on the sheet), ?flip turns the card, ?cont moves on, ?auto does all of it for every
+// beat; ?freeze; ?pose=open|one|thumb[&yaw=&pitch=&roll=(degrees)&view=thumb]; ?endyaw=degrees (the thumbs-up's turn);
+// ?lean=degrees (the thumb's lean at the end of turn 2); ?handk=0 (the hand stays full size behind the deck), ?bpk=
+// (how its stars shrink with it), ?lb= / ?gb= (its lines' and stars' lift behind the deck)
+if (qs.has('pose') && POSES[qs.get('pose')]) {
+  const n = k => (qs.has(k) ? Number(qs.get(k)) * DEG : null);
+  const thumbView = qs.get('view') === 'thumb';
+  debugPose = {
+    pose: POSES[qs.get('pose')],
+    st: {
+      starsIn: 1, formT: 1e4, lines: 1, yaw: n('yaw') ?? 0, pitch: n('pitch') ?? 0, roll: n('roll') ?? 0, dolly: 1, arcX: 0,
+      wThumb: thumbView ? 1 : 0, wHome: 0, wFinger: 0, wPlanet: 0, fist: thumbView ? 1 : 0, head: 0, cap: '', math: 0,
+      hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, placedA: 0, floatW: 0,
+    },
+  };
+  skipBtn.hidden = true;
+}
+function placeInstant(b) {
+  let c, major;
+  if (b === 0) { c = thumbCardObj; major = result.thumb; }
+  else { const s = Math.floor(pool.length / 2); major = pool[s]; pool.splice(s, 1); c = cards.find(o => o.id < DECK_N && o.state === 'off'); }
+  c.state = 'placed'; c.finger = b; c.major = major; c.grp.visible = true; c.alpha = -1;
+  ownMaterials(c);
+  prepareFace(c, major);
+}
+function jumpBeat(b, t = 0) {
+  restartQuiet();
+  if (b <= 0) { setPhase('A'); tA = TA.end; return; }   // the sheet, with the Sun formed
+  computeThumb(readInputs());
+  for (let k = 0; k < Math.min(b, 6); k++) placeInstant(k);
+  if (b >= 6) { beat = 5; setPhase('end'); return; }
+  enterIn(b);
+  tIn = Math.max(0, Math.min(timelineIn(b).end, t));
+}
+{
+  const BK = BEATS.map(x => x.key).concat('end');
+  if (qs.has('beat') && BK.includes(qs.get('beat'))) jumpBeat(BK.indexOf(qs.get('beat')), Number(qs.get('in')) || 0);
+  else if (qs.has('t')) tA = Math.min(TA.end, Number(qs.get('t')) || 0);   // (past TA.sheet: the sheet)
+}
+window.__seq = {
+  get phase() { return phase; }, get beat() { return beat; }, phases: PHASES, beats: BEATS.map(x => x.key),
+  get tA() { return tA; }, get tIn() { return tIn; }, get tOut() { return tOut; }, TA, TI, TR, TO, TO0, st,
+  jumpA(t) { restartQuiet(); setPhase('A'); tA = t; }, jump: jumpBeat, setIn(t) { tIn = t; }, setOut(t) { tOut = t; },
+  reveal() { if (phase !== 'await') { restartQuiet(); setPhase('await'); tA = TA.end; } reveal(); }, restart,
+  pick(i) {
+    if (phase === 'in') { tIn = timelineIn(beat).end; evalIn(beat, tIn); enterChoose(); PK.autoPickAt = -1; }
+    if (phase !== 'choose') return null;
+    snapFan();
+    choose(i ?? Math.floor(fan.length / 2));
+    return { slot: PK.slot, card: PK.card };
+  },
+  flip() { flipToFace(); }, back() { returnToDeck(); }, cont() { PK.revealAt = Math.min(PK.revealAt, clock - 1); continueBeat(); },
+  get sealed() { return sealed ? [...sealed] : null; },
+  get pool() { return pool ? [...pool] : null; },
+  get picked() { return { slot: PK.slot, card: PK.card, name: PK.card >= 0 ? MAJORS[PK.card].join(' · ') : null, revealed: PK.revealed, hovered: PK.hovered, beat }; },
+  placed() {
+    return cards.filter(c => c.state === 'placed').sort((a, b) => a.finger - b.finger).map(c => {
+      const v = new THREE.Vector3().copy(c.grp.position).project(cardCam);
+      return { finger: BEATS[c.finger].key, card: c.major, name: MAJORS[c.major].join(' · '), visible: c.grp.visible, x: Math.round((v.x * 0.5 + 0.5) * W), y: Math.round((-v.y * 0.5 + 0.5) * H), hPx: Math.round(c.grp.scale.x * CH / (2 * TAN * -c.grp.position.z) * H) };
+    });
+  },
+  slotAt, backColors, DEFAULT_BACK,
+  fan: () => ({ N: fan.length, fanR: FAN.fanR, maxA: FAN.maxA, TWIST, STEP, LIFT_OUT, Df: FAN.Df, camInFan: [0, 0.25, FAN.Df], ndc: [FAN.nx, FAN.ny], layout: { ...LAY } }),
+  // every slot must be reachable: screen points (on a grid) whose topmost card is that slot, and one sample point each
+  fanReach(step = 3) {
+    const N = fan.length, counts = new Array(N).fill(0), pts = Array.from({ length: N }, () => []);
+    for (let y = Math.max(0, LAY.fanTop - 40); y < Math.min(H, LAY.fanBottom + 10); y += step)
+      for (let x = 2; x < W - 2; x += step) { const s = slotAt(x, y); if (s >= 0) { counts[s]++; pts[s].push([x, y]); } }
+    return { counts, pts: pts.map(p => (p.length ? p[Math.floor(p.length / 2)] : null)) };
+  },
+  sizes: () => ({ PLANET_R, R_FINGER, R_SAT, RING_OUT, band: { ...BAND }, fingerBaseWidth: 2 * BONE_RP.r0, planet: Object.fromEntries(PLANET_KIND.map(k => [k, +(PLANET_SIZE[k] * PLANET_R).toFixed(4)])) }),
+  // on screen, in px: the current planet's centre, body diameter and drawn extent
+  planetPx() {
+    if (!PL) return null;
+    const c = new THREE.Vector3().copy(PL.obj.group.position); handInner.localToWorld(c);
+    const v = c.clone().applyMatrix4(camera.matrixWorldInverse); c.project(camera);
+    const ppu = H / (2 * TAN * -v.z);
+    const sc = PL.obj.group.scale.x;
+    return { kind: PL.kind, x: Math.round((c.x * 0.5 + 0.5) * W), y: Math.round((-c.y * 0.5 + 0.5) * H), body: +(2 * PL.obj.radius * sc * ppu).toFixed(1), extent: +(2 * (PL.obj.extent || PL.obj.radius) * sc * ppu).toFixed(1), planetA: +st.planetA.toFixed(3), reveal: +st.reveal.toFixed(3), camDist: +(-v.z).toFixed(3) };
+  },
+  tags() {
+    const r = headEl.getBoundingClientRect(), box = n => { const b = n.getBoundingClientRect(); return { left: Math.round(b.left), right: Math.round(b.right), top: Math.round(b.top), bottom: Math.round(b.bottom) }; };
+    return { head: { opacity: +headEl.style.opacity || 0, text: headEl.innerText.replace(/\s+/g, ' ').trim(), rect: box(headEl), title: box(hdTitle), line: box(hdLine), centre: Math.round((r.left + r.right) / 2) }, caption: capShown, captionText: captionP.textContent, captionOn: captionP.classList.contains('on'), math: mathEl.hidden ? '' : mathEl.innerText.replace(/\s+/g, ' ').trim(), hint: hintEl.textContent };
+  },
+  joints: () => joints.map(j => j.pos.toArray().map(v => +v.toFixed(4))),
+  fk(poseDeg) { applyPose(Float32Array.from(poseDeg, x => x * DEG)); return joints.map(j => j.pos.toArray().map(v => +(v / CM).toFixed(3))); },
+  setDebugPose(p, s) { debugPose = { pose: Float32Array.from(p, x => x * DEG), st: Object.assign({}, debugPose ? debugPose.st : {}, s) }; },
+  anchors() {            // each finger's small-card anchor: world position and screen px (layout tests)
+    return Array.from({ length: 6 }, (_, k) => {
+      const v = cardAnchorLocal(k, new THREE.Vector3()); handBody.localToWorld(v);
+      const w = v.clone(); v.project(camera);
+      return { k, world: w.toArray().map(x => +x.toFixed(3)), px: [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)] };
+    });
+  },
+  thumbCheck, get ROT_T() { return { ...ROT_T }; },
+  FIG, HOME, FLEN, framing, LAY, SHOT, BODY_K,
+  // screen-space [x, y, alpha, kind, group] for every visible hand star, plus the planet's centre (layout tests)
+  project() {
+    const out = [], u = new THREE.Vector3();
+    const add = (x, y, z, obj, a, kind, g = -1) => {
+      u.set(x, y, z); obj.localToWorld(u); u.project(camera);
+      if (u.z > -1 && u.z < 1 && a > 0.001) out.push([Math.round((u.x * 0.5 + 0.5) * W), Math.round((-u.y * 0.5 + 0.5) * H), +a.toFixed(3), kind, g]);
+    };
+    const jp = jPos.array, ja = jAlpha.array, dp = dPos.array, da = dAlpha.array;
+    for (let i = 0; i < NJ; i++) add(jp[i * 3], jp[i * 3 + 1], jp[i * 3 + 2], handBody, ja[i] * GA[joints[i].group], 'j', joints[i].group);
+    for (let i = 0; i < ND; i++) add(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2], handBody, da[i] * GA[dust[i].group], dust[i].arm ? 'arm' : 'd', dust[i].group);
+    if (PL && PL.obj.group.visible) add(0, 0, 0, PL.obj.group, st.planetA, PL.kind);
+    return out;
+  },
+};
+requestAnimationFrame(frame);
+</script>
+</body></html>
