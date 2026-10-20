@@ -3209,6 +3209,28 @@ prepareFormation();
 setHead(0);
 setPhase('A');
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => resize());
+// v7: compile every shader the run will need now, while the sky is only twinkling, so none stalls a frame later on (on
+// first use they cost a dropped frame or two on a laptop, more on a phone): the planets' (first needed as the Sun's
+// header comes in and the thumb's stars start to stream), the cards' (as the thumb's card rises, and as each card is
+// placed), the band's. The warm-up objects stay, hidden: disposing them would free the compiled programs.
+function warmShaders() {
+  try {
+    const warm = makePlanet(THREE, 'mercury', PLANET_R, {});
+    warm.setOpacity(1); handInner.add(warm.group);
+    ringGroup.visible = true;
+    const faceO = new THREE.MeshStandardMaterial({ map: backColorTex, roughness: 0.6, metalness: 0 });
+    const faceT = faceO.clone(); faceT.transparent = true;
+    const backT = backMat.clone(); backT.transparent = true;
+    const edgeT = edgeMat.clone(); edgeT.transparent = true;
+    const g = new THREE.Group();
+    for (const m of [backMat, edgeMat, blankFaceMat, faceO, faceT, backT, edgeT]) { const k = new THREE.Mesh(faceGeo, m); k.position.z = -5; g.add(k); }
+    cardScene.add(g);
+    renderer.compile(scene, camera);
+    renderer.compile(cardScene, cardCam);
+    warm.setOpacity(0); ringGroup.visible = false; g.visible = false;
+  } catch (e) { ringGroup.visible = false; }
+}
+warmShaders();
 
 // debug hooks (harmless in production): ?t=seconds into the intro; ?beat=thumb|index|middle|ring|pinky|palm|end
 // (every earlier beat is completed at once, choosing the middle position), ?in=seconds into that beat; ?pick[=position]
