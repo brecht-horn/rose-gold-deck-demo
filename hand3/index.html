@@ -1831,18 +1831,23 @@ function resize() {
   // ---- behind the deck: how far the open hand draws back around each finger's planet to be seen whole (BODY_K) ----
   for (let b = 0; b <= 4; b++) {
     const S = SHOT[b], mx = (1 + S.sxP) / 2 * W, my = (1 - S.syP) / 2 * H, P = b === 0 ? HOME.sunP : HOME.P && HOME.P[b];
-    const pts = b === 0 ? HOME.fistPts : HOME.pts;      // the thumb's beat: the thumbs-up, around the Sun
-    let k = 1;
+    const pts = b === 0 ? HOME.fistPts : HOME.bodyPts;  // the thumb's beat: the thumbs-up, around the Sun
+    let k = 0.5;
     if (BODY_ON && P && pts) {
-      const top = LAY.top + S.headH + 6, bot = H - LAY.bottom - 4;
-      for (const [x, y, , hx, hy] of pts) {
-        if (hx) continue;                                 // the small cards' boxes are not part of the hand
+      // the fingertips may rise behind the header's line but not its title; the knuckles stay above the fan, so fingers
+      // and palm read as a hand; the side edges may crop the thumb and the hand's outer edge a little (the thumbs-up:
+      // all of it in view). The beat's own finger is inside the planet, so it does not count.
+      const top = b === 0 ? LAY.top + S.headH + 6 : LAY.top + LAY.titleBottom + 8, low = b === 0 || LAY.short ? H - LAY.bottom - 4 : LAY.fanTop - 4;
+      const x0 = b === 0 ? 14 : -0.04 * W, x1 = b === 0 ? W - 14 : 1.04 * W;
+      for (const { x, y, g, kind } of pts) {
+        if (b > 0 && g === b) continue;
         const dx = (x - P.x) * S.ppuP, dy = (y - P.y) * S.ppuP;
-        if (dx > 0) k = Math.min(k, (W - 14 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - 14) / -dx);
-        if (dy > 0) k = Math.min(k, (my - top) / dy); else if (dy < 0) k = Math.min(k, (bot - my) / -dy);
+        if (b === 0 || g !== 0) { if (dx > 0) k = Math.min(k, (x1 - mx) / dx); else if (dx < 0) k = Math.min(k, (mx - x0) / -dx); }
+        if (dy > 0) k = Math.min(k, (my - top) / dy);
+        else if (dy < 0 && (b === 0 || (kind === 'knuckle' && g > 0))) k = Math.min(k, (low - my) / -dy);
       }
     }
-    BODY_K[b] = Math.max(0.2, Math.min(1, k));
+    BODY_K[b] = Math.max(0.2, k);
   }
   buildConstellations();
 }
@@ -3033,8 +3038,8 @@ resize();
   // curled index finger is left to show at the lower left
   [T.j[1], T.j[2], T.j[3]].forEach(j => take(j.pos));
   HOME.fistPts = [];
-  { const g = v => { const w = handInner.localToWorld(v.clone()); HOME.fistPts.push([w.x, w.y, w.z, 0, 0]); };
-    joints.forEach(j => g(j.pos)); dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) g(dustTarget(dd, q)); });
+  { const g = (v, gr, kind) => { const w = handInner.localToWorld(v.clone()); HOME.fistPts.push({ x: w.x, y: w.y, g: gr, kind }); };
+    joints.forEach(j => g(j.pos, j.group, j.kind)); dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) g(dustTarget(dd, q), dd.group, 'dust'); });
     HOME.sunP = handInner.localToWorld(planetLocal(0, new THREE.Vector3())); }
   dust.forEach(dd => { if (!dd.stat && dd.group === 0 && (BONES[dd.bone].a !== T.j[0] || dd.t > 0.45)) take(dustTarget(dd, q)); });
   for (const k in ext) FIG[k] = ext[k] * 1.06;
@@ -3048,6 +3053,9 @@ resize();
   dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) grab(dustTarget(dd, q)); });
   for (let k = 0; k < 6; k++) grab(cardAnchorLocal(k, new THREE.Vector3()), FLOAT_H * CW / CH / 2 + 0.012, FLOAT_H / 2 + 0.02);
   HOME.P = Array.from({ length: 6 }, (_, b) => handInner.localToWorld(planetLocal(b, new THREE.Vector3())));
+  HOME.bodyPts = [];                                  // the open hand's stars, for BODY_K (world, with their group)
+  joints.forEach(j => { p.copy(j.pos); handInner.localToWorld(p); HOME.bodyPts.push({ x: p.x, y: p.y, g: j.group, kind: j.kind }); });
+  dust.forEach((dd, i) => { if (!dd.arm && i % 2 === 0) { dustTarget(dd, p); handInner.localToWorld(p); HOME.bodyPts.push({ x: p.x, y: p.y, g: dd.group, kind: 'dust' }); } });
   // each beat's subject length, for the dolly in
   FLEN[0] = T.j[1].pos.distanceTo(T.j[3].pos);
   FINGERS.forEach((f, k) => { FLEN[k + 1] = f.j[1].pos.distanceTo(f.j[4].pos) + (k === 2 ? 0.08 : 0); });
