@@ -2061,7 +2061,8 @@ function evalOut(b, t) {                            // the card is read: back ou
   st.cap = t < O.cap ? `card${b}` : '';
   st.math = b === 0 ? 1 - segE(t, [0, O.cap]) : 0;
   st.floatW = segE(t, O.float, E.inOut);
-  st.placedA = lerp(st.placedA, 1, un);                  // the cards already chosen come back with the hand
+  // the cards already chosen come back once the camera is most of the way out, so none appears cut off at the top
+  st.placedA = lerp(st.placedA, 1, segE(t, O.placed, E.sine));
 }
 
 /* ---------- state machine ----------
