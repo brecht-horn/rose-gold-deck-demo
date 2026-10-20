@@ -2055,7 +2055,7 @@ const st = {
   starsIn: 0, formT: -1, lines: 0, dolly: 1, arcX: 0,
   wThumb: 0, wHome: 0, wFinger: 0, wPlanet: 0, fist: 0,
   head: 0, cap: '', math: 0, first: 0,
-  hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0,
+  hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0, lineA: 1,
   bandIn: 0, slide: 0, disT: -1e4, tiltW: 0,
   placedA: 1, floatW: 0,
 };
@@ -2078,7 +2078,7 @@ function evalHome() {                               // the whole open hand, palm
   st.pose.set(POSES.open); st.yaw = 0; st.pitch = -0.04; st.roll = 0; st.dolly = 1; st.arcX = 0;
   st.wThumb = 0; st.wHome = 1; st.wFinger = 0; st.wPlanet = 0; st.fist = 0;
   st.head = 0; st.cap = ''; st.math = 0; st.first = 0;
-  st.hi = 0; st.fingerA = 1; st.collapse = 0; st.restA = 1; st.planetA = 0; st.reveal = 0; st.palmHi = 0;
+  st.hi = 0; st.fingerA = 1; st.collapse = 0; st.restA = 1; st.planetA = 0; st.reveal = 0; st.palmHi = 0; st.lineA = 1;
   st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
   st.placedA = 1; st.floatW = 0;
 }
@@ -2111,7 +2111,7 @@ function evalA(t) {                                 // the intro and the thumb, 
   st.restA = 1 - segE(t, TA.rest, E.sine);           // v5: the hand stays hidden under the Sun and the sheet until the tap
   st.planetA = segE(t, TA.plA, E.sine);
   st.reveal = segE(t, TA.reveal, E.sine);
-  st.palmHi = 0; st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
+  st.palmHi = 0; st.lineA = 1; st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
   st.placedA = 0; st.floatW = 0;
 }
 function evalIn(b, t) {                             // a finger (or the palm): dolly in, header, planet, deck
@@ -2179,7 +2179,14 @@ function evalOut(b, t) {                            // the card is read: back ou
   st.planetA *= 1 - segE(t, O.plOut, E.sine);
   const un = segE(t, O.unfade, E.sine);
   st.fingerA = lerp(st.fingerA, 1, un);
-  st.collapse *= 1 - segE(t, O.unfade, E.inOut);
+  // v10 (founder: on the way out of the palm, its lines and the hand "should already be part of the hand -- currently
+  // they slowly fade in and enlargen into the right place as we zoom out"): whatever comes back is already in its own
+  // place and at its own size the moment the camera starts out. Nothing streams back out of the planet any more, on
+  // any beat: the stars are home at once (each finger is still unseen then, and fades in where it belongs as before)
+  // and the planet fades where it is. The palm, which never left, keeps its lines: they are back on it at once, at
+  // their resting light, over the first 0.3 s (no pop), while Mars fades in front of them
+  if (t > 0) st.collapse = 0;
+  if (b === 5) { st.palmHi = 0; st.lineA = segE(t, [0, 0.3 * MB], E.sine); }
   st.restA = lerp(st.restA, 1, un);
   st.hi *= 1 - segE(t, O.hiOff); st.palmHi *= 1 - segE(t, O.hiOff);
   st.head *= 1 - segE(t, O.head, E.sine);
@@ -2857,7 +2864,7 @@ function updateLines() {
   // and hidden while Mars shows; once the camera starts back out they are at rest again (evalOut)
   const pour = cg === 5 ? clamp01(st.collapse) : 0;
   const face = clamp01((palmN.dot(vD) - 0.2) / 0.4);
-  const pa = lerp(0.26 * st.restA, 1, st.palmHi) * face * (1 - curl) * clamp01(p * 1.5 - 0.5) * (1 - pour);
+  const pa = lerp(0.26 * st.restA, 1, st.palmHi) * face * (1 - curl) * clamp01(p * 1.5 - 0.5) * (1 - pour) * st.lineA;
   palmLineStars.material.uniforms.uOpacity.value = pa;
   palmLineSegs.material.uniforms.uOpacity.value = pa * 0.85;
   palmLineStars.visible = palmLineSegs.visible = pa > 0.002;
@@ -3366,7 +3373,7 @@ if (qs.has('pose') && POSES[qs.get('pose')]) {
     st: {
       starsIn: 1, formT: 1e4, lines: 1, yaw: n('yaw') ?? 0, pitch: n('pitch') ?? 0, roll: n('roll') ?? 0, dolly: 1, arcX: 0,
       wThumb: thumbView ? 1 : 0, wHome: 0, wFinger: 0, wPlanet: 0, fist: thumbView ? 1 : 0, head: 0, cap: '', math: 0,
-      hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, placedA: 0, floatW: 0,
+      hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0, lineA: 1, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, placedA: 0, floatW: 0,
     },
   };
   skipBtn.hidden = true; backBtn.hidden = true;
