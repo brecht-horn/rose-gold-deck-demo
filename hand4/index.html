@@ -239,6 +239,8 @@
   <div id="hint">Move to drift through the stars.</div>
   <div class="controls">
     <button id="tilt" type="button" hidden>Tilt</button>
+    <!-- DEV / DEMO ONLY, not a product feature: steps back to the previous moment or decision (see devBack) -->
+    <button id="back" type="button" data-dev hidden>Back</button>
     <button id="skip" type="button">Skip</button>
     <button id="replay" type="button">Replay</button>
   </div>
@@ -353,6 +355,7 @@ const stage = document.getElementById('stage');
 const hintEl = document.getElementById('hint');
 const tiltBtn = document.getElementById('tilt');
 const skipBtn = document.getElementById('skip');
+const backBtn = document.getElementById('back');          // DEV / DEMO ONLY (see devBack)
 const replayBtn = document.getElementById('replay');
 const captionEl = document.getElementById('caption');
 const captionP = document.querySelector('#caption p');
@@ -2190,6 +2193,7 @@ function setPhase(p) {
   phase = p;
   if (p !== 'choose') el.style.cursor = '';
   skipBtn.hidden = p === 'end';
+  backBtn.hidden = !DEV_BACK || !!debugPose;      // DEV / DEMO ONLY
   replayBtn.hidden = p !== 'end';
   replayBtn.classList.toggle('cta', p === 'end');
   setHint();
@@ -2396,6 +2400,56 @@ skipBtn.addEventListener('click', () => {
   else if (phase === 'read') { PK.revealAt = Math.min(PK.revealAt, clock - 1); continueBeat(); }
   else if (phase === 'out') tOut = timelineOut(beat).end;
 });
+
+/* ---------- DEV / DEMO ONLY: the Back button ----------
+   Not a product feature. The founder asked for it on the demo site only ("just for dev, not a feature, but makes it
+   easier to analyze each segment than going through the whole onboarding process every time"); ?noback hides it, and
+   the app's onboarding has no Back. It returns to the start of the previous moment or decision and restores the state
+   of that point. The sealed deal stays consistent: every card chosen after that point is un-chosen and goes back into
+   the sealed order where it was (the order itself is kept; only going back to the sheet drops it, and Reveal then
+   seals a fresh one, as Replay does).
+     the intro -> its start          the turns -> their start, or (at their start) the intro's
+     the sheet -> the start of the turns               the thumb's card (rising, turned, read) -> the sheet
+     a beat, a moment in -> its start                  a beat at its start -> the previous beat's deck (beat 1: the sheet)
+     a deck -> the start of its beat                   a lifted card -> back into the deck (as a tap beside it)
+     a card read -> the deck, the card back in it      moving on (back out to the hand) -> the card read again
+     the end -> the palm's deck */
+const DEV_BACK = !qs.has('noback');
+const BACK_EPS = 0.6;                                // seconds into a moment that still count as its start
+function devPoolFromPlaced() { pool = sealed ? sealed.filter(m => !cards.some(c => c.state === 'placed' && c.major === m)) : null; }
+function devClearFrom(b) {                           // un-place beat b's card and every later one; put the rest away
+  for (const c of cards) if (c.state !== 'placed' || c.finger >= b) resetCard(c);
+  fan = []; resetPickState(); disposePlanet(); devPoolFromPlaced();
+  sweepT = -1; sweep.intensity = 0; tOut = 0;
+}
+function devToA(t) { restartQuiet(); setPhase('A'); tA = t; }          // (t = TA.end: the sheet, the Sun formed)
+function devToBeat(b, atDeck) {                      // b >= 1: the start of its beat, or (atDeck) its deck, nothing chosen
+  devClearFrom(b);
+  enterIn(b);
+  if (atDeck) { tIn = timelineIn(b).end; evalIn(b, tIn); enterChoose(); snapFan(); }
+}
+function devBack() {
+  drag = null;
+  if (phase === 'A') devToA(tA > TA.turn[0] + BACK_EPS ? TA.turn[0] : 0);
+  else if (phase === 'await') devToA(TA.turn[0]);
+  else if (phase === 'end') devToBeat(5, true);
+  else if (phase === 'out') {                        // the card read again: the camera back on the planet, the fan dealt back
+    for (const o of fan) if (o !== PK.obj && (o.state === 'leaving' || o.state === 'off')) { o.state = 'fan'; o.grp.visible = true; o.lift = 0; o.ret = 0; }
+    tOut = 0; PK.revealAt = clock - 1; PK.autoContAt = -1;
+    setPhase('read');
+  } else if (beat === 0) devToA(TA.end);             // the thumb's card -> the sheet
+  else if (phase === 'in') { if (tIn > BACK_EPS) devToBeat(beat, false); else if (beat === 1) devToA(TA.end); else devToBeat(beat - 1, true); }
+  else if (phase === 'choose') devToBeat(beat, false);
+  else if (phase === 'pick') returnToDeck();
+  else if (phase === 'read' && PK.obj) {             // un-choose it: back into its place in the fan and the sealed order
+    const c = PK.obj;
+    c.state = 'fan'; c.ret = 1; c.lift = 0.6; c.major = -1;
+    c.flip = c.flipTarget = Math.PI; c.flipVel = 0;
+    resetFace(c); resetPickState(); devPoolFromPlaced();
+    setPhase('choose');
+  }
+}
+backBtn.addEventListener('click', devBack);
 
 /* ---------- captions ---------- */
 const CAPS = { intro: INTRO_LINE, card: ['', ''] };
@@ -3290,7 +3344,7 @@ if (qs.has('pose') && POSES[qs.get('pose')]) {
       hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, placedA: 0, floatW: 0,
     },
   };
-  skipBtn.hidden = true;
+  skipBtn.hidden = true; backBtn.hidden = true;
 }
 function placeInstant(b) {
   let c, major;
@@ -3327,7 +3381,7 @@ window.__seq = {
     choose(i ?? Math.floor(fan.length / 2));
     return { slot: PK.slot, card: PK.card };
   },
-  flip() { flipToFace(); }, back() { returnToDeck(); }, cont() { PK.revealAt = Math.min(PK.revealAt, clock - 1); continueBeat(); },
+  flip() { flipToFace(); }, back() { returnToDeck(); }, rewind() { devBack(); return { phase, beat, tA: +tA.toFixed(2), tIn: +tIn.toFixed(2) }; }, cont() { PK.revealAt = Math.min(PK.revealAt, clock - 1); continueBeat(); },
   get sealed() { return sealed ? [...sealed] : null; },
   get pool() { return pool ? [...pool] : null; },
   get picked() { return { slot: PK.slot, card: PK.card, name: PK.card >= 0 ? MAJORS[PK.card].join(' · ') : null, revealed: PK.revealed, hovered: PK.hovered, beat }; },
