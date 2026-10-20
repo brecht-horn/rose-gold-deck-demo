@@ -641,13 +641,16 @@ function joint(obj, off, group, kind) {
 const wR = joint(skel, V(2.15 * PALM_W, 0.1), 5, 'wrist');
 const wU = joint(skel, V(-2.35 * PALM_W, 0.1), 5, 'wrist');
 
-// thumb: metacarpal + 2 phalanges, set low on the palm's radial side
-const T_LEN = [4.3, 3.15, 2.65].map(x => x * CM);
+// thumb: metacarpal + 2 phalanges, set low on the palm's radial side. v5: its two phalanges a little shorter (the
+// founder: "a tiny bit smaller and rounder"); the metacarpal belongs to the palm (see T.j[0])
+const T_LEN = [4.3, 2.95, 2.42].map(x => x * CM);
 const tBase = new THREE.Group(); tBase.position.copy(V(1.65 * PALM_W, 1.5, 0.52)); tBase.rotation.order = 'ZXY'; skel.add(tBase);
 const tProx = new THREE.Group(); tProx.position.y = T_LEN[0]; tBase.add(tProx);
 const tDist = new THREE.Group(); tDist.position.y = T_LEN[1]; tProx.add(tDist);
+// v5: the thumb (its highlight, its stars streaming into the Sun) runs from its tip down to its second knuckle only
+// (tip, IP, MCP); its base joint and metacarpal, down by the wrist, are part of the palm (group 5)
 const T = {
-  j: [joint(tBase, ZERO, 0, 'base'), joint(tProx, ZERO, 0, 'knuckle'), joint(tDist, ZERO, 0, 'pip'), joint(tDist, new THREE.Vector3(0, T_LEN[2], 0), 0, 'tip')],
+  j: [joint(tBase, ZERO, 5, 'base'), joint(tProx, ZERO, 0, 'knuckle'), joint(tDist, ZERO, 0, 'pip'), joint(tDist, new THREE.Vector3(0, T_LEN[2], 0), 0, 'tip')],
 };
 
 // index, middle, ring, pinky: metacarpal + 3 phalanges. Slender: middle longest, ring a touch shorter, index shorter, pinky clearly shortest.
@@ -765,7 +768,7 @@ seg2(wU, wR, 5, 0.1, 0);
 seg2(wR, T.j[0], 5, 0.16, 0);
 seg2(wU, ULNAR, 5, 0.14, 0);
 seg2(ULNAR, FP.j[1], 5, 0.14, 1);
-seg2(T.j[0], T.j[1], 0, 0.3, 1);
+seg2(T.j[0], T.j[1], 5, 0.2, 1);                 // the thumb's metacarpal: palm, not thumb (v5)
 seg2(FI.j[1], FM.j[1], 5, 0.18, 2); seg2(FM.j[1], FR.j[1], 5, 0.18, 2); seg2(FR.j[1], FP.j[1], 5, 0.18, 2);
 // while a finger is its planet, the palm lines that meet at its knuckle go with it and one rung bridges its neighbours
 // (v2's ring-finger fix, for every finger): middle FI-FR, ring FM-FP, little finger FR to the palm's outer edge
@@ -793,12 +796,13 @@ handBody.add(boneLines);
 
 // --- volumetric dust: capsules around the phalanges, a rounded palm slab, a fading forearm ---
 const BONES = [];
-const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06) => BONES.push({ a, b, frame, r0: r0 * CM, r1: r1 * CM, group, count, tip, t0 });
+const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06, flat = 0.86, capP = 0.26) => BONES.push({ a, b, frame, r0: r0 * CM, r1: r1 * CM, group, count, tip, t0, flat, capP });
 // v2: ~30% more dust than v1 (counts), radii x FINGER_T, tip ends a touch fuller (less taper)
 const FT = FINGER_T;
-bone(T.j[0], T.j[1], tBase, 1.18 * FT, 0.9 * FT, 0, 57, false, 0.1);
-bone(T.j[1], T.j[2], tProx, 0.88 * FT, 0.81 * FT, 0, 52, false);
-bone(T.j[2], T.j[3], tDist, 0.78 * FT, 0.63 * FT, 0, 52, true);
+bone(T.j[0], T.j[1], tBase, 1.18 * FT, 0.9 * FT, 5, 57, false, 0.1);       // (the metacarpal: palm, v5)
+// v5: rounder: a fuller, rounder tip and pad (less taper, a rounder cross-section, more stars on the tip's dome)
+bone(T.j[1], T.j[2], tProx, 0.88 * FT, 0.84 * FT, 0, 50, false, -0.06, 0.9);
+bone(T.j[2], T.j[3], tDist, 0.82 * FT, 0.74 * FT, 0, 56, true, -0.06, 0.93, 0.36);
 const FCOUNTS = { 1: [39, 29, 27], 2: [44, 31, 30], 3: [39, 29, 27], 4: [31, 22, 22] };
 for (const f of FINGERS) {
   const c = FCOUNTS[f.g], s = f.rs * FT;
@@ -854,7 +858,7 @@ function addDust(rec, group, alphaMul = 1) {
 BONES.forEach((b, bi) => {
   for (let k = 0; k < b.count; k++) {
     let t;
-    if (b.tip && Math.random() < 0.26) t = 1 + Math.random() * (b.r1 / b.len);
+    if (b.tip && Math.random() < b.capP) t = 1 + Math.random() * (b.r1 / b.len);
     else t = rand(b.t0, 1.04);
     const ph = Math.random() * Math.PI * 2;
     addDust({ bone: bi, t, c: Math.cos(ph), s: Math.sin(ph), jit: rand(0.9, 1.05) }, b.group);
@@ -911,7 +915,7 @@ function dustTarget(d, out, nrm) {
     r = b.r0 + (b.r1 - b.r0) * Math.max(0, d.t); along = d.t * b.len;
   }
   r *= d.jit;
-  const cx = d.c * r, cz = d.s * r * 0.86;
+  const cx = d.c * r, cz = d.s * r * b.flat;
   if (nrm) {                                   // surface normal: radial on the shaft, bending toward the axis over the tip cap
     const q = Math.sqrt(Math.max(0, 1 - u * u)), nc = d.c * q, ns = d.s * q;
     nrm.set(m[0] * nc + m[8] * ns + m[4] * u, m[1] * nc + m[9] * ns + m[5] * u, m[2] * nc + m[10] * ns + m[6] * u);
@@ -3030,8 +3034,9 @@ resize();
   // photo 3: the close-up frames the thumb (its two bones and where it leaves the palm), not the whole fist; the
   // curled index finger is left to show at the lower left
   [T.j[1], T.j[2], T.j[3]].forEach(j => take(j.pos));
-  dust.forEach(dd => { if (!dd.stat && dd.group === 0 && (BONES[dd.bone].a !== T.j[0] || dd.t > 0.45)) take(dustTarget(dd, q)); });
-  for (const k in ext) FIG[k] = ext[k] * 1.06;
+  dust.forEach(dd => { if (dd.stat) return; const fr = BONES[dd.bone].frame; if (fr === tProx || fr === tDist || (fr === tBase && dd.t > 0.45)) take(dustTarget(dd, q)); });
+  // v5: a little more room round the thumb than a tight fit, so it reads a tiny bit smaller on the close-up
+  for (const k in ext) FIG[k] = ext[k] * 1.15;
   // the open hand, palm to us, with its six small cards, as the home shot sees it (world units around the pivot)
   applyPose(POSES.open);
   handRoot.rotation.set(-0.04, 0, 0); handRoot.updateMatrixWorld(true);
