@@ -80,6 +80,15 @@
   .short .hd-line { max-width: 76ch; }
   @media (max-width: 420px) { .hd-title { font-size: 21px; } .hd-line { font-size: 11.5px; } }
 
+  /* v5: "First…", in the open space to the right of the raised index finger while the hand holds ONE (placed from
+     the finger's projected joints each frame, clamped inside the rails) */
+  #first {
+    position: fixed; left: 0; top: 0; pointer-events: none; opacity: 0; white-space: nowrap;
+    font-family: var(--display); font-weight: 500; font-size: clamp(36px, 2.4vw + 27px, 54px); line-height: 1.1;
+    color: var(--ink); letter-spacing: 0.01em; will-change: transform, opacity;
+    text-shadow: 0 0 22px rgba(4, 3, 6, 0.9), 0 0 2px rgba(4, 3, 6, 0.9);
+  }
+
   /* narrative line, the prompt under the fan, and the card's numeral and name (plus the thumb's arithmetic) */
   #caption {
     position: fixed; left: 0; right: 0; bottom: calc(78px + env(safe-area-inset-bottom, 0px));
@@ -189,6 +198,8 @@
 <div class="grain" aria-hidden="true"></div>
 
 <div id="head" aria-live="polite"><span class="hd-eyebrow" id="hdEyebrow"></span><span class="hd-title" id="hdTitle"></span><span class="hd-line" id="hdLine"></span></div>
+
+<div id="first" aria-hidden="true">First…</div>
 
 <div id="caption" aria-live="polite"><p></p><div id="math"></div></div>
 
@@ -340,6 +351,7 @@ const headEl = document.getElementById('head');
 const hdEyebrow = document.getElementById('hdEyebrow');
 const hdTitle = document.getElementById('hdTitle');
 const hdLine = document.getElementById('hdLine');
+const firstEl = document.getElementById('first');
 
 /* =====================================================================
    Renderer, camera, shared uniforms
@@ -1758,7 +1770,7 @@ function measureSheet() {
 }
 function resize() {
   W = stage.clientWidth || innerWidth; H = stage.clientHeight || innerHeight;
-  headBoxes = null;
+  headBoxes = null; FIRST.w = 0;
   renderer.setSize(W, H, false);
   aspect = W / H; camera.aspect = aspect;
   cardCam.aspect = aspect; cardCam.updateProjectionMatrix();
@@ -1855,7 +1867,10 @@ const TA = (() => {
   c += 2.2 * HA;                           // hold: the open right hand, palm to us, thumb on the right
   o.cap[1] = c - 0.5 * HA;                 // the line leaves before the hand turns
   o.turn = [c, 2.9 * MA]; c += 2.9 * MA;   // a slow clockwise turn to the back of the hand, into ONE
-  c += 0.45 * HA;
+  // "First…" comes in as the hand settles into ONE and goes as the second turn begins; v5 holds ONE long enough to read it
+  o.firstIn = [o.turn[0] + 0.9 * o.turn[1], 0.75 * MA];
+  c += 1.6 * HA;
+  o.firstOut = [c, 0.5 * MA];
   o.zoom = [c, 3.0 * MA]; c += 3.0 * MA;   // turn 2: counter-clockwise, back the way it came, into the thumbs-up, palm side to us (photo 2)
   o.push = [c - 0.15 * MA, 2.6 * MA];      // then the camera pushes in on the thumb, three-quarter, and stops there (photo 3)
   c = o.push[0] + o.push[1];
@@ -1923,7 +1938,7 @@ const st = {
   pose: new Float32Array(NP), yaw: 0, pitch: -0.04, roll: 0,
   starsIn: 0, formT: -1, lines: 0, dolly: 1, arcX: 0,
   wThumb: 0, wHome: 0, wFinger: 0, wPlanet: 0, fist: 0,
-  head: 0, cap: '', math: 0,
+  head: 0, cap: '', math: 0, first: 0,
   hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0,
   bandIn: 0, slide: 0, disT: -1e4, tiltW: 0,
   placedA: 1, floatW: 0,
@@ -1946,7 +1961,7 @@ function evalHome() {                               // the whole open hand, palm
   st.starsIn = 1; st.formT = 1e4; st.lines = 1;
   st.pose.set(POSES.open); st.yaw = 0; st.pitch = -0.04; st.roll = 0; st.dolly = 1; st.arcX = 0;
   st.wThumb = 0; st.wHome = 1; st.wFinger = 0; st.wPlanet = 0; st.fist = 0;
-  st.head = 0; st.cap = ''; st.math = 0;
+  st.head = 0; st.cap = ''; st.math = 0; st.first = 0;
   st.hi = 0; st.fingerA = 1; st.collapse = 0; st.restA = 1; st.planetA = 0; st.reveal = 0; st.palmHi = 0;
   st.bandIn = 0; st.slide = 0; st.disT = -1e4; st.tiltW = 0;
   st.placedA = 1; st.floatW = 0;
@@ -1972,6 +1987,7 @@ function evalA(t) {                                 // the intro and the thumb, 
   st.wPlanet = segE(t, TA.pzoom);
   st.head = segE(t, TA.head, E.sine);
   st.cap = t >= TA.cap[0] && t < TA.cap[1] ? 'intro' : '';
+  st.first = segE(t, TA.firstIn, E.sine) * (1 - segE(t, TA.firstOut, E.sine));
   st.math = 0;
   st.hi = segE(t, TA.hi);
   st.fingerA = 1 - segE(t, TA.fade, E.sine);
@@ -2910,6 +2926,35 @@ function renderCards() {
   for (const c of topCards) c.grp.visible = true;
 }
 
+/* ---------- "First…" beside the index finger ---------- */
+const FIRST = { x: 0, y: 0, on: false, fs: 0, w: 0, h: 0 };
+const _f2 = new THREE.Vector3();
+function jointPx(j, out) { _f2.copy(j.pos); handBody.localToWorld(_f2); _f2.project(camera); return out.set((_f2.x * 0.5 + 0.5) * W, (-_f2.y * 0.5 + 0.5) * H, 0); }
+function updateFirst(dt) {
+  const a = clamp01(st.first);
+  if (a < 0.002) { if (FIRST.on) { FIRST.on = false; firstEl.style.opacity = '0'; } return; }
+  // the open space to the right of the raised index finger: level with its upper half, a gap to the right of it
+  let fx = -1e9;
+  for (const j of [FI.j[2], FI.j[3], FI.j[4]]) fx = Math.max(fx, jointPx(j, vC).x);
+  const yPip = jointPx(FI.j[2], vC).y, yTip = jointPx(FI.j[4], vD).y;
+  if (!FIRST.on || !FIRST.w) {
+    firstEl.style.fontSize = ''; FIRST.fs = parseFloat(getComputedStyle(firstEl).fontSize) || 36;
+    FIRST.w = firstEl.offsetWidth; FIRST.h = firstEl.offsetHeight;
+  }
+  const gap = Math.max(18, 0.045 * W), railL = 16, railR = W - 16;
+  let x = fx + gap, y = lerp(yPip, yTip, 0.45) - FIRST.h / 2, sc = 1;
+  if (x + FIRST.w > railR) {                                   // too little room: keep the gap, shrink a little, then slide left
+    sc = Math.max(0.72, (railR - x) / FIRST.w);
+    x = Math.max(railL, Math.min(x, railR - FIRST.w * sc));
+  }
+  y = Math.max(LAY.top + 8, Math.min(y, H - LAY.bottom - 8 - FIRST.h * sc));
+  if (!FIRST.on) { FIRST.x = x; FIRST.y = y; FIRST.on = true; }
+  else { const k = damp(7, dt); FIRST.x += (x - FIRST.x) * k; FIRST.y += (y - FIRST.y) * k; }   // no jitter from the sway
+  firstEl.style.transform = `translate(${FIRST.x.toFixed(1)}px, ${FIRST.y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
+  firstEl.style.transformOrigin = '0 0';
+  firstEl.style.opacity = a.toFixed(3);
+}
+
 /* ---------- loop ---------- */
 let last = performance.now(), clock = 0, frames = 0;
 const holdSeq = qs.has('hold');
@@ -2981,6 +3026,7 @@ function frame(now) {
   for (const lay of [skyFar, skyMid, skyNear, skyConst]) for (const c of lay.children) if (c.material && c.material.uniforms) c.material.uniforms.uOpacity.value = skyA;
 
   const cardsOn = updateCards(dt, par);
+  updateFirst(rdt);
   setCaption(st.cap);
   headEl.style.opacity = st.head.toFixed(3);
   // the lifted card covers the line under the title (the page's text would otherwise sit on top of the card)
@@ -3153,6 +3199,7 @@ window.__seq = {
       return { k, world: w.toArray().map(x => +x.toFixed(3)), px: [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)] };
     });
   },
+  first() { const r = firstEl.getBoundingClientRect(); return { text: firstEl.textContent, opacity: +(+firstEl.style.opacity || 0).toFixed(3), left: Math.round(r.left), top: Math.round(r.top), right: Math.round(r.right), bottom: Math.round(r.bottom), index: [FI.j[2], FI.j[3], FI.j[4]].map(j => { const v = jointPx(j, new THREE.Vector3()); return [Math.round(v.x), Math.round(v.y)]; }) }; },
   thumbPx() {            // the thumb's joints (CMC, MCP, IP, tip) on screen, px (layout tests)
     return T.j.map(j => { const v = j.pos.clone(); handBody.localToWorld(v); v.project(camera); return [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)]; });
   },
