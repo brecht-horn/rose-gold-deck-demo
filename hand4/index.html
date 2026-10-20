@@ -827,8 +827,8 @@ const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06, flat = 0.86, c
 const FT = FINGER_T;
 bone(T.j[0], T.j[1], tBase, 1.18 * FT, 0.9 * FT, 5, 57, false, 0.1);       // (the metacarpal: palm, v5)
 // v5: rounder: a fuller, rounder tip and pad (less taper, a rounder cross-section, more stars on the tip's dome)
-bone(T.j[1], T.j[2], tProx, 1.03 * FT, 0.99 * FT, 0, 50, false, -0.06, 0.9);   // v5b: ~17% wider
-bone(T.j[2], T.j[3], tDist, 0.97 * FT, 0.9 * FT, 0, 56, true, -0.06, 0.93, 0.36);   // v5b: wider, rounder tip
+bone(T.j[1], T.j[2], tProx, 0.88 * FT, 0.84 * FT, 0, 50, false, -0.06, 0.9);   // v5c: back to the v5 width (shorter only)
+bone(T.j[2], T.j[3], tDist, 0.82 * FT, 0.74 * FT, 0, 56, true, -0.06, 0.93, 0.36);   // v5c: back to the v5 width
 const FCOUNTS = { 1: [39, 29, 27], 2: [44, 31, 30], 3: [39, 29, 27], 4: [31, 22, 22] };
 for (const f of FINGERS) {
   const c = FCOUNTS[f.g], s = f.rs * FT;
