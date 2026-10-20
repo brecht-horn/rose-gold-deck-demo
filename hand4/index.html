@@ -669,7 +669,9 @@ const wU = joint(skel, V(-2.35 * PALM_W, 0.1), 5, 'wrist');
 
 // thumb: metacarpal + 2 phalanges, set low on the palm's radial side. v5: its two phalanges a little shorter (the
 // founder: "a tiny bit smaller and rounder"); the metacarpal belongs to the palm (see T.j[0])
-const T_LEN = [4.3, 2.45, 2.0].map(x => x * CM);   // v5b (founder: "smaller and wider, its too long"): phalanges ~17% shorter
+// v5b (founder: "smaller and wider, its too long"): phalanges ~17% shorter; v7 ("still too large ... shorter from top
+// joint to 2nd joint, and 2nd joint to 3rd joint"): both phalanges ~14% shorter again (MCP-IP 2.45 -> 2.1, IP-tip 2.0 -> 1.72)
+const T_LEN = [4.3, 2.1, 1.72].map(x => x * CM);
 const tBase = new THREE.Group(); tBase.position.copy(V(1.65 * PALM_W, 1.5, 0.52)); tBase.rotation.order = 'ZXY'; skel.add(tBase);
 const tProx = new THREE.Group(); tProx.position.y = T_LEN[0]; tBase.add(tProx);
 const tDist = new THREE.Group(); tDist.position.y = T_LEN[1]; tProx.add(tDist);
@@ -826,9 +828,10 @@ const bone = (a, b, frame, r0, r1, group, count, tip, t0 = -0.06, flat = 0.86, c
 // v2: ~30% more dust than v1 (counts), radii x FINGER_T, tip ends a touch fuller (less taper)
 const FT = FINGER_T;
 bone(T.j[0], T.j[1], tBase, 1.18 * FT, 0.9 * FT, 5, 57, false, 0.1);       // (the metacarpal: palm, v5)
-// v5: rounder: a fuller, rounder tip and pad (less taper, a rounder cross-section, more stars on the tip's dome)
-bone(T.j[1], T.j[2], tProx, 0.88 * FT, 0.84 * FT, 0, 50, false, -0.06, 0.9);   // v5c: back to the v5 width (shorter only)
-bone(T.j[2], T.j[3], tDist, 0.82 * FT, 0.74 * FT, 0, 56, true, -0.06, 0.93, 0.36);   // v5c: back to the v5 width
+// v7 (founder: "a tiny bit too round and wide"): ~5% narrower, a flatter cross-section, a slimmer tip with fewer stars
+// on its dome; the star counts follow the shorter bones, so the density (and the brightness) stays as it was
+bone(T.j[1], T.j[2], tProx, 0.84 * FT, 0.79 * FT, 0, 43, false, -0.06, 0.86);
+bone(T.j[2], T.j[3], tDist, 0.77 * FT, 0.68 * FT, 0, 48, true, -0.06, 0.88, 0.28);
 const FCOUNTS = { 1: [39, 29, 27], 2: [44, 31, 30], 3: [39, 29, 27], 4: [31, 22, 22] };
 for (const f of FINGERS) {
   const c = FCOUNTS[f.g], s = f.rs * FT;
@@ -1903,20 +1906,24 @@ const TA = (() => {
   o.firstIn = [o.turn[0] + 0.9 * o.turn[1], 0.75 * MA];
   c += 1.6 * HA;
   o.firstOut = [c, 0.5 * MA];
-  o.zoom = [c, 3.0 * MA]; c += 3.0 * MA;   // turn 2: counter-clockwise, back the way it came, into the thumbs-up, palm side to us (photo 2)
-  o.push = [c - 0.15 * MA, 2.6 * MA];      // then the camera pushes in on the thumb, three-quarter, and stops there (photo 3)
-  c = o.push[0] + o.push[1];
-  o.hi = [o.push[0] + o.push[1] * 0.45, 1.0 * MA];
-  o.head = [o.push[0] + o.push[1] * 0.62, 0.9 * MA];
-  c += 3.2 * HA;                           // the header and the three lines, read on the thumb
-  o.pzoom = [c, 3.1 * MA];                 // the camera dollies in on the Sun as it forms...
-  o.fade = [c + 0.15 * MA, 2.9 * MA];      // ...while the thumb's stars stream slowly into it, arriving as the camera settles
-  o.rest = [c + 0.15 * MA, 1.8 * MA];      // the rest of the hand fades away
-  o.plA = [c + 0.2 * MA, 0.9 * MA];
-  o.reveal = [c + 0.2 * MA, 3.0 * MA];     // the Sun forms over the same span as the collapse
-  c += 3.6 * MA;
-  o.back = [c, 1.4 * MA];                  // the sheet arrives (the hand stays hidden until the thumb's card is read)
-  o.sheet = c + 0.3 * HA;
+  o.zoom = [c, 3.0 * MA];                  // turn 2: counter-clockwise, back the way it came, into the thumbs-up, palm side to us (photo 2)
+  // v7 (founder: "slowly start zooming in as the thumb comes into position, so there is not a static moment"): the
+  // camera's push in on the thumb (photo 3) begins halfway through turn 2, while the hand is still turning
+  o.push = [o.zoom[0] + 0.5 * o.zoom[1], 2.9 * MA];
+  // v7 (founder: the Sun forms from the thumb's stars "at the same time that the top text appears ... all together"):
+  // one moment S, just before the push arrives, starts the header, the thumb's stars streaming into the Sun and the
+  // camera's dolly in on it; the thumb brightens over the second before
+  const S = o.push[0] + o.push[1] - 0.4 * MA;
+  o.hi = [S - 1.0 * MA, 1.0 * MA];
+  o.head = [S, 0.9 * MA];
+  o.pzoom = [S, 3.1 * MA];                 // the camera dollies in on the Sun as it forms...
+  o.fade = [S, 2.9 * MA];                  // ...while the thumb's stars stream slowly into it, arriving as the camera settles
+  o.rest = [S, 1.8 * MA];                  // the rest of the hand fades away
+  o.plA = [S + 0.05 * MA, 0.9 * MA];
+  o.reveal = [S + 0.05 * MA, 3.0 * MA];    // the Sun forms over the same span as the collapse
+  c = o.reveal[0] + o.reveal[1];           // the Sun has formed...
+  o.back = [c, 1.4 * MA];
+  o.sheet = c + 0.3 * MA;                  // ...and the sheet comes up 0.3 s later (founder: "at most a half second after")
   o.end = c + 1.4 * MA;                    // (the intro's clock runs on under the sheet until the hand is back)
   return o;
 })();
@@ -2015,7 +2022,7 @@ function evalA(t) {                                 // the intro and the thumb, 
   st.pitch = lerp(-0.04, ROT_T.pitch, eZ) - Math.sin(Math.PI * eT) * (reduceMotion ? 0.03 : 0.1) - Math.sin(Math.PI * eZ) * (reduceMotion ? 0.02 : 0.06);
   st.dolly = lerp(1.2, 1.0, segE(t, [0, TA.turn[0] + TA.turn[1]], E.sine));
   st.arcX = -Math.sin(Math.PI * eT) * (reduceMotion ? 0.05 : 0.28);
-  st.wThumb = E.quart(clamp01(wPush)); st.fist = st.wThumb;
+  st.wThumb = E.sine(clamp01(wPush)); st.fist = st.wThumb;   // v7: a sine, so the push is already visible as the turn ends
   st.wHome = 0; st.wFinger = 0;
   st.wPlanet = segE(t, TA.pzoom);
   st.head = segE(t, TA.head, E.sine);
