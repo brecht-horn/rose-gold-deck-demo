@@ -135,7 +135,8 @@
     background: var(--panel); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
     border: 1px solid var(--line); border-radius: 16px; padding: 18px 16px 16px;
     opacity: 0; transform: translateY(12px);
-    transition: opacity 0.9s ease, transform 0.9s cubic-bezier(.2, .7, .2, 1);
+    /* v7: 0.55 s (was 0.9 s), so the sheet is all but in within half a second of the Sun forming (founder) */
+    transition: opacity 0.55s ease, transform 0.55s cubic-bezier(.2, .7, .2, 1);
   }
   .ask.on { opacity: 1; transform: none; }
   .wide #askWrap {
