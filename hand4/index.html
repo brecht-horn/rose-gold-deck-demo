@@ -3204,6 +3204,8 @@ window.__seq = {
   thumbPx() {            // the thumb's joints (CMC, MCP, IP, tip) on screen, px (layout tests)
     return T.j.map(j => { const v = j.pos.clone(); handBody.localToWorld(v); v.project(camera); return [Math.round((v.x * 0.5 + 0.5) * W), Math.round((-v.y * 0.5 + 0.5) * H)]; });
   },
+  // what of the hand is drawn right now (opacities), for the "the hand stays hidden" checks
+  vis: () => ({ GA: GA.map(v => +v.toFixed(3)), palmLines: palmLineStars.visible ? +palmLineStars.material.uniforms.uOpacity.value.toFixed(3) : 0, band: ringGroup.visible ? +bandStars.material.uniforms.uOpacity.value.toFixed(3) : 0, placedA: +st.placedA.toFixed(3), planet: PL ? +st.planetA.toFixed(3) : 0 }),
   thumbCheck, get ROT_T() { return { ...ROT_T }; },
   FIG, HOME, FLEN, framing, LAY, SHOT,
   // screen-space [x, y, alpha, kind, group] for every visible hand star, plus the planet's centre (layout tests)
