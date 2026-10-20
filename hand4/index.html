@@ -1609,7 +1609,7 @@ cardScene.add(new THREE.AmbientLight(0xffffff, 0.15));
 const fanRoot = new THREE.Group(); cardScene.add(fanRoot);          // the deck's world: the fan is laid out in here
 // v7: the key's intensity, how far it rides up and down with the tilt, and how much it dims as the tilt carries it
 // toward the angle that would mirror it straight into the camera (the top edge tipped up), where it whited out the fan
-const CARD_KEY = { i: 46, y: 2.2, dim: 0 };
+const CARD_KEY = { i: 46, y: 2.2, yDown: 2.2, dim: 0 };
 const cardKey = new THREE.PointLight(0xffe6d8, CARD_KEY.i, 0, 2); fanRoot.add(cardKey);
 const cardRimT = new THREE.Object3D(); fanRoot.add(cardRimT);
 const cardRim = new THREE.DirectionalLight(0x9a7bff, 0.9); cardRim.position.set(-4, 3, -3); cardRim.target = cardRimT; fanRoot.add(cardRim);
@@ -2969,7 +2969,7 @@ function snapFan() {                               // debug jumps: put every car
 }
 function updateCards(dt, par) {
   ptrF.x = pointer.x * par; ptrF.y = pointer.y * par;
-  cardKey.position.set(ptrF.x * 3.2, 1.4 + ptrF.y * CARD_KEY.y, 3.2);   // the deck's key light follows the pointer
+  cardKey.position.set(ptrF.x * 3.2, 1.4 + ptrF.y * (ptrF.y < 0 ? CARD_KEY.yDown : CARD_KEY.y), 3.2);   // the deck's key light follows the pointer
   cardKey.intensity = CARD_KEY.i * (1 - CARD_KEY.dim * E.sine(clamp01(-ptrF.y)));
   const deckUp = beat >= 1 && pool && ((phase === 'in' && tIn >= timelineIn(beat).deal) || phase === 'choose' || phase === 'pick' || phase === 'read');
   if (deckUp && !fan.length) deal();
@@ -3344,6 +3344,7 @@ window.__seq = {
     if (o.key !== undefined) CARD_KEY.i = o.key;
     if (o.keyY !== undefined) CARD_KEY.y = o.keyY;
     if (o.keyDim !== undefined) CARD_KEY.dim = o.keyDim;
+    if (o.keyYDown !== undefined) CARD_KEY.yDown = o.keyYDown;
     return { cc: backMat.clearcoat, ccr: backMat.clearcoatRoughness, env: backMat.envMapIntensity, envI: cardScene.environmentIntensity, key: { ...CARD_KEY } };
   },
   // v7: the current planet's spin (phase in rad, its own clock, its rate) and the phase it is in (rotation checks)
