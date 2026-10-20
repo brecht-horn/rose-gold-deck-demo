@@ -46,6 +46,9 @@
   #hint.cue { color: var(--ink); animation: cue 2.6s ease-in-out infinite; }
   @keyframes cue { 50% { opacity: 0.5; } }
   .controls { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+  /* v8: one row of controls with the dev Back button in it (the hint wraps instead); see resize() for why the
+     layout ignores it */
+  .controls { flex: none; flex-wrap: nowrap; }
   button {
     font: inherit; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
     background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 999px;
@@ -1854,7 +1857,10 @@ function resize() {
   document.documentElement.classList.toggle('short', short);
   Object.assign(LAY, { short, side, portrait });
   LAY.top = parseFloat(getComputedStyle(headEl).top) || 18;
+  // (DEV / DEMO ONLY: measured without the Back button, which is not part of the app, so it moves no framing)
+  const backWas = backBtn.hidden; backBtn.hidden = true;
   LAY.bottom = H - document.querySelector('.rail.bottom').getBoundingClientRect().top + 8;
+  backBtn.hidden = backWas;
   LAY.capBottom = parseFloat(getComputedStyle(captionEl).bottom) || 78;
   for (let b = 0; b < 6; b++) { fillHead(headProbe, b); SHOT[b].headH = headProbe.offsetHeight; }
   LAY.titleBottom = headProbe.querySelector('.hd-title').getBoundingClientRect().bottom - headProbe.getBoundingClientRect().top;
