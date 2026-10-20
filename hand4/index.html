@@ -1820,6 +1820,8 @@ function layoutLift(o, capBlock) {
   o.px = px; o.z = CH / (2 * TAN * px / H); o.y = ndcY(bot - px / 2); o.x = ndcX(cx);
 }
 const SIZE_K = kind => Math.pow(PLANET_SIZE.saturn / PLANET_SIZE[kind], 0.35);   // smaller planets get a little closer, the Sun a little further
+// v8: Venus, Mars and Mercury on screen, as a share of Jupiter's disc (the Sun, Jupiter and Saturn keep SIZE_K)
+const VS_JUPITER = { venus: 0.9, mars: 0.87, mercury: 0.85 };
 // the name/birthday sheet's box where it comes to rest, measured even while it is hidden (offsets ignore its
 // rise-in transform), so the thumb close-up and the Sun keep clear of it on every screen (v2 tester: 375x667)
 function measureSheet() {
@@ -1888,10 +1890,20 @@ function resize() {
     P0 = Math.min(P0, wk, satH(B.bot - B.top)); P0F = Math.min(P0F, wk, satH(Math.max(B.bot - B.top, FLOOR_P)));
   }
   P0 *= reduceMotion ? 0.85 : 1; P0F *= reduceMotion ? 0.85 : 1;
-  for (let b = 0; b < 6; b++) {
-    const S = SHOT[b], B = bandOf(b), kind = PLANET_KIND[b], bh = Math.max(60, B.bot - B.top);
+  const fitPpu = (b, want) => {
+    const B = bandOf(b), kind = PLANET_KIND[b], bh = Math.max(60, B.bot - B.top);
     const ex = PLANET_EXT[kind] * PLANET_R, ey = (PLANET_EXT_Y[kind] || PLANET_EXT[kind]) * PLANET_R;
-    const ppu = Math.min(P0 * SIZE_K(kind), 0.94 * B.w / (2 * ex), 0.92 * bh / (2 * ey));
+    return Math.min(want, 0.94 * B.w / (2 * ex), 0.92 * bh / (2 * ey));
+  };
+  // v8 (founder: "the sun, jupiter and saturn can remain their current size. The rest need to be almost the same size
+  // as jupiter, just a little smaller"): Venus, Mars and Mercury are framed so their discs come out at a set share of
+  // Jupiter's on this screen (Mercury still the smallest), as far as their header and fan leave room
+  const ppuJup = fitPpu(1, P0 * SIZE_K('jupiter'));
+  for (let b = 0; b < 6; b++) {
+    const S = SHOT[b], B = bandOf(b), kind = PLANET_KIND[b];
+    const ex = PLANET_EXT[kind] * PLANET_R, ey = (PLANET_EXT_Y[kind] || PLANET_EXT[kind]) * PLANET_R;
+    const ppu = fitPpu(b, VS_JUPITER[kind] ? ppuJup * VS_JUPITER[kind] * PLANET_SIZE.jupiter / PLANET_SIZE[kind] : P0 * SIZE_K(kind));
+    const bh = Math.max(60, B.bot - B.top);
     S.ppuP = ppu; S.dP = dAtPpu(ppu); S.sxP = ndcX(B.cx); S.syP = ndcY((B.top + B.bot) / 2);
     // the dolly in on the finger: about half the planet's magnification (as a normal-height phone would have it), the
     // whole finger under the header; on a short phone the rest of the hand crops at the edges
@@ -3063,7 +3075,7 @@ function updateFirst(dt) {
     FIRST.w = firstEl.offsetWidth; FIRST.h = firstEl.offsetHeight;
   }
   // v8: about 24 px of clear sky between the finger's last stars (their centres, plus their glow) and the text
-  const gap = Math.max(26, 0.068 * W), railL = 16, railR = W - 16;
+  const gap = Math.min(34, Math.max(26, 0.068 * W)), railL = 16, railR = W - 16;
   let y = lerp(yPip, yTip, 0.45) - FIRST.h / 2;
   y = Math.max(LAY.top + 8, Math.min(y, H - LAY.bottom - 8 - FIRST.h));
   // the finger's right edge level with the text (a margin above and below), and never left of its joints
