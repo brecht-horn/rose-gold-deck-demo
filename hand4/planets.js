@@ -9,8 +9,25 @@
 
      makePlanet(THREE, kind, fingerBaseRadius, opts) -> {
        group, radius, ringOuter, extent, kind, counts, quaternion,
-       update(dt, t, camera), setOpacity(a), setReveal(p), setClock(s), dispose()
+       update(dt, t, camera), setOpacity(a), setReveal(p), setClock(s), setLight(v), dispose()
      }
+
+   opts (all optional):
+     sourcePoints      THREE.Vector3[] in the group's local space. setReveal(0..1) pours the stars in from these points
+                       (both sorted along the sources' long axis, rank to rank), e.g. a dissolving finger. Without
+                       them, the stars come in from a scattered shell round the planet.
+     ringSourcePoints  THREE.Vector3[] in the group's local space; only planets with rings use it (Saturn). The RING
+                       stars then converge from these points instead (both sorted by angle about the planet's local Y
+                       axis, the ring plane's normal, so a band lying round the planet in the ring plane blooms
+                       straight out into the rings), starting almost at once, while the BODY stars still come from
+                       sourcePoints (or the shell). Without it, everything behaves as before: rings and body both
+                       pour from sourcePoints. The ring's edge lines, like every planet's lines, fade in late.
+     seed, spin0, spinRate, lightDir (view space), atten, refDistance, renderOrder, occluder (false: no dark
+     disc), occluderAlpha.
+
+   The look is deliberately "normalized" (v5): clean, even light over astronomical detail. The Sun has no flares,
+   prominences, streamers or sunspot (just its granules and a soft corona halo); Jupiter has calm bands and no storms;
+   Mercury's craters are a faint texture; Mars is plain rust-red with no caps or surface features.
 
    Everything moves in the vertex shader (spin, band drift, swirls, ring orbits, twinkle, the formation), so there
    are no per-frame buffer writes. Light comes from the upper right in VIEW space, as in v2 (SUN_V), so the planet
@@ -749,11 +766,11 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
   for (let i = 0; i < N; i++) {
     rest.push(restLocal(st.a[i * 4], st.p.slice(i * 3, i * 3 + 3), st.b.slice(i * 4, i * 4 + 4), R, look, vortex, spin0));
   }
-  const STAGE = [[0, 0.3], [0.14, 0.45]];       // the body forms first, then the rings / corona / prominences
-  const sp = opts.sourcePoints;
-  if (sp && sp.length) {
-    // map coherently: sort the sources and the stars along the source's long axis, then pour rank to rank
-    const S = sp.map(v => [v.x, v.y, v.z]);
+  const STAGE = [[0, 0.3], [0.14, 0.45]];       // the body forms first, then the rings / corona
+  const RING_STAGE = [0.04, 0.45];               // rings poured from opts.ringSourcePoints start almost at once
+  const toArr = pts => pts.map(v => [v.x, v.y, v.z]);
+  // Pour the stars idx (ascending) from the points S along the sources' long axis: sort both along it, rank to rank.
+  const pourAxis = (idx, S) => {
     const cen = S.reduce((a, v) => [a[0] + v[0] / S.length, a[1] + v[1] / S.length, a[2] + v[2] / S.length], [0, 0, 0]);
     const far = (from) => S.reduce((best, v) => {
       const d = (v[0] - from[0]) ** 2 + (v[1] - from[1]) ** 2 + (v[2] - from[2]) ** 2;
@@ -765,25 +782,53 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
     ax = ax.map(x => x / al);
     const dot = v => v[0] * ax[0] + v[1] * ax[1] + v[2] * ax[2];
     const sIdx = S.map((v, i) => i).sort((i, j) => dot(S[i]) - dot(S[j]));
-    const pIdx = rest.map((v, i) => i).sort((i, j) => dot(rest[i]) - dot(rest[j]));
+    const pIdx = idx.slice().sort((i, j) => dot(rest[i]) - dot(rest[j]));
     const spacing = al / Math.max(1, S.length - 1);
+    const n = idx.length;
     let maxD = 1e-6;
     const dist = new Float32Array(N);
     pIdx.forEach((pi, rank) => {
-      const s = S[sIdx[Math.min(S.length - 1, Math.floor((rank / N) * S.length))]];
+      const s = S[sIdx[Math.min(S.length - 1, Math.floor((rank / n) * S.length))]];
       const j = spacing * 0.6;
       src.set([s[0] + (rnd() - 0.5) * j, s[1] + (rnd() - 0.5) * j, s[2] + (rnd() - 0.5) * j], pi * 3);
       const q = rest[pi];
       dist[pi] = Math.hypot(q[0] - src[pi * 3], q[1] - src[pi * 3 + 1], q[2] - src[pi * 3 + 2]);
       maxD = Math.max(maxD, dist[pi]);
     });
-    for (let i = 0; i < N; i++) {
+    for (const i of idx) {
       const [lo, hi] = STAGE[st.stage[i]];
       st.a[i * 4 + 3] = lo + (hi - lo) * (0.62 * (dist[i] / maxD) + 0.38 * rnd());
     }
-  } else {
-    // a scattered shell: each star comes in from roughly its own side of the sky
-    for (let i = 0; i < N; i++) {
+  };
+  // Pour ring stars idx from a loop of points S (a band lying in the ring plane): sort both by their angle about the
+  // planet's axis (local Y; the sources about their own centre), rank to rank, so the loop blooms out into the rings
+  // without any star crossing the body.
+  const pourAngle = (idx, S) => {
+    const cx = S.reduce((a, v) => a + v[0], 0) / S.length, cz = S.reduce((a, v) => a + v[2], 0) / S.length;
+    const angS = S.map(v => Math.atan2(v[0] - cx, v[2] - cz));
+    const sIdx = S.map((v, i) => i).sort((i, j) => angS[i] - angS[j]);
+    const angP = new Float32Array(N);
+    for (const i of idx) angP[i] = Math.atan2(rest[i][0], rest[i][2]);
+    const pIdx = idx.slice().sort((i, j) => angP[i] - angP[j]);
+    const rad = S.reduce((a, v) => a + Math.hypot(v[0] - cx, v[2] - cz), 0) / S.length;
+    const j = Math.max(1e-6, (TAU * rad) / S.length) * 0.6;
+    const n = idx.length;
+    let minD = Infinity, maxD = 0;
+    const dist = new Float32Array(N);
+    pIdx.forEach((pi, rank) => {
+      const s = S[sIdx[Math.min(S.length - 1, Math.floor((rank / n) * S.length))]];
+      src.set([s[0] + (rnd() - 0.5) * j, s[1] + (rnd() - 0.5) * j * 0.3, s[2] + (rnd() - 0.5) * j], pi * 3);
+      const q = rest[pi];
+      dist[pi] = Math.hypot(q[0] - src[pi * 3], q[1] - src[pi * 3 + 1], q[2] - src[pi * 3 + 2]);
+      minD = Math.min(minD, dist[pi]); maxD = Math.max(maxD, dist[pi]);
+    });
+    const span = Math.max(1e-6, maxD - minD);
+    const [lo, hi] = RING_STAGE;
+    for (const i of idx) st.a[i * 4 + 3] = lo + (hi - lo) * (0.62 * ((dist[i] - minD) / span) + 0.38 * rnd());
+  };
+  // a scattered shell: each star comes in from roughly its own side of the sky
+  const pourShell = idx => {
+    for (const i of idx) {
       const q = rest[i], l = Math.hypot(q[0], q[1], q[2]) || 1;
       let d = [q[0] / l, q[1] / l, q[2] / l];
       const u = rnd() * 2 - 1, t = rnd() * TAU, s = Math.sqrt(1 - u * u);
@@ -793,7 +838,13 @@ export function makePlanet(THREE, kind, fingerBaseRadius, opts = {}) {
       const [lo, hi] = STAGE[st.stage[i]];
       st.a[i * 4 + 3] = lo + (hi - lo) * rnd();
     }
-  }
+  };
+  const sp = opts.sourcePoints, rsp = opts.ringSourcePoints;
+  const all = Array.from({ length: N }, (v, i) => i);
+  const ringIdx = rsp && rsp.length ? all.filter(i => st.a[i * 4] === K_RING) : [];
+  const bodyIdx = ringIdx.length ? all.filter(i => st.a[i * 4] !== K_RING) : all;
+  if (sp && sp.length) pourAxis(bodyIdx, toArr(sp)); else pourShell(bodyIdx);
+  if (ringIdx.length) pourAngle(ringIdx, toArr(rsp));
 
   /* ---------- shared uniforms ---------- */
   if (!texCache) texCache = { glow: gradientTexture(THREE, GLOW_STOPS), soft: gradientTexture(THREE, SOFT_STOPS) };
