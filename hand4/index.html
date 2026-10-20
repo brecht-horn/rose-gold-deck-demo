@@ -1231,12 +1231,6 @@ function collapsePalmLines(k, to) {             // k: 0 at rest, 1 at Mars (hand
     g.attributes.position.needsUpdate = true;
   });
 }
-// the palm's lines span (hand-local, for framing the palm's beat): heart and head lines, and Mars in the hollow
-const PALM_FRAME = (() => {
-  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-  for (const pts of PALM_LINES.slice(0, 2)) for (const [x, y] of pts) { x0 = Math.min(x0, x * PALM_W); x1 = Math.max(x1, x * PALM_W); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
-  return { x0: x0 * CM, x1: x1 * CM, y0: y0 * CM, y1: y1 * CM };
-})();
 
 /* =====================================================================
    The planets (planets.js), one at a time: each forms where its finger was, the finger's own stars streaming into it
@@ -1656,7 +1650,7 @@ const LAY = {
   top: 18, bottom: 80, capBottom: 78, fanTop: 500, fanBottom: 700, fanL: 16, fanR: 374, floatZ: 7.8,
   lift: { x: 0, y: -0.2, z: 6, px: 300 }, liftT: { x: 0, y: -0.2, z: 6, px: 300 }, short: false, side: false, portrait: true, titleBottom: 50,
 };
-const FLOAT_H = 0.2, FLOAT_GAP = 0.05;           // the small cards above the fingers (scene units)
+const FLOAT_H = 0.2;                             // the small cards on the fingertips (scene units)
 const dAtPpu = p => H / (2 * TAN * p);
 const ndcY = py => 1 - 2 * py / H;
 const ndcX = px => 2 * px / W - 1;
@@ -1818,17 +1812,6 @@ function resize() {
   }
   framing.dHome = dH; framing.homeCx = cx; framing.homeCy = cy;
   framing.syHome = ndcY((hTop + hBot) / 2);
-  // ---- the palm: from home, one dolly straight in on the point where Mars forms (never a pull-back). Part way in,
-  // the heart and head lines are framed around that point (Mars lands where the planet shot will hold it); then the
-  // camera carries on in to the planet shot as the palm's stars collapse into Mars
-  {
-    const S = SHOT[5], ppuHome = H / (2 * TAN * dH), ppuP = S.ppuP;
-    const left = MARS_AT.x - PALM_FRAME.x0, right = PALM_FRAME.x1 - MARS_AT.x, up = PALM_FRAME.y1 - MARS_AT.y;
-    const myPx = (1 - S.syP) / 2 * H, mxPx = (1 + S.sxP) / 2 * W, top = LAY.top + S.headH + 12;
-    const ppuLines = Math.min((Math.min(mxPx, W - mxPx) - 14) / (Math.max(left, right) + 0.02), (myPx - top) / (up + 0.03));
-    const ppuF = Math.min(ppuP * 0.82, Math.max(ppuHome * 1.3, ppuLines));
-    S.dF = dAtPpu(ppuF); S.sxF = S.sxP; S.syF = S.syP;
-  }
   buildConstellations();
 }
 
@@ -1896,7 +1879,17 @@ const TO0 = (() => {                       // after the thumb: the thumbs-up ope
   const s = x => x * MB, w = (a, d) => [s(a), s(d)];
   return { head: w(0, 0.8), cap: s(0.9), plOut: w(0.2, 1.5), hiOff: w(0.3, 1.2), unfade: w(0.4, 1.8), cam: w(0.0, 3.6), turn: w(0.1, 3.4), open: w(0.3, 3.0), float: w(0.1, 3.1), placed: w(1.6, 1.2), end: s(4.3) };
 })();
-const timelineIn = b => (b === 3 ? TR : TI);
+const TP = (() => {                        // the palm: one continuous dolly from the header straight into Mars (v5)
+  const s = x => x * MB, w = (a, d) => [s(a), s(d)];
+  return {
+    hi: w(0.2, 1.0), push: w(0.2, 1.0), head: w(0.2, 0.9),
+    // the camera never rests: it eases in from the moment the header appears and arrives as Mars forms; the palm's
+    // stars and its lines pour into Mars over the second half of the same move
+    zoom: w(0.2, 5.0), rest: w(1.2, 2.2), fade: w(2.5, 2.7), plA: w(2.6, 1.0), reveal: w(2.6, 3.0),
+    back: w(6.4, 1.4), prompt: s(7.6), deal: s(7.9), end: s(9.6),
+  };
+})();
+const timelineIn = b => (b === 3 ? TR : b === 5 ? TP : TI);
 const D_DIS = TR.dis[1];
 const STAG_ONE = [0.28, 0, 0.02, 0.08, 0.14];      // thumb folds last
 const STAG_THUMB = [0.22, 0, 0.04, 0.06, 0.08];    // index curls, then the thumb comes out
@@ -1972,6 +1965,13 @@ function evalIn(b, t) {                             // a finger (or the palm): d
   st.wFinger = segE(t, T.push);
   st.head = segE(t, T.head, E.sine);
   st.wPlanet = segE(t, T.zoom);
+  if (b === 5) {
+    // the palm: no stop part way in. The camera's distance eases geometrically from home to the Mars shot (a constant
+    // zoom rate at the middle of the move, so it neither crawls at the start nor rushes at the end)
+    st.wFinger = 0;
+    const r = Math.min(0.95, SHOT[5].dP / Math.max(1e-3, framing.dHome)), e = segE(t, T.zoom, E.sine);
+    st.wPlanet = (1 - Math.pow(r, e)) / (1 - r);
+  }
   st.fingerA = 1 - segE(t, T.fade, E.sine);
   const fadeE = segE(t, T.fade, E.sine);
   st.collapse = fadeE;
@@ -2705,16 +2705,18 @@ const tmpP = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpN = new THRE
 const ptrF = { x: 0, y: 0 };
 const floatE = new THREE.Euler();
 let sweepT = -1, dealAt = -99;
-const BONE_TD = BONES.find(b => b.frame === tDist);
-const TIP_R = [BONE_TD.r1, ...FINGERS.map(f => BONES.find(b => b.frame === f.dist).r1)];
-const PALM_CARD = (() => { const x = 0.1 * PALM_W, y = 4.4; return V(x, y, palmHalf(x, y).front + 0.5); })();
-const _ca = new THREE.Vector3();
-function cardAnchorLocal(k, out) {           // the centre of finger k's small card: beyond its tip, along the finger (the palm: over its centre)
-  if (k === 5) return out.copy(PALM_CARD);
-  const tip = TIPS[k].pos, prev = (k === 0 ? T.j[2] : FINGERS[k - 1].j[3]).pos;
-  _ca.copy(tip).sub(prev); _ca.z = 0; _ca.normalize();          // along the finger as seen from the front, at the tip's depth
-  return out.copy(tip).addScaledVector(_ca, TIP_R[k] * 1.15 + FLOAT_GAP + FLOAT_H / 2);
-}
+// v5: each small card hovers over its finger's bright fingertip star (the thumb's: the thumb-tip star), centred on it;
+// the palm's hovers over the palm's brightest star nearest where Mars formed (a main star of its lines, in the hollow)
+const PALM_CARD = (() => {
+  let best = null, bd = 1e9;
+  for (let i = 0; i < plPos.length; i++) {
+    if (plA[i] < 0.9) continue;                      // the lines' main stars (their ends and the fine dust are dimmer)
+    const d = Math.hypot(plPos[i][0] - MARS_AT.x, plPos[i][1] - MARS_AT.y);
+    if (d < bd) { bd = d; best = plPos[i]; }
+  }
+  return new THREE.Vector3().fromArray(best);
+})();
+function cardAnchorLocal(k, out) { return k === 5 ? out.copy(PALM_CARD) : out.copy(TIPS[k].pos); }
 function liftPose(flip, outP, outQ, lay) {
   const z = lay.z, par = reduceMotion ? 0.3 : 1, tk = tilt.on ? 1.6 : 1;
   outP.set(lay.x * TAN * aspect * z, lay.y * TAN * z, -z);
@@ -3071,7 +3073,8 @@ function jumpBeat(b, t = 0) {
 }
 window.__seq = {
   get phase() { return phase; }, get beat() { return beat; }, phases: PHASES, beats: BEATS.map(x => x.key),
-  get tA() { return tA; }, get tIn() { return tIn; }, get tOut() { return tOut; }, TA, TI, TR, TO, TO0, st,
+  get tA() { return tA; }, get tIn() { return tIn; }, get tOut() { return tOut; }, TA, TI, TR, TP, TO, TO0, st,
+  cam: () => ({ dist: +camera.position.distanceTo(camLook).toFixed(4), pos: camera.position.toArray().map(v => +v.toFixed(4)) }),
   jumpA(t) { restartQuiet(); setPhase('A'); tA = t; }, jump: jumpBeat, setIn(t) { tIn = t; }, setOut(t) { tOut = t; },
   reveal() { if (phase !== 'await') { restartQuiet(); setPhase('await'); tA = TA.end; } reveal(); }, restart,
   pick(i) {

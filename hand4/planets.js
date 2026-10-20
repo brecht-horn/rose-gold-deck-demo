@@ -52,7 +52,7 @@ const HEMI_MARGIN = 0.32;
 export const PLANET_KINDS = ['sun', 'jupiter', 'venus', 'saturn', 'mercury', 'mars'];
 
 /* Body radius in finger-base radii, the suggested orientation (Euler degrees about X then Z, order 'ZXY', as v2's
-   Q_SAT), spin (rad/s) and the spin phase that puts each planet's signature feature in front at the start. */
+   Q_SAT), spin (rad/s) and the starting spin phase (it once brought each planet's signature feature round; v5 keeps the values). */
 export const PLANET_SPECS = {
   sun:     { size: 1.5,  tilt: [8, -10],  spin: 0.05, spin0: 0.0 },
   jupiter: { size: 1.15, tilt: [-6, -8],  spin: 0.07, spin0: -0.3 },
