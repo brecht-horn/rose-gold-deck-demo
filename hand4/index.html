@@ -46,8 +46,8 @@
   #hint.cue { color: var(--ink); animation: cue 2.6s ease-in-out infinite; }
   @keyframes cue { 50% { opacity: 0.5; } }
   .controls { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
-  /* v8: one row of controls with the dev Back button in it (the hint wraps instead); see resize() for why the
-     layout ignores it */
+  /* v8: one row of controls with the dev Back button in it; v12: the row compacts while Back shows (.has-back, below)
+     so the hint keeps its width; see resize() for why the layout ignores it */
   .controls { flex: none; flex-wrap: nowrap; }
   button {
     font: inherit; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink);
@@ -1962,6 +1962,7 @@ function resize() {
   framing.dHome = dH; framing.homeCx = cx; framing.homeCy = cy;
   framing.syHome = ndcY((hTop + hBot) / 2);
   buildConstellations();
+  fitHint();
 }
 
 /* =====================================================================
@@ -2524,11 +2525,25 @@ function setCaption(key) {
 const pointer = { x: 0, y: 0, tx: 0, ty: 0, rx: 0, ry: 0, ox: 0, oy: 0, rz: null };   // rx, ry: raw; ox, oy: v7's re-zero offset
 function setHint(msg) {
   hintEl.classList.remove('cue');
-  if (msg) { hintEl.textContent = msg; return; }
-  if (phase === 'choose') hintEl.textContent = coarse ? 'Slide along the fan, then let go on a card.' : 'Hover to lift a card. Click to choose it.';
+  if (msg) hintEl.textContent = msg;
+  else if (phase === 'choose') hintEl.textContent = coarse ? 'Slide along the fan, then let go on a card.' : 'Hover to lift a card. Click to choose it.';
   else if (phase === 'pick' && !PK.revealed) { hintEl.textContent = 'Swipe to turn it over.'; hintEl.classList.add('cue'); }
   else if (phase === 'read') { hintEl.textContent = 'Tap to continue.'; hintEl.classList.add('cue'); }
   else hintEl.textContent = tilt.on ? 'Tilt your phone to drift through the stars.' : coarse ? 'Drag to drift through the stars.' : 'Move the mouse to drift through the stars.';
+  fitHint();
+}
+// v12 (auditor: with tilt on, the hint ran onto the sheet's bottom edge): while the name/birthday sheet is up, the
+// hint's lines sit closer (.by-sheet), and a hint that would still come within 4 px of the sheet's resting box (a
+// long passing message, such as "Recentered…") fades out until the sheet goes
+function fitHint() {
+  const bySheet = phase === 'await';
+  hintEl.classList.toggle('by-sheet', bySheet);
+  let off = false;
+  if (bySheet && LAY.sheet) {
+    const h = hintEl.getBoundingClientRect(), s = LAY.sheet;
+    off = h.top < s.bottom + 4 && h.right > s.left && h.left < s.right;
+  }
+  hintEl.classList.toggle('off', off);
 }
 
 // ---------- device tilt ----------
