@@ -210,6 +210,17 @@
     #caption p, .ask { transition-duration: 0.5s; transform: none; filter: none; }
     #hint.cue { animation: none; }
   }
+  /* v12 (DEV / DEMO ONLY): while the dev Back button sits in the row, the row's buttons and gaps are compacted so the
+     hint keeps the width it had without Back (the same line breaks as before v8). Without Back (?noback, and the
+     app) none of this applies. setBackShown() toggles .has-back together with the button. */
+  .rail.bottom.has-back { gap: 8px; }
+  .rail.bottom.has-back .controls { gap: 6px; }
+  .rail.bottom.has-back .controls button { padding-left: 9px; padding-right: 9px; }
+  /* v12: while the name/birthday sheet is up, the hint's lines sit a little closer, so a three-line hint (tilt on)
+     clears the sheet's bottom edge; a longer passing message that would still reach it fades out (fitHint) */
+  #hint { transition: opacity 0.3s ease; }
+  #hint.by-sheet { line-height: 1.4; }
+  #hint.off { opacity: 0; animation: none; }
 </style>
 
 <div id="stage" aria-label="A hand drawn in stars forms out of the night sky. One at a time, from the thumb to the palm, each finger becomes its planet and you choose a card for it, until the whole hand holds six cards."></div>
@@ -359,6 +370,9 @@ const hintEl = document.getElementById('hint');
 const tiltBtn = document.getElementById('tilt');
 const skipBtn = document.getElementById('skip');
 const backBtn = document.getElementById('back');          // DEV / DEMO ONLY (see devBack)
+const railBottom = document.querySelector('.rail.bottom');
+// DEV / DEMO ONLY: show or hide the Back button, and compact the row with it (.has-back) so the hint keeps its width
+function setBackShown(on) { backBtn.hidden = !on; railBottom.classList.toggle('has-back', on); }
 const replayBtn = document.getElementById('replay');
 const captionEl = document.getElementById('caption');
 const captionP = document.querySelector('#caption p');
@@ -1857,10 +1871,12 @@ function resize() {
   document.documentElement.classList.toggle('short', short);
   Object.assign(LAY, { short, side, portrait });
   LAY.top = parseFloat(getComputedStyle(headEl).top) || 18;
-  // (DEV / DEMO ONLY: measured without the Back button, which is not part of the app, so it moves no framing)
-  const backWas = backBtn.hidden; backBtn.hidden = true;
-  LAY.bottom = H - document.querySelector('.rail.bottom').getBoundingClientRect().top + 8;
-  backBtn.hidden = backWas;
+  // (DEV / DEMO ONLY: measured without the Back button, which is not part of the app, so it moves no framing;
+  // v12: and without the row's compaction and the hint's tighter lines beside the sheet, for the same reason)
+  const backWas = backBtn.hidden, compactWas = railBottom.classList.contains('has-back'), bySheetWas = hintEl.classList.contains('by-sheet');
+  backBtn.hidden = true; railBottom.classList.remove('has-back'); hintEl.classList.remove('by-sheet');
+  LAY.bottom = H - railBottom.getBoundingClientRect().top + 8;
+  backBtn.hidden = backWas; railBottom.classList.toggle('has-back', compactWas); hintEl.classList.toggle('by-sheet', bySheetWas);
   LAY.capBottom = parseFloat(getComputedStyle(captionEl).bottom) || 78;
   for (let b = 0; b < 6; b++) { fillHead(headProbe, b); SHOT[b].headH = headProbe.offsetHeight; }
   LAY.titleBottom = headProbe.querySelector('.hd-title').getBoundingClientRect().bottom - headProbe.getBoundingClientRect().top;
@@ -2220,7 +2236,7 @@ function setPhase(p) {
   phase = p;
   if (p !== 'choose') el.style.cursor = '';
   skipBtn.hidden = p === 'end';
-  backBtn.hidden = !DEV_BACK || !!debugPose;      // DEV / DEMO ONLY
+  setBackShown(DEV_BACK && !debugPose);           // DEV / DEMO ONLY
   replayBtn.hidden = p !== 'end';
   replayBtn.classList.toggle('cta', p === 'end');
   setHint();
@@ -3381,7 +3397,7 @@ if (qs.has('pose') && POSES[qs.get('pose')]) {
       hi: 0, fingerA: 1, collapse: 0, restA: 1, planetA: 0, reveal: 0, palmHi: 0, lineA: 1, bandIn: 0, slide: 0, disT: -1e4, tiltW: 0, placedA: 0, floatW: 0,
     },
   };
-  skipBtn.hidden = true; backBtn.hidden = true;
+  skipBtn.hidden = true; setBackShown(false);
 }
 function placeInstant(b) {
   let c, major;
