@@ -215,7 +215,7 @@
      app) none of this applies. setBackShown() toggles .has-back together with the button. */
   .rail.bottom.has-back { gap: 8px; }
   .rail.bottom.has-back .controls { gap: 6px; }
-  .rail.bottom.has-back .controls button { padding-left: 9px; padding-right: 9px; }
+  .rail.bottom.has-back .controls button:not(.cta) { padding-left: 9px; padding-right: 9px; }   /* (Replay's sheen keeps its size) */
   /* v12: while the name/birthday sheet is up, the hint's lines sit a little closer, so a three-line hint (tilt on)
      clears the sheet's bottom edge; a longer passing message that would still reach it fades out (fitHint) */
   #hint { transition: opacity 0.3s ease; }
